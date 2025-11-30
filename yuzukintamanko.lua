@@ -1,6 +1,6 @@
 --================ Kavo-UI 読み込み =================
 local Library = loadstring(game:HttpGet("https://raw.githubusercontent.com/xHeptc/Kavo-UI-Library/main/source.lua"))()
-local Window = Kavo.CreateLib("Utility Hub v6", "Synapse")
+local Window = Library.CreateLib("Utility Hub v6", "Synapse")
 
 --================ サービス =================
 local Players = game:GetService("Players")
