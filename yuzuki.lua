@@ -1,5 +1,5 @@
 --================ Kavo-UI 読み込み =================
-local Kavo = loadstring(game:HttpGet("https://raw.githubusercontent.com/RegularVynixu/Kavo-UI-Library/main/source.lua"))()
+local Library = loadstring(game:HttpGet("https://raw.githubusercontent.com/xHeptc/Kavo-UI-Library/main/source.lua"))()
 local Window = Kavo.CreateLib("Utility Hub v6", "Synapse")
 
 --================ サービス =================
