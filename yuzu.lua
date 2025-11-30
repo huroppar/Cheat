@@ -1,9 +1,3 @@
---========================================================--
---                    UtilityHub v5                       --
---           RayField版 完全版（魚アイコン付き）          --
---========================================================--
-
--- RayFieldロード
 local Rayfield = loadstring(game:HttpGet("https://sirius.menu/rayfield"))()
 
 local Players = game:GetService("Players")
