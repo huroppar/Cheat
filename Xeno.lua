@@ -1,16 +1,8 @@
 --========================================================--
---         Xeno向け RayField + カスタムGUI 完全版       --
---========================================================--
--- Features:
--- - プレイヤータブ: スピード(slider + manual input), 無限ジャンプ, 空中TP(popup), 壁貫通
--- - ESPタブ: プレイヤーESP(全員), 敵ESP(Bot系判定), アイテムESP(推測)
--- - 戦闘(別UI): 縦長プレイヤー一覧(アイコン+残りHP), 選択してTP/張り付き(再押しで元に戻る)
--- - アンチAFK
--- Notes: Designed to avoid "empty RayField tab" issues by creating custom ScreenGui for player list,
--- and doing initialization in correct order. Respawn-safe where needed.
+--         Xeno向け RayField + カスタムGUI 完全版 (修正版)
+--         （UI要素は必ず Section:Create系で生成）
 --========================================================--
 
--- safe pcall for external load
 local success, Rayfield = pcall(function()
     return loadstring(game:HttpGet('https://raw.githubusercontent.com/SiriusSoftwareLtd/Rayfield/main/source.lua'))()
 end)
@@ -19,7 +11,6 @@ if not success or not Rayfield then
     return
 end
 
--- main window
 local Window = Rayfield:CreateWindow({
     Name = "Xeno Script - Complete",
     LoadingTitle = "Loading Script...",
@@ -28,56 +19,52 @@ local Window = Rayfield:CreateWindow({
     KeySystem = false
 })
 
--- services
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
 local VirtualUser = game:GetService("VirtualUser")
-
 local LocalPlayer = Players.LocalPlayer
 
--- utility
-local function safeGetCharacter(player)
-    if not player then return nil end
-    return player.Character or player.CharacterAdded:Wait()
-end
-
--- ---------- State ----------
+-- state
 local state = {
-    -- player tab
     speedEnabled = false,
     speedValue = 16,
     infJump = false,
-    airTPActive = false, -- whether popup action is ready
-    airTPInAir = false, -- whether currently in air state (teleported)
+    airTPActive = false,
+    airTPInAir = false,
     airTPOriginalCFrame = nil,
     wallClip = false,
-
-    -- esp
     itemsESP = false,
     enemiesESP = false,
     playersESP = false,
-
-    -- combat
     attachedPlayer = nil,
     attachedOriginalCFrame = nil,
     attachedMode = false,
-
-    -- antiafk
     antiAFK = false
 }
 
--- ---------- RayField Tabs ----------
-local playerTab = Window:CreateTab("プレイヤー", 4483362458)
-local espTab = Window:CreateTab("ESP", 4483362458)
-local combatTab = Window:CreateTab("戦闘", 4483362458)
-local otherTab = Window:CreateTab("その他", 4483362458)
+-- Forward declarations for functions used by toggles
+local airPopupGui, playerListGui
+local function showAirTPPopup() end
+local function hideAirTPPopup() end
+local function enableNoclip() end
+local function disableNoclip() end
 
--- ---------- PLAYER TAB ----------
+-- Tabs and sections
+local playerTab = Window:CreateTab("プレイヤー", 4483362458)
 local playerSec = playerTab:CreateSection("移動 / 能力")
 
--- Speed slider
-playerTab:CreateSlider({
+local espTab = Window:CreateTab("ESP", 4483362458)
+local espSec = espTab:CreateSection("ESP設定")
+
+local combatTab = Window:CreateTab("戦闘", 4483362458)
+local combatSec = combatTab:CreateSection("戦闘設定")
+
+local otherTab = Window:CreateTab("その他", 4483362458)
+local otherSec = otherTab:CreateSection("便利機能")
+
+-- ---------- PLAYER SECTION UI (修正済: 全て playerSec で生成) ----------
+playerSec:CreateSlider({
     Name = "スピード (スライダー)",
     Range = {16, 500},
     Increment = 1,
@@ -93,8 +80,7 @@ playerTab:CreateSlider({
     end
 })
 
--- Speed ON/OFF toggle
-playerTab:CreateToggle({
+playerSec:CreateToggle({
     Name = "スピード ON/OFF",
     CurrentValue = false,
     Flag = "SpeedToggle",
@@ -111,11 +97,12 @@ playerTab:CreateToggle({
     end
 })
 
--- Speed manual input (text box with Enter)
-local speedInputLabel = playerTab:CreateLabel({ Name = "スピードを直接入力してEnterで確定（16-500）" })
--- RayFieldには直接テキストボックス API が無い場合があるため、CreateBox の存在チェック
-if playerTab.CreateTextBox then
-    playerTab:CreateTextBox({
+-- 手入力説明ラベル（Section内）
+playerSec:CreateLabel({ Name = "速度を直接入力してEnterで確定（16-500）" })
+
+-- テキストボックスAPIが使える場合は Section に作成
+if playerSec.CreateTextBox then
+    playerSec:CreateTextBox({
         Name = "速度を入力",
         Text = "16",
         Placeholder = "Enter speed then press Enter",
@@ -127,19 +114,14 @@ if playerTab.CreateTextBox then
                 if state.speedEnabled and LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Humanoid") then
                     pcall(function() LocalPlayer.Character:FindFirstChildOfClass("Humanoid").WalkSpeed = state.speedValue end)
                 end
-            else
-                -- ignore invalid
             end
         end
     })
 else
-    -- Fallback: an inline toggled prompt button to request via TextBox popup
-    playerTab:CreateButton({
-        Name = "速度を手入力 (ポップアップ)",
+    playerSec:CreateButton({
+        Name = "速度を手入力 (ポップアップなし環境）",
         Callback = function()
-            local input = game:GetService("GuiService") -- fallback prompt not available; try to use a simple InputBegan prompt
-            local s = tostring(state.speedValue)
-            -- As a very simple fallback, toggle speed to current numeric value (no interactive prompt).
+            -- フォールバック: 現在の数値を適用するだけ
             if LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Humanoid") and state.speedEnabled then
                 pcall(function() LocalPlayer.Character:FindFirstChildOfClass("Humanoid").WalkSpeed = state.speedValue end)
             end
@@ -147,8 +129,7 @@ else
     })
 end
 
--- Infinite jump
-playerTab:CreateToggle({
+playerSec:CreateToggle({
     Name = "無限ジャンプ",
     CurrentValue = false,
     Flag = "InfJump",
@@ -156,6 +137,7 @@ playerTab:CreateToggle({
         state.infJump = val
     end
 })
+
 UserInputService.JumpRequest:Connect(function()
     if state.infJump then
         local char = LocalPlayer.Character
@@ -165,23 +147,21 @@ UserInputService.JumpRequest:Connect(function()
     end
 end)
 
--- 空中TP (ポップアップボタンを別	guiで作る)
-playerTab:CreateToggle({
-    Name = "空中TP (ポップアップを表示)",
+playerSec:CreateToggle({
+    Name = "空中TP (ポップアップ)",
     CurrentValue = false,
     Flag = "AirTPToggle",
     Callback = function(val)
         state.airTPActive = val
         if val then
-            showAirTPPopup() -- we'll define below; safe-call placeholder
+            showAirTPPopup()
         else
             hideAirTPPopup()
         end
     end
 })
 
--- 壁貫通
-playerTab:CreateToggle({
+playerSec:CreateToggle({
     Name = "壁貫通 (Noclip)",
     CurrentValue = false,
     Flag = "WallClipToggle",
@@ -195,129 +175,101 @@ playerTab:CreateToggle({
     end
 })
 
--- We'll forward-declare functions used above to avoid order problems
-local airTPGui -- ref
-function showAirTPPopup() end
-function hideAirTPPopup() end
-function enableNoclip() end
-function disableNoclip() end
-
--- ---------- ESP TAB ----------
-local espSec = espTab:CreateSection("ESP設定")
-
-espTab:CreateToggle({
+-- ---------- ESP SECTION (Section used) ----------
+espSec:CreateToggle({
     Name = "プレイヤーESP (全員)",
     CurrentValue = false,
     Flag = "PlayersESP",
     Callback = function(val)
         state.playersESP = val
         if not val then
-            -- remove all player highlights
             for p,h in pairs(ESP.PlayerHighlights) do
-                if h and h.Instance then
-                    h.Instance:Destroy()
-                end
+                if h and h.Instance then pcall(function() h.Instance:Destroy() end) end
             end
             ESP.PlayerHighlights = {}
         end
     end
 })
 
-espTab:CreateToggle({
+espSec:CreateToggle({
     Name = "敵ESP (Bot等)",
     CurrentValue = false,
     Flag = "EnemiesESP",
     Callback = function(val)
         state.enemiesESP = val
         if not val then
-            for p,h in pairs(ESP.EnemyHighlights) do
-                if h and h.Instance then h.Instance:Destroy() end
-            end
+            for p,h in pairs(ESP.EnemyHighlights) do if h and h.Instance then pcall(function() h.Instance:Destroy() end) end end
             ESP.EnemyHighlights = {}
         end
     end
 })
 
-espTab:CreateToggle({
+espSec:CreateToggle({
     Name = "アイテムESP (推測)",
     CurrentValue = false,
     Flag = "ItemsESP",
     Callback = function(val)
         state.itemsESP = val
         if not val then
-            for i,h in pairs(ESP.ItemHighlights) do
-                if h and h.Instance then h.Instance:Destroy() end
-            end
+            for i,h in pairs(ESP.ItemHighlights) do if h and h.Instance then pcall(function() h.Instance:Destroy() end) end end
             ESP.ItemHighlights = {}
         end
     end
 })
 
--- ---------- COMBAT TAB ----------
-combatTab:CreateSection("戦闘設定")
-combatTab:CreateLabel({ Name = "プレイヤー一覧は右側の独自UIを参照してください。" })
-
--- ---------- OTHER TAB ----------
-otherTab:CreateSection("便利機能")
-otherTab:CreateToggle({
+-- ---------- OTHER SECTION ----------
+otherSec:CreateToggle({
     Name = "アンチAFK",
     CurrentValue = false,
     Flag = "AntiAFK",
     Callback = function(val)
         state.antiAFK = val
         if val then
-            -- connect once
-            if not otherTab._antiAfkConn then
-                otherTab._antiAfkConn = LocalPlayer.Idled:Connect(function()
+            if not otherSec._antiAfkConn then
+                otherSec._antiAfkConn = LocalPlayer.Idled:Connect(function()
                     VirtualUser:CaptureController()
                     VirtualUser:ClickButton2(Vector2.new(0,0))
                 end)
             end
         else
-            if otherTab._antiAfkConn then
-                otherTab._antiAfkConn:Disconnect()
-                otherTab._antiAfkConn = nil
+            if otherSec._antiAfkConn then
+                otherSec._antiAfkConn:Disconnect()
+                otherSec._antiAfkConn = nil
             end
         end
     end
 })
 
 -- ======================================================
--- Custom Player List GUI (separate ScreenGui for reliability)
+-- player list GUI (same as previous, unchanged logic)
 -- ======================================================
 local function createPlayerListGui()
-    -- remove existing if present
     local existing = LocalPlayer:FindFirstChild("XenoPlayerListGui")
     if existing then existing:Destroy() end
-
     local screenGui = Instance.new("ScreenGui")
     screenGui.Name = "XenoPlayerListGui"
     screenGui.ResetOnSpawn = false
-    screenGui.Parent = game:GetService("CoreGui") -- inject into CoreGui for executor environment
+    screenGui.Parent = game:GetService("CoreGui")
 
-    -- main frame (vertical, right side)
     local main = Instance.new("Frame")
     main.Name = "Main"
     main.AnchorPoint = Vector2.new(1,0.5)
     main.Position = UDim2.new(1, -10, 0.5, 0)
-    main.Size = UDim2.new(0, 260, 0.8, 0) -- narrow tall panel
+    main.Size = UDim2.new(0, 260, 0.8, 0)
     main.BackgroundTransparency = 1
     main.Parent = screenGui
 
-    -- background card
     local bg = Instance.new("ImageLabel")
     bg.Name = "BG"
     bg.Size = UDim2.new(1, 0, 1, 0)
     bg.Position = UDim2.new(0,0,0,0)
     bg.BackgroundTransparency = 1
-    bg.Image = "rbxassetid://3926305904" -- subtle rounded background style (Roblox stock)
+    bg.Image = "rbxassetid://3926305904"
     bg.ScaleType = Enum.ScaleType.Slice
     bg.SliceCenter = Rect.new(100,100,100,100)
     bg.ImageColor3 = Color3.fromRGB(20,20,25)
-    bg.ImageTransparency = 0
     bg.Parent = main
 
-    -- title
     local title = Instance.new("TextLabel")
     title.Name = "Title"
     title.Size = UDim2.new(1, -12, 0, 34)
@@ -330,7 +282,6 @@ local function createPlayerListGui()
     title.TextColor3 = Color3.fromRGB(255,255,255)
     title.Parent = bg
 
-    -- scroll frame for list
     local scroll = Instance.new("ScrollingFrame")
     scroll.Name = "List"
     scroll.Size = UDim2.new(1, -16, 1, -56)
@@ -350,7 +301,6 @@ local function createPlayerListGui()
         scroll.CanvasSize = UDim2.new(0, 0, 0, uiList.AbsoluteContentSize.Y + 10)
     end
 
-    -- item template creator
     local function createPlayerEntry(player)
         local entry = Instance.new("Frame")
         entry.Name = "Entry_"..player.UserId
@@ -360,7 +310,6 @@ local function createPlayerListGui()
         entry.BorderSizePixel = 0
         entry.Parent = scroll
 
-        -- icon
         local icon = Instance.new("ImageLabel")
         icon.Name = "Icon"
         icon.Size = UDim2.new(0,56,0,56)
@@ -368,7 +317,6 @@ local function createPlayerListGui()
         icon.BackgroundTransparency = 1
         icon.Parent = entry
 
-        -- username
         local nameLabel = Instance.new("TextLabel")
         nameLabel.Name = "Name"
         nameLabel.Size = UDim2.new(1, -80, 0, 24)
@@ -381,7 +329,6 @@ local function createPlayerListGui()
         nameLabel.Text = player.Name
         nameLabel.Parent = entry
 
-        -- hp label
         local hpLabel = Instance.new("TextLabel")
         hpLabel.Name = "HP"
         hpLabel.Size = UDim2.new(1, -80, 0, 20)
@@ -394,7 +341,6 @@ local function createPlayerListGui()
         hpLabel.Text = "HP: --"
         hpLabel.Parent = entry
 
-        -- action button (TP / Attach)
         local actBtn = Instance.new("TextButton")
         actBtn.Name = "Act"
         actBtn.Size = UDim2.new(0,60,0,34)
@@ -406,11 +352,8 @@ local function createPlayerListGui()
         actBtn.Text = "TP"
         actBtn.Parent = entry
 
-        -- click handler
         actBtn.MouseButton1Click:Connect(function()
-            -- toggle attach/TP
             if state.attachedPlayer == player and state.attachedMode then
-                -- currently attached/teleported => return to original
                 if state.attachedOriginalCFrame then
                     pcall(function()
                         LocalPlayer.Character.HumanoidRootPart.CFrame = state.attachedOriginalCFrame
@@ -421,13 +364,11 @@ local function createPlayerListGui()
                 state.attachedMode = false
                 actBtn.Text = "TP"
             else
-                -- set select and teleport behind
                 if not (player and player.Character and player.Character:FindFirstChild("HumanoidRootPart")) then return end
                 state.attachedOriginalCFrame = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") and LocalPlayer.Character.HumanoidRootPart.CFrame or nil
                 state.attachedPlayer = player
                 state.attachedMode = true
                 actBtn.Text = "STOP"
-                -- teleport slightly behind
                 pcall(function()
                     local targetCF = player.Character.HumanoidRootPart.CFrame * CFrame.new(0,0,3)
                     LocalPlayer.Character.HumanoidRootPart.CFrame = targetCF
@@ -435,9 +376,7 @@ local function createPlayerListGui()
             end
         end)
 
-        -- return created widgets and updater
         local function updateEntry()
-            -- set name and hp
             nameLabel.Text = player.Name
             local char = player.Character
             local hum = char and char:FindFirstChildOfClass("Humanoid")
@@ -450,7 +389,6 @@ local function createPlayerListGui()
             end
         end
 
-        -- fetch thumbnail async
         spawn(function()
             local ok, content = pcall(function()
                 return Players:GetUserThumbnailAsync(player.UserId, Enum.ThumbnailType.HeadShot, Enum.ThumbnailSize.Size60x60)
@@ -461,7 +399,6 @@ local function createPlayerListGui()
             updateCanvas()
         end)
 
-        -- update loop connection
         local conn
         conn = RunService.Heartbeat:Connect(function()
             if not entry.Parent then
@@ -474,11 +411,8 @@ local function createPlayerListGui()
         return entry
     end
 
-    -- table to track entries
     local entries = {}
-
     local function refreshList()
-        -- clear
         for _,v in pairs(scroll:GetChildren()) do
             if v:IsA("Frame") and v.Name:sub(1,6) == "Entry_" then v:Destroy() end
         end
@@ -491,36 +425,24 @@ local function createPlayerListGui()
         updateCanvas()
     end
 
-    -- connections
-    Players.PlayerAdded:Connect(function(pl)
-        refreshList()
-    end)
+    Players.PlayerAdded:Connect(function(pl) refreshList() end)
     Players.PlayerRemoving:Connect(function(pl)
         if entries[pl] and entries[pl].Name then entries[pl]:Destroy() end
         entries[pl] = nil
         updateCanvas()
     end)
 
-    -- initial
     refreshList()
-
-    return screenGui, function() -- return cleanup function
-        screenGui:Destroy()
-    end
+    return screenGui, function() screenGui:Destroy() end
 end
 
-local playerListGui, cleanupPlayerList = createPlayerListGui()
+playerListGui, cleanupPlayerList = createPlayerListGui()
 
 -- ======================================================
--- ESP Implementation
+-- ESP implementation (unchanged)
 -- ======================================================
-ESP = {
-    PlayerHighlights = {},
-    EnemyHighlights = {},
-    ItemHighlights = {}
-}
+ESP = { PlayerHighlights = {}, EnemyHighlights = {}, ItemHighlights = {} }
 
--- helper to isBot (enemy) by name heuristics
 local function isBotByName(name)
     if not name then return false end
     local n = name:lower()
@@ -531,27 +453,24 @@ local function isBotByName(name)
     return false
 end
 
--- create or update highlight for a character
 local function ensurePlayerHighlight(player)
     if not player or not player.Character then return end
     local char = player.Character
     if not char:FindFirstChild("HumanoidRootPart") then return end
     local existing = ESP.PlayerHighlights[player]
     if existing and existing.Instance and existing.Instance.Parent then
-        -- update color by HP
         local hum = char:FindFirstChildOfClass("Humanoid")
         if hum then
             local ratio = hum.Health / math.max(1, hum.MaxHealth)
             if ratio <= 0.3 then
-                existing.Instance.FillColor = Color3.fromRGB(255,80,80) -- red
+                existing.Instance.FillColor = Color3.fromRGB(255,80,80)
             elseif ratio >= 0.7 then
-                existing.Instance.FillColor = Color3.fromRGB(120,255,120) -- green
+                existing.Instance.FillColor = Color3.fromRGB(120,255,120)
             else
-                existing.Instance.FillColor = Color3.fromRGB(255,220,80) -- yellow
+                existing.Instance.FillColor = Color3.fromRGB(255,220,80)
             end
         end
     else
-        -- create highlight
         local ok, highlight = pcall(function()
             local h = Instance.new("Highlight")
             h.Name = "XenoPlayerHighlight_"..player.UserId
@@ -562,43 +481,31 @@ local function ensurePlayerHighlight(player)
             h.Parent = workspace
             return h
         end)
-        if ok and highlight then
-            ESP.PlayerHighlights[player] = { Instance = highlight }
-        end
+        if ok and highlight then ESP.PlayerHighlights[player] = { Instance = highlight } end
     end
 end
 
 local function removePlayerHighlight(player)
     local e = ESP.PlayerHighlights[player]
-    if e and e.Instance then
-        pcall(function() e.Instance:Destroy() end)
-    end
+    if e and e.Instance then pcall(function() e.Instance:Destroy() end) end
     ESP.PlayerHighlights[player] = nil
 end
 
--- enemy highlight (bot)
 local function ensureEnemyHighlight(model)
     if not model then return end
-    if model:IsA("Model") then
-        local existing = ESP.EnemyHighlights[model]
-        if existing and existing.Instance and existing.Instance.Parent then
-            return
-        else
-            local ok, highlight = pcall(function()
-                local h = Instance.new("Highlight")
-                h.Name = "XenoEnemyHighlight_"..tostring(model:GetDebugId())
-                h.Adornee = model
-                h.OutlineTransparency = 0.9
-                h.FillTransparency = 0.4
-                h.FillColor = Color3.fromRGB(255,60,60)
-                h.Parent = workspace
-                return h
-            end)
-            if ok and highlight then
-                ESP.EnemyHighlights[model] = { Instance = highlight }
-            end
-        end
-    end
+    local existing = ESP.EnemyHighlights[model]
+    if existing and existing.Instance and existing.Instance.Parent then return end
+    local ok, highlight = pcall(function()
+        local h = Instance.new("Highlight")
+        h.Name = "XenoEnemyHighlight_"..tostring(tick())
+        h.Adornee = model
+        h.OutlineTransparency = 0.9
+        h.FillTransparency = 0.4
+        h.FillColor = Color3.fromRGB(255,60,60)
+        h.Parent = workspace
+        return h
+    end)
+    if ok and highlight then ESP.EnemyHighlights[model] = { Instance = highlight } end
 end
 
 local function removeEnemyHighlight(model)
@@ -607,14 +514,13 @@ local function removeEnemyHighlight(model)
     ESP.EnemyHighlights[model] = nil
 end
 
--- item highlight (approx)
 local function ensureItemHighlight(inst)
     if not inst then return end
     local existing = ESP.ItemHighlights[inst]
     if existing and existing.Instance and existing.Instance.Parent then return end
     local ok, highlight = pcall(function()
         local h = Instance.new("Highlight")
-        h.Name = "XenoItemHighlight_"..inst:GetDebugId()
+        h.Name = "XenoItemHighlight_"..tostring(tick())
         h.Adornee = inst
         h.OutlineTransparency = 1
         h.FillTransparency = 0.6
@@ -622,9 +528,7 @@ local function ensureItemHighlight(inst)
         h.Parent = workspace
         return h
     end)
-    if ok and highlight then
-        ESP.ItemHighlights[inst] = { Instance = highlight }
-    end
+    if ok and highlight then ESP.ItemHighlights[inst] = { Instance = highlight } end
 end
 
 local function removeItemHighlight(inst)
@@ -633,42 +537,27 @@ local function removeItemHighlight(inst)
     ESP.ItemHighlights[inst] = nil
 end
 
--- periodically update ESP
 RunService.Heartbeat:Connect(function()
-    -- PLAYER ESP
     if state.playersESP then
         for _,pl in pairs(Players:GetPlayers()) do
-            if pl.Character then
-                ensurePlayerHighlight(pl)
-            end
+            if pl.Character then ensurePlayerHighlight(pl) end
         end
     else
         for p,_ in pairs(ESP.PlayerHighlights) do removePlayerHighlight(p) end
     end
 
-    -- ENEMY ESP (heuristic: workspace models with Bot/NPC in name or players with name pattern)
     if state.enemiesESP then
-        -- player-name-based bots
         for _,pl in pairs(Players:GetPlayers()) do
-            if isBotByName(pl.Name) and pl.Character then
-                ensureEnemyHighlight(pl.Character)
-            else
-                removeEnemyHighlight(pl.Character)
-            end
+            if isBotByName(pl.Name) and pl.Character then ensureEnemyHighlight(pl.Character) else removeEnemyHighlight(pl.Character) end
         end
-        -- workspace model scan for common enemy model names
         for _,obj in pairs(workspace:GetDescendants()) do
-            if obj:IsA("Model") and isBotByName(obj.Name) then
-                ensureEnemyHighlight(obj)
-            end
+            if obj:IsA("Model") and isBotByName(obj.Name) then ensureEnemyHighlight(obj) end
         end
     else
         for m,_ in pairs(ESP.EnemyHighlights) do removeEnemyHighlight(m) end
     end
 
-    -- ITEM ESP (best-effort guess)
     if state.itemsESP then
-        -- common folder names
         local folderNames = {"Items","Drops","Tools","SpawnedItems","Loot","Pickups"}
         for _,fname in ipairs(folderNames) do
             local folder = workspace:FindFirstChild(fname)
@@ -678,11 +567,8 @@ RunService.Heartbeat:Connect(function()
                 end
             end
         end
-        -- fallback: parts with 'item' in name
         for _,part in pairs(workspace:GetDescendants()) do
-            if part:IsA("BasePart") and string.find(part.Name:lower(), "item") then
-                ensureItemHighlight(part)
-            end
+            if part:IsA("BasePart") and string.find(part.Name:lower(), "item") then ensureItemHighlight(part) end
         end
     else
         for i,_ in pairs(ESP.ItemHighlights) do removeItemHighlight(i) end
@@ -690,7 +576,7 @@ RunService.Heartbeat:Connect(function()
 end)
 
 -- ======================================================
--- Noclip (wall clip) implementation (respawn-safe)
+-- Noclip (respawn-safe)
 -- ======================================================
 local noclipConn
 function enableNoclip()
@@ -703,7 +589,6 @@ function enableNoclip()
                     pcall(function() part.CanCollide = false end)
                 end
             end
-            -- rootpart too (but keep some collisions maybe)
             local hrp = char:FindFirstChild("HumanoidRootPart")
             if hrp then pcall(function() hrp.CanCollide = false end) end
         end
@@ -712,26 +597,22 @@ end
 
 function disableNoclip()
     if noclipConn then noclipConn:Disconnect() noclipConn = nil end
-    -- try restoring collisions (best-effort)
     local char = LocalPlayer.Character
     if char then
         for _,part in pairs(char:GetDescendants()) do
-            if part:IsA("BasePart") then
-                pcall(function() part.CanCollide = true end)
-            end
+            if part:IsA("BasePart") then pcall(function() part.CanCollide = true end) end
         end
     end
 end
 
--- reapply noclip on respawn if toggled
-Players.PlayerAdded:Connect(function() end)
 LocalPlayer.CharacterAdded:Connect(function(char)
     wait(0.5)
+    if state.speedEnabled and char:FindFirstChildOfClass("Humanoid") then pcall(function() char:FindFirstChildOfClass("Humanoid").WalkSpeed = state.speedValue end) end
     if state.wallClip then enableNoclip() end
 end)
 
 -- ======================================================
--- Attach (follow selected player) update loop
+-- Attach/follow loop
 -- ======================================================
 RunService.RenderStepped:Connect(function()
     if state.attachedMode and state.attachedPlayer and state.attachedPlayer.Character and LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
@@ -744,11 +625,9 @@ RunService.RenderStepped:Connect(function()
 end)
 
 -- ======================================================
--- Air TP popup & behavior
+-- Air TP popup & behavior (defined after referencers)
 -- ======================================================
-local airPopupGui -- created below
 function showAirTPPopup()
-    -- create a small popup in CoreGui if not existing
     if airPopupGui and airPopupGui.Parent then return end
     airPopupGui = Instance.new("ScreenGui")
     airPopupGui.Name = "XenoAirTPPopup"
@@ -798,17 +677,13 @@ function showAirTPPopup()
     btnUp.MouseButton1Click:Connect(function()
         local char = LocalPlayer.Character
         if not char or not char:FindFirstChild("HumanoidRootPart") or not char:FindFirstChildOfClass("Humanoid") then return end
-        -- store original
         state.airTPOriginalCFrame = char.HumanoidRootPart.CFrame
-        -- move up
         local targetCF = state.airTPOriginalCFrame + Vector3.new(0,2000,0)
         pcall(function()
             char.HumanoidRootPart.CFrame = targetCF
-            -- prevent falling: put PlatformStand true and zero velocity each frame
             state.airTPInAir = true
             char.Humanoid.PlatformStand = true
         end)
-        -- start hold loop
         if airPopupGui._holdConn then airPopupGui._holdConn:Disconnect() end
         airPopupGui._holdConn = RunService.Stepped:Connect(function()
             if not state.airTPInAir then return end
@@ -816,7 +691,6 @@ function showAirTPPopup()
                 pcall(function()
                     char.HumanoidRootPart.Velocity = Vector3.new(0,0,0)
                     char.HumanoidRootPart.RotVelocity = Vector3.new(0,0,0)
-                    -- keep platformstand true
                     if char:FindFirstChildOfClass("Humanoid") then
                         char:FindFirstChildOfClass("Humanoid").PlatformStand = true
                     end
@@ -828,18 +702,12 @@ function showAirTPPopup()
     btnDown.MouseButton1Click:Connect(function()
         local char = LocalPlayer.Character
         if not char or not char:FindFirstChild("HumanoidRootPart") then return end
-        -- restore
         if state.airTPOriginalCFrame then
-            pcall(function()
-                char.HumanoidRootPart.CFrame = state.airTPOriginalCFrame
-            end)
+            pcall(function() char.HumanoidRootPart.CFrame = state.airTPOriginalCFrame end)
         end
-        -- clear hold loop
         state.airTPInAir = false
         if airPopupGui._holdConn then airPopupGui._holdConn:Disconnect() airPopupGui._holdConn = nil end
-        if char:FindFirstChildOfClass("Humanoid") then
-            pcall(function() char:FindFirstChildOfClass("Humanoid").PlatformStand = false end)
-        end
+        if char:FindFirstChildOfClass("Humanoid") then pcall(function() char:FindFirstChildOfClass("Humanoid").PlatformStand = false end) end
     end)
 end
 
@@ -853,20 +721,13 @@ function hideAirTPPopup()
 end
 
 -- ======================================================
--- Ensure local character humanoid events (respawn-safe behaviors)
+-- character added handling
 -- ======================================================
 local function onCharacterAdded(char)
     local hum = char:FindFirstChildOfClass("Humanoid")
     if hum then
-        if state.speedEnabled then
-            pcall(function() hum.WalkSpeed = state.speedValue end)
-        else
-            pcall(function() hum.WalkSpeed = 16 end)
-        end
-        if state.wallClip then
-            enableNoclip()
-        end
-        -- apply infinite jump handling already hooked globally
+        if state.speedEnabled then pcall(function() hum.WalkSpeed = state.speedValue end) else pcall(function() hum.WalkSpeed = 16 end) end
+        if state.wallClip then enableNoclip() end
     end
 end
 
@@ -874,24 +735,16 @@ if LocalPlayer.Character then onCharacterAdded(LocalPlayer.Character) end
 LocalPlayer.CharacterAdded:Connect(onCharacterAdded)
 
 -- ======================================================
--- Small guard: if RayField's CreateTextBox was not present, making sure speed manual works
--- ======================================================
--- (implemented earlier as fallback)
-
--- ======================================================
--- Cleanup on script unload (optional)
+-- cleanup binding
 -- ======================================================
 local function cleanAll()
-    -- kill highlights
     for p,h in pairs(ESP.PlayerHighlights) do if h.Instance then pcall(function() h.Instance:Destroy() end) end end
     for m,h in pairs(ESP.EnemyHighlights) do if h.Instance then pcall(function() h.Instance:Destroy() end) end end
     for i,h in pairs(ESP.ItemHighlights) do if h.Instance then pcall(function() h.Instance:Destroy() end) end end
-    -- remove UI
     if playerListGui and playerListGui.Parent then playerListGui:Destroy() end
     if airPopupGui and airPopupGui.Parent then airPopupGui:Destroy() end
 end
 
--- Bind cleanup to a keyboard combo (Ctrl+Shift+U) for convenience
 UserInputService.InputBegan:Connect(function(input, gameProcessed)
     if gameProcessed then return end
     if input.KeyCode == Enum.KeyCode.U and UserInputService:IsKeyDown(Enum.KeyCode.LeftControl) and UserInputService:IsKeyDown(Enum.KeyCode.LeftShift) then
@@ -899,5 +752,4 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
     end
 end)
 
--- End of script
-print("Xeno Script - Complete loaded.")
+print("Xeno Script - Complete (修正版) loaded.")
