@@ -83,8 +83,7 @@ local MobileButton = CreateButton(Frame, "Mobile (Delta)", 0.5, Color3.fromRGB(2
 --================= ボタンクリック処理 =================--
 PCButton.MouseButton1Click:Connect(function()
     Frame:Destroy()
-    -- ここにPC専用スクリプト呼び出し
-    -- 例: loadstring(game:HttpGet("https://raw.githubusercontent.com/ユーザー名/リポジトリ名/main/PCScript.lua"))()
+    loadstring(game:HttpGet("https://raw.githubusercontent.com/huroppar/Cheat/refs/heads/main/Xeno.lua"))()
 end)
 
 MobileButton.MouseButton1Click:Connect(function()
