@@ -1,216 +1,201 @@
 --========================================================--
---          XENO (PC) LOCAL SCRIPT: AUTO & ESP HUB       --
+--              Xeno対応 RayField GUIスクリプト           --
 --========================================================--
 
-local Players = game:GetService("Players")
-local RunService = game:GetService("RunService")
-local workspace = game:GetService("Workspace")
+-- RayField読み込み
+local Rayfield = loadstring(game:HttpGet('https://raw.githubusercontent.com/SiriusSoftwareLtd/Rayfield/main/source.lua'))()
 
-local player = Players.LocalPlayer
-local character = player.Character or player.CharacterAdded:Wait()
-local humanoid = character:WaitForChild("Humanoid")
-local hrp = character:WaitForChild("HumanoidRootPart")
-
---=================== SETTINGS ===================--
-local settings = {
-    AttackEnabled = false,
-    AttackRange = 10,
-    AttackSpeed = 0.3,
-    GodModeEnabled = false,
-    WalkSpeed = 16,
-    ESPEnabled = true,
-    ESPColor = Color3.fromRGB(0,255,255),
-    ESPItemsEnabled = true,
-    ESPChestsEnabled = true
-}
-
---=================== TARGET FUNCTIONS ===================--
-local function getEnemies()
-    local enemies = {}
-    for _, obj in ipairs(workspace:GetChildren()) do
-        if obj:FindFirstChild("EnemyTag") or obj.Name:match("Enemy") then
-            table.insert(enemies, obj)
-        end
-    end
-    return enemies
-end
-
-local function getItems()
-    local items = {}
-    for _, obj in ipairs(workspace:GetChildren()) do
-        if obj:FindFirstChild("ItemTag") or obj.Name:match("Item") then
-            table.insert(items, obj)
-        end
-    end
-    return items
-end
-
-local function getChests()
-    local chests = {}
-    for _, obj in ipairs(workspace:GetChildren()) do
-        if obj:FindFirstChild("ChestTag") or obj.Name:match("Chest") then
-            table.insert(chests, obj)
-        end
-    end
-    return chests
-end
-
---=================== ESP FUNCTION ===================--
-local function createESP(target, labelText)
-    if not target then return end
-    if target:FindFirstChild("ESP") then return end
-    local primaryPart = target:FindFirstChild("HumanoidRootPart") or target.PrimaryPart
-    if not primaryPart then return end
-
-    local esp = Instance.new("BillboardGui")
-    esp.Name = "ESP"
-    esp.Adornee = primaryPart
-    esp.Size = UDim2.new(0,100,0,50)
-    esp.AlwaysOnTop = true
-    esp.Parent = target
-
-    local label = Instance.new("TextLabel")
-    label.Size = UDim2.new(1,0,1,0)
-    label.BackgroundTransparency = 1
-    label.TextColor3 = settings.ESPColor
-    label.TextScaled = true
-    label.Text = labelText or target.Name
-    label.Font = Enum.Font.GothamBold
-    label.Parent = esp
-end
-
---=================== AUTO ATTACK ===================--
-local attackCooldown = 0
-local function attackEnemies(dt)
-    if not settings.AttackEnabled then return end
-    attackCooldown = attackCooldown - dt
-    if attackCooldown > 0 then return end
-    attackCooldown = settings.AttackSpeed
-
-    for _, enemy in ipairs(getEnemies()) do
-        if enemy:FindFirstChild("Humanoid") and enemy:FindFirstChild("HumanoidRootPart") then
-            local distance = (hrp.Position - enemy.HumanoidRootPart.Position).Magnitude
-            if distance <= settings.AttackRange then
-                enemy.Humanoid:TakeDamage(10)
-            end
-        end
-    end
-end
-
---=================== GOD MODE ===================--
-humanoid.HealthChanged:Connect(function(newHealth)
-    if settings.GodModeEnabled and newHealth < humanoid.MaxHealth then
-        hrp.CFrame = hrp.CFrame + Vector3.new(0,30,0)
-    end
-end)
-
---=================== GUI (RayField) ===================--
-local Rayfield = loadstring(game:HttpGet("https://raw.githubusercontent.com/SiriusSoftwareLtd/Rayfield/main/source.lua"))()
+-- メインウィンドウ作成
 local Window = Rayfield:CreateWindow({
-    Name = "Xeno Hub",
-    LoadingTitle = "Loading...",
-    LoadingSubtitle = "Masashi Edition",
-    ConfigurationSaving = { Enabled = true, FolderName = "XenoHub", FileName = "Settings" },
+    Name = "Xeno Script",
+    LoadingTitle = "Loading Script...",
+    LoadingSubtitle = "by Masashi",
+    ConfigurationSaving = {
+        Enabled = true,
+        FolderName = "XenoScriptConfigs",
+        FileName = "Config"
+    },
     KeySystem = false
 })
 
--- Auto Attack Toggle
-Window:CreateToggle({
-    Name = "Auto Attack",
-    CurrentValue = settings.AttackEnabled,
-    Flag = "AutoAttack",
-    Callback = function(value) settings.AttackEnabled = value end
-})
+--========================================================--
+--================== プレイヤータブ ====================--
+--========================================================--
 
--- Attack Range Slider
-Window:CreateSlider({
-    Name = "Attack Range",
-    Min = 1,
-    Max = 50,
-    CurrentValue = settings.AttackRange,
-    Flag = "AttackRange",
-    Callback = function(value) settings.AttackRange = value end
-})
+local PlayerTab = Window:CreateTab("プレイヤー", 4483362458)
 
--- Attack Speed Slider
-Window:CreateSlider({
-    Name = "Attack Speed",
-    Min = 0.1,
-    Max = 2,
-    CurrentValue = settings.AttackSpeed,
-    Flag = "AttackSpeed",
-    Callback = function(value) settings.AttackSpeed = value end
-})
+local PlayerSection = PlayerTab:CreateSection("移動/能力")
 
--- God Mode Toggle
-Window:CreateToggle({
-    Name = "God Mode",
-    CurrentValue = settings.GodModeEnabled,
-    Flag = "GodMode",
-    Callback = function(value) settings.GodModeEnabled = value end
-})
-
--- WalkSpeed Slider
-Window:CreateSlider({
-    Name = "Walk Speed",
-    Min = 16,
-    Max = 200,
-    CurrentValue = settings.WalkSpeed,
-    Flag = "WalkSpeed",
-    Callback = function(value) humanoid.WalkSpeed = value end
-})
-
--- ESP Toggle
-Window:CreateToggle({
-    Name = "ESP",
-    CurrentValue = settings.ESPEnabled,
-    Flag = "ESP",
-    Callback = function(value) settings.ESPEnabled = value end
-})
-
--- ESP Color Picker
-Window:CreateColorPicker({
-    Name = "ESP Color",
-    CurrentColor = settings.ESPColor,
-    Flag = "ESPColor",
-    Callback = function(color) settings.ESPColor = color end
-})
-
--- Item ESP Toggle
-Window:CreateToggle({
-    Name = "Item ESP",
-    CurrentValue = settings.ESPItemsEnabled,
-    Flag = "ESPItems",
-    Callback = function(value) settings.ESPItemsEnabled = value end
-})
-
--- Chest ESP Toggle
-Window:CreateToggle({
-    Name = "Chest ESP",
-    CurrentValue = settings.ESPChestsEnabled,
-    Flag = "ESPChests",
-    Callback = function(value) settings.ESPChestsEnabled = value end
-})
-
---=================== MAIN LOOP ===================--
-RunService.RenderStepped:Connect(function(dt)
-    attackEnemies(dt)
-
-    if settings.ESPEnabled then
-        for _, enemy in ipairs(getEnemies()) do
-            createESP(enemy, "Enemy")
-        end
+-- スピードアップ
+local speedValue = 16
+PlayerTab:CreateSlider({
+    Name = "スピードアップ",
+    Range = {16, 500},
+    Increment = 1,
+    Suffix = "Speed",
+    CurrentValue = 16,
+    Flag = "Speed",
+    Callback = function(value)
+        speedValue = value
+        game.Players.LocalPlayer.Character.Humanoid.WalkSpeed = speedValue
     end
+})
 
-    if settings.ESPItemsEnabled then
-        for _, item in ipairs(getItems()) do
-            createESP(item, "Item")
-        end
+-- 無限ジャンプ
+local InfiniteJump = false
+PlayerTab:CreateToggle({
+    Name = "無限ジャンプ",
+    CurrentValue = false,
+    Flag = "InfJump",
+    Callback = function(value)
+        InfiniteJump = value
     end
+})
 
-    if settings.ESPChestsEnabled then
-        for _, chest in ipairs(getChests()) do
-            createESP(chest, "Chest")
-        end
+game:GetService("UserInputService").JumpRequest:Connect(function()
+    if InfiniteJump then
+        game.Players.LocalPlayer.Character.Humanoid:ChangeState(Enum.HumanoidStateType.Jumping)
     end
 end)
+
+-- 空中TP
+local AirTPEnabled = false
+PlayerTab:CreateToggle({
+    Name = "空中TP",
+    CurrentValue = false,
+    Flag = "AirTP",
+    Callback = function(value)
+        AirTPEnabled = value
+    end
+})
+
+-- 壁貫通
+local WallClip = false
+PlayerTab:CreateToggle({
+    Name = "壁貫通",
+    CurrentValue = false,
+    Flag = "WallClip",
+    Callback = function(value)
+        WallClip = value
+    end
+})
+
+--========================================================--
+--====================== ESPタブ ========================--
+--========================================================--
+
+local ESPTab = Window:CreateTab("ESP", 4483362458)
+local ESPSection = ESPTab:CreateSection("ESP設定")
+
+local ESPItems = {}
+local ESPEnemies = {}
+local ESPPlayers = {}
+
+-- アイテムESP
+local ItemsEnabled = false
+ESPTab:CreateToggle({
+    Name = "アイテムESP",
+    CurrentValue = false,
+    Flag = "ItemsESP",
+    Callback = function(value)
+        ItemsEnabled = value
+        -- ESP更新処理
+    end
+})
+
+-- 敵ESP
+local EnemiesEnabled = false
+ESPTab:CreateToggle({
+    Name = "敵ESP",
+    CurrentValue = false,
+    Flag = "EnemyESP",
+    Callback = function(value)
+        EnemiesEnabled = value
+    end
+})
+
+-- プレイヤーESP
+local PlayersESPEnabled = false
+ESPTab:CreateToggle({
+    Name = "プレイヤーESP",
+    CurrentValue = false,
+    Flag = "PlayerESP",
+    Callback = function(value)
+        PlayersESPEnabled = value
+    end
+})
+
+--========================================================--
+--===================== 戦闘タブ ========================--
+--========================================================--
+
+local CombatTab = Window:CreateTab("戦闘", 4483362458)
+local CombatSection = CombatTab:CreateSection("プレイヤー選択/TP")
+
+local SelectedPlayer = nil
+local AttachMode = false
+local OriginalCFrame = nil
+
+local function UpdatePlayerList()
+    CombatSection:ClearAllObjects()
+    for i, player in pairs(game.Players:GetPlayers()) do
+        if player ~= game.Players.LocalPlayer then
+            CombatSection:CreateButton({
+                Name = player.Name,
+                Callback = function()
+                    if SelectedPlayer == player then
+                        -- 張り付きの場合、元に戻す
+                        if AttachMode and OriginalCFrame then
+                            game.Players.LocalPlayer.Character.HumanoidRootPart.CFrame = OriginalCFrame
+                            AttachMode = false
+                        end
+                        SelectedPlayer = nil
+                        OriginalCFrame = nil
+                        return
+                    end
+                    SelectedPlayer = player
+                    OriginalCFrame = game.Players.LocalPlayer.Character.HumanoidRootPart.CFrame
+                    AttachMode = true
+                    -- TP
+                    game.Players.LocalPlayer.Character.HumanoidRootPart.CFrame = player.Character.HumanoidRootPart.CFrame * CFrame.new(0,0,3)
+                end
+            })
+        end
+    end
+end
+
+-- 初回生成
+UpdatePlayerList()
+
+-- プレイヤー追加時に自動更新
+game.Players.PlayerAdded:Connect(UpdatePlayerList)
+game.Players.PlayerRemoving:Connect(UpdatePlayerList)
+
+-- 張り付きループ
+game:GetService("RunService").RenderStepped:Connect(function()
+    if AttachMode and SelectedPlayer and SelectedPlayer.Character and SelectedPlayer.Character:FindFirstChild("HumanoidRootPart") then
+        game.Players.LocalPlayer.Character.HumanoidRootPart.CFrame = SelectedPlayer.Character.HumanoidRootPart.CFrame * CFrame.new(0,0,3)
+    end
+end)
+
+--========================================================--
+--===================== その他タブ =======================--
+--========================================================--
+
+local OtherTab = Window:CreateTab("その他", 4483362458)
+local OtherSection = OtherTab:CreateSection("便利機能")
+
+-- アンチAFK
+OtherTab:CreateToggle({
+    Name = "アンチAFK",
+    CurrentValue = false,
+    Flag = "AntiAFK",
+    Callback = function(value)
+        if value then
+            game:GetService("Players").LocalPlayer.Idled:Connect(function()
+                game:GetService("VirtualUser"):CaptureController()
+                game:GetService("VirtualUser"):ClickButton2(Vector2.new())
+            end)
+        end
+    end
+})
