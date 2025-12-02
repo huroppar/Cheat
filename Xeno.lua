@@ -226,3 +226,195 @@ spawn(function()
         wait(0.2)
     end
 end)
+
+
+
+--========================================================--
+--                     🔥 Combat Tab                      --
+--========================================================--
+
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local player = Players.LocalPlayer
+
+local combatTab = Window:CreateTab("Combat", 4483362458)
+combatTab:CreateLabel("プレイヤー一覧（HPリアルタイム表示）")
+
+local selectedTarget = nil
+local followActive = false
+local originalPos = nil
+
+local playerButtons = {}  -- [Player] = Button
+
+------------------------------------------------------------
+-- 🔥 HPを取得する安全関数
+------------------------------------------------------------
+local function GetHP(plr)
+    if plr.Character and plr.Character:FindFirstChild("Humanoid") then
+        local hum = plr.Character.Humanoid
+        return math.floor(hum.Health), math.floor(hum.MaxHealth)
+    end
+    return 0, 0
+end
+
+------------------------------------------------------------
+-- 🔥 プレイヤーボタン作成（HP付き）
+------------------------------------------------------------
+local function CreatePlayerButton(plr)
+    if playerButtons[plr] then return end -- 既にボタンがあるなら作らない
+
+    local hp, maxhp = GetHP(plr)
+    local btnName = plr.Name .. " [" .. hp .. "/" .. maxhp .. "]"
+
+    local btn = combatTab:CreateButton({
+        Name = btnName,
+        Callback = function()
+            selectedTarget = plr
+            followActive = false
+            originalPos = nil
+            RayField:Notify({
+                Title="ターゲット選択",
+                Content=plr.Name.." を選んだよ",
+                Duration=2
+            })
+        end
+    })
+
+    playerButtons[plr] = btn
+end
+
+------------------------------------------------------------
+-- 🔥 初期プレイヤー一覧作成
+------------------------------------------------------------
+for _, plr in pairs(Players:GetPlayers()) do
+    if plr ~= player then
+        CreatePlayerButton(plr)
+    end
+end
+
+------------------------------------------------------------
+-- 🔥 プレイヤー追加・削除処理
+------------------------------------------------------------
+Players.PlayerAdded:Connect(function(plr)
+    if plr ~= player then
+        CreatePlayerButton(plr)
+    end
+end)
+
+Players.PlayerRemoving:Connect(function(plr)
+    local btn = playerButtons[plr]
+    if btn then
+        btn.Name = "[Left] "..plr.Name
+        btn.Callback = function() end
+        playerButtons[plr] = nil
+        if selectedTarget == plr then selectedTarget = nil end
+    end
+end)
+
+------------------------------------------------------------
+-- 🔥 HPリアルタイム更新
+------------------------------------------------------------
+RunService.Heartbeat:Connect(function()
+    for plr, btn in pairs(playerButtons) do
+        if plr and plr.Character then
+            local hp, maxhp = GetHP(plr)
+            local text = (maxhp==0) and (plr.Name.." [Dead]") or (plr.Name.." ["..hp.."/"..maxhp.."]")
+            pcall(function() btn:Set(text) end)
+        end
+    end
+end)
+
+------------------------------------------------------------
+-- 🌀 TP ボタン
+------------------------------------------------------------
+combatTab:CreateButton({
+    Name = "選択中のプレイヤーへ TP",
+    Callback = function()
+        if selectedTarget
+            and selectedTarget.Character
+            and selectedTarget.Character:FindFirstChild("HumanoidRootPart") then
+
+            local hrp = selectedTarget.Character.HumanoidRootPart
+            player.Character:PivotTo(hrp.CFrame * CFrame.new(0,0,-3))
+        else
+            RayField:Notify({
+                Title="エラー",
+                Content="ターゲット無効！",
+                Duration=2
+            })
+        end
+    end
+})
+
+------------------------------------------------------------
+-- 🌀 張り付き（Follow）
+------------------------------------------------------------
+combatTab:CreateToggle({
+    Name="張り付き（Follow）",
+    CurrentValue=false,
+    Callback=function(state)
+        if not selectedTarget then
+            RayField:Notify({
+                Title="エラー",
+                Content="先にプレイヤー選んで！",
+                Duration=2
+            })
+            return
+        end
+
+        followActive = state
+
+        if state then
+            local myHRP = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
+            if myHRP then originalPos = myHRP.CFrame end
+
+            RayField:Notify({
+                Title="張り付き開始",
+                Content=selectedTarget.Name.." の後ろへ追従中",
+                Duration=2
+            })
+        else
+            if originalPos and player.Character then
+                player.Character:PivotTo(originalPos)
+            end
+            RayField:Notify({
+                Title="解除",
+                Content="元の位置に戻ったよ！",
+                Duration=2
+            })
+        end
+    end
+})
+
+------------------------------------------------------------
+-- 🔥 張り付き追尾ループ
+------------------------------------------------------------
+RunService.RenderStepped:Connect(function()
+    if followActive and selectedTarget and selectedTarget.Character then
+        local targetHRP = selectedTarget.Character:FindFirstChild("HumanoidRootPart")
+        local myHRP = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
+
+        if targetHRP and myHRP then
+            myHRP.CFrame = targetHRP.CFrame * CFrame.new(0,0,3)
+        end
+    end
+end)
+
+------------------------------------------------------------
+-- 🐟 GUI再表示用アイコン
+------------------------------------------------------------
+local icon = Instance.new("TextButton")
+icon.Size = UDim2.new(0,50,0,50)
+icon.Position = UDim2.new(0,10,0,10)
+icon.Text = "🐟"
+icon.BackgroundColor3 = Color3.fromRGB(0,170,255)
+icon.Visible = false
+icon.Parent = player:WaitForChild("PlayerGui")
+icon.MouseButton1Click:Connect(function()
+    Window:Toggle()
+    icon.Visible = false
+end)
+
+Window.CloseCallback = function()
+    icon.Visible = true
+end
