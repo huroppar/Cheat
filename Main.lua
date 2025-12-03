@@ -1,4 +1,4 @@
--- ultra obfuscation start
+- ultra obfuscation start
 local _c = string.char
 local _b = string.byte
 local _g = string.gsub
