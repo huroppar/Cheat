@@ -33,6 +33,156 @@ local function setWallClip(enable)
     end
 end
 
+
+
+-- ======= X-Ray & FullBright 定義（そのまま貼ってOK） =======
+local Players = game:GetService("Players")
+local LocalPlayer = Players.LocalPlayer
+local RunService = game:GetService("RunService")
+local Lighting = game:GetService("Lighting")
+
+-- X-Ray 状態
+local XRayPlayersEnabled = false   -- プレイヤーだけ透過
+local XRayWorldEnabled   = false   -- ワールド（壁など）透過
+local XRayTransparency   = 0.6
+
+-- ワールドパーツの元の LocalTransparencyModifier を保持
+local originalLocalTransparency = {}
+
+-- FullBright 状態
+local FullBrightEnabled = false
+local FB_Original = {
+	Brightness = Lighting.Brightness,
+	ClockTime = Lighting.ClockTime,
+	Ambient = Lighting.Ambient,
+	OutdoorAmbient = Lighting.OutdoorAmbient
+}
+local function ApplyFullBright()
+	Lighting.Brightness = 2
+	Lighting.ClockTime = 12
+	Lighting.Ambient = Color3.new(1,1,1)
+	Lighting.OutdoorAmbient = Color3.new(1,1,1)
+end
+local function RestoreFullBright()
+	if FB_Original then
+		Lighting.Brightness = FB_Original.Brightness
+		Lighting.ClockTime = FB_Original.ClockTime
+		Lighting.Ambient = FB_Original.Ambient
+		Lighting.OutdoorAmbient = FB_Original.OutdoorAmbient
+	end
+end
+
+-- キャラ（プレイヤー）に対する透過適用
+local function SetCharacterXray(character, value)
+	if not character then return end
+	for _, obj in ipairs(character:GetDescendants()) do
+		if obj:IsA("BasePart") then
+			-- LocalTransparencyModifier を使うとクライアントだけ描画が変わる
+			obj.LocalTransparencyModifier = value
+		end
+	end
+end
+
+-- ワールド（workspace 内の BasePart）に対する透過適用（安全に保持して戻す）
+local function SetWorldXray(value)
+	-- value = 0 なら元に戻す
+	if value == 0 then
+		for part, old in pairs(originalLocalTransparency) do
+			if part and part:IsA("BasePart") then
+				pcall(function() part.LocalTransparencyModifier = old end)
+			end
+		end
+		originalLocalTransparency = {}
+		return
+	end
+
+	-- 透過値を設定（対象フィルタ：CanCollide==true かつ Transparency < 1 を簡易壁判定）
+	for _, part in ipairs(workspace:GetDescendants()) do
+		if part:IsA("BasePart") and part ~= workspace.Terrain then
+			-- 簡易フィルタ（床や小道具全部透けたくないなら条件変更して）
+			if part.CanCollide and part.Transparency < 1 then
+				-- 保存しておく（最初だけ）
+				if originalLocalTransparency[part] == nil then
+					originalLocalTransparency[part] = part.LocalTransparencyModifier or 0
+				end
+				pcall(function() part.LocalTransparencyModifier = XRayTransparency end)
+			end
+		end
+	end
+end
+
+-- ループ：X-Ray（プレイヤー）更新
+task.spawn(function()
+	while true do
+		if XRayPlayersEnabled then
+			for _, plr in ipairs(Players:GetPlayers()) do
+				if plr ~= LocalPlayer then
+					SetCharacterXray(plr.Character, XRayTransparency)
+				end
+			end
+		else
+			for _, plr in ipairs(Players:GetPlayers()) do
+				if plr ~= LocalPlayer and plr.Character then
+					-- 元に戻す（0）
+					SetCharacterXray(plr.Character, 0)
+				end
+			end
+		end
+		task.wait(0.25)
+	end
+end)
+
+-- ループ：X-Ray（ワールド）更新（常時上書き）
+task.spawn(function()
+	while true do
+		if XRayWorldEnabled then
+			-- set world parts to transparency
+			SetWorldXray(XRayTransparency)
+		else
+			-- restore original
+			SetWorldXray(0)
+		end
+		task.wait(0.5)
+	end
+end)
+
+-- ループ：FullBright維持
+task.spawn(function()
+	while true do
+		if FullBrightEnabled then
+			ApplyFullBright()
+		end
+		task.wait(0.1)
+	end
+end)
+
+-- 外部から切り替えられる関数（GUI のコールバックで呼ぶ）
+local function ToggleXRayPlayers()
+	XRayPlayersEnabled = not XRayPlayersEnabled
+end
+local function ToggleXRayWorld()
+	XRayWorldEnabled = not XRayWorldEnabled
+end
+local function ToggleFullBright()
+	FullBrightEnabled = not FullBrightEnabled
+	if not FullBrightEnabled then
+		RestoreFullBright()
+	end
+end
+
+-- 安全にスクリプト停止時に戻すための関数（必要なら呼んで）
+local function CleanupVisuals()
+	XRayPlayersEnabled = false
+	XRayWorldEnabled = false
+	FullBrightEnabled = false
+	SetWorldXray(0)
+	for _, plr in ipairs(Players:GetPlayers()) do
+		if plr.Character then SetCharacterXray(plr.Character, 0) end
+	end
+	RestoreFullBright()
+end
+-- ======= 定義ブロック終わり =======
+
 --================ RayField GUI =================
 local Window = Rayfield:CreateWindow({
     Name = "Utility Hub v5",
@@ -154,6 +304,72 @@ local espTab = Window:CreateTab("ESP", 4483362458)
 
 local showPlayerESP, showEnemyESP, showItemESP = false, false, false
 local highlights = {}
+
+
+
+
+-- ======= ESPタブ用トグル（espTab が既にある前提） =======
+-- もし espTab が nil なら作る
+if not espTab then
+    espTab = Window:CreateTab("ESP", 4483362458)
+end
+
+-- プレイヤーX-Ray トグル
+espTab:CreateToggle({
+    Name = "X-Ray: プレイヤー透過",
+    CurrentValue = false,
+    Callback = function(val)
+        ToggleXRayPlayers()
+        if val then
+            -- 即反映（Optional：通知）
+            RayField:Notify({Title="X-Ray", Content="プレイヤー透過 ON", Duration=2})
+        else
+            RayField:Notify({Title="X-Ray", Content="プレイヤー透過 OFF", Duration=1})
+        end
+    end
+})
+
+-- ワールドX-Ray トグル（壁透け）
+espTab:CreateToggle({
+    Name = "X-Ray: ワールド透過",
+    CurrentValue = false,
+    Callback = function(val)
+        ToggleXRayWorld()
+        if val then
+            RayField:Notify({Title="X-Ray", Content="ワールド透過 ON", Duration=2})
+        else
+            RayField:Notify({Title="X-Ray", Content="ワールド透過 OFF", Duration=1})
+        end
+    end
+})
+
+-- 透過度スライダー（0 = 通常, 1 = 完全透明）
+espTab:CreateSlider({
+    Name = "X-Ray 透過度",
+    Range = {0, 1},
+    Increment = 0.05,
+    CurrentValue = XRayTransparency,
+    Suffix = "",
+    Flag = "XRayAlpha",
+    Callback = function(val)
+        XRayTransparency = val
+    end
+})
+
+-- FullBright トグル
+espTab:CreateToggle({
+    Name = "FullBright（常時明るく）",
+    CurrentValue = false,
+    Callback = function(val)
+        ToggleFullBright()
+        if val then
+            RayField:Notify({Title="FullBright", Content="常時明るく ON", Duration=2})
+        else
+            RayField:Notify({Title="FullBright", Content="常時明るく OFF", Duration=1})
+        end
+    end
+})
+-- ======= トグル追加終わり =======
 
 -- トグル作成
 espTab:CreateToggle({Name="Player ESP", CurrentValue=false, Callback=function(val) showPlayerESP=val end})
