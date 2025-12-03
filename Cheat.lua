@@ -88,6 +88,5 @@ end)
 
 MobileButton.MouseButton1Click:Connect(function()
     Frame:Destroy()
-    -- ここにMobile専用スクリプト呼び出し
-    -- 例: loadstring(game:HttpGet("https://raw.githubusercontent.com/ユーザー名/リポジトリ名/main/MobileScript.lua"))()
+   loadstring(game:HttpGet("https://raw.githubusercontent.com/huroppar/Cheat/refs/heads/main/Delta.lua"))()
 end)
