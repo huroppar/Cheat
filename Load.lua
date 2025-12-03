@@ -1,7 +1,3 @@
---========================================================--
---                🔑 RobloxCheatScriptVer2 Key GUI        --
---========================================================--
-
 local VALID_KEY = "RobloxCheatScriptVer2"  -- 正しいキー
 
 local RayField = loadstring(game:HttpGet("https://sirius.menu/rayfield"))()
@@ -12,19 +8,25 @@ local Window = RayField:CreateWindow({
     Theme = "Default",
 })
 
+-- 🔐 Key Tab
 local keyTab = Window:CreateTab("Key", 4483362458)
 keyTab:CreateLabel("スクリプトを使うにはキーを入力してください")
 
+-- 🔐 セクション必須！
+local keySection = keyTab:CreateSection("Key Input")
+
 local enteredKey = ""
-keyTab:CreateTextbox({
+
+keySection:CreateInput({
     Name = "Key Input",
     PlaceholderText = "Enter your key...",
+    RemoveTextAfterFocusLost = false,
     Callback = function(text)
         enteredKey = text
     end
 })
 
-keyTab:CreateButton({
+keySection:CreateButton({
     Name = "認証する",
     Callback = function()
         if enteredKey == VALID_KEY then
@@ -34,7 +36,6 @@ keyTab:CreateButton({
                 Duration = 3
             })
 
-            -- ★ 本体スクリプトを読み込む ★
             loadstring(game:HttpGet("https://raw.githubusercontent.com/huroppar/Cheat/refs/heads/main/Cheat.lua"))()
 
         else
