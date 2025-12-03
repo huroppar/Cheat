@@ -40,7 +40,7 @@ local Title = Instance.new("TextLabel")
 Title.Size = UDim2.new(1,0,0,40)
 Title.Position = UDim2.new(0,0,0,0)
 Title.BackgroundTransparency = 1
-Title.Text = "Select Platform"
+Title.Text = "プラットフォーム選択"
 Title.TextColor3 = Color3.fromRGB(0,255,255)
 Title.Font = Enum.Font.GothamBold
 Title.TextScaled = true
@@ -76,9 +76,9 @@ local function CreateButton(parent, text, posX, color)
 end
 
 -- PC ボタン
-local PCButton = CreateButton(Frame, "PC (Xeno)", 0.05, Color3.fromRGB(0,200,255))
+local PCButton = CreateButton(Frame, "PC", 0.05, Color3.fromRGB(0,200,255))
 -- Mobile ボタン
-local MobileButton = CreateButton(Frame, "Mobile (Delta)", 0.5, Color3.fromRGB(255,0,255))
+local MobileButton = CreateButton(Frame, "IOSまたはAndroid", 0.5, Color3.fromRGB(255,0,255))
 
 --================= ボタンクリック処理 =================--
 PCButton.MouseButton1Click:Connect(function()
