@@ -619,7 +619,7 @@ local DistanceSlider = EnemyTab:CreateSlider({
 -- 半径スライダー
 local RadiusSlider = EnemyTab:CreateSlider({
     Name = "吸引半径",
-    Range = {1, 100},
+    Range = {1, 2000},
     Increment = 1,
     Suffix = " studs",
     CurrentValue = AttractionRadius,
