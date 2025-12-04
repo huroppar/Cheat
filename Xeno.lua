@@ -588,3 +588,68 @@ RunService.Heartbeat:Connect(function()
         end
     end
 end)
+
+
+
+
+--============================
+-- 設定値
+--============================
+local FollowDistance = 4   -- プレイヤー前方の距離
+local AttractionRadius = 20 -- 半径20スタッド以内だけ吸引（初期値）
+
+--============================
+-- RayField UI
+--============================
+local EnemyTab = Window:CreateTab("EnemyControl", 4483362458)
+
+-- 距離スライダー
+local DistanceSlider = EnemyTab:CreateSlider({
+    Name = "敵の前方距離",
+    Range = {1, 50},
+    Increment = 1,
+    Suffix = " studs",
+    CurrentValue = FollowDistance,
+    Flag = "DistanceSliderFlag",
+    Callback = function(val)
+        FollowDistance = val
+    end,
+})
+
+-- 半径スライダー
+local RadiusSlider = EnemyTab:CreateSlider({
+    Name = "吸引半径",
+    Range = {1, 100},
+    Increment = 1,
+    Suffix = " studs",
+    CurrentValue = AttractionRadius,
+    Flag = "RadiusSliderFlag",
+    Callback = function(val)
+        AttractionRadius = val
+    end,
+})
+
+--============================
+-- 敵吸引処理
+--============================
+local player = game.Players.LocalPlayer
+local run = game:GetService("RunService")
+local enemyFolder = workspace:WaitForChild("Enemies")  -- 敵フォルダ名を合わせてね
+
+run.RenderStepped:Connect(function()
+    local char = player.Character
+    if not char then return end
+    local hrp = char:FindFirstChild("HumanoidRootPart")
+    if not hrp then return end
+
+    for _, enemy in pairs(enemyFolder:GetChildren()) do
+        local eHRP = enemy:FindFirstChild("HumanoidRootPart")
+        if eHRP then
+            local distance = (eHRP.Position - hrp.Position).Magnitude
+            if distance <= AttractionRadius then
+                -- プレイヤー前方 FollowDistance スタッドに固定
+                eHRP.CFrame = hrp.CFrame * CFrame.new(0, 0, -FollowDistance)
+            end
+        end
+    end
+end)
