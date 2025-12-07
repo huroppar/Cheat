@@ -371,6 +371,95 @@ espTab:CreateToggle({
 })
 -- ======= トグル追加終わり =======
 
+--=================== HITBOX ESP ===================--
+local showPlayerHitbox = false
+local showEnemyHitbox = false
+
+local hitboxBoxes = {} -- 管理テーブル（Highlightとは別管理）
+
+-- ボックス作成
+local function createHitboxBox(part)
+    local box = Instance.new("BoxHandleAdornment")
+    box.Adornee = part
+    box.AlwaysOnTop = true
+    box.ZIndex = 10
+    box.Size = part.Size
+    box.Color3 = Color3.new(1,0,0) -- 赤
+    box.Transparency = 0.5
+    box.Parent = part
+    return box
+end
+
+-- HITBOX 更新ループ
+task.spawn(function()
+    while true do
+        
+        -- プレイヤー Hitbox
+        for _, pl in pairs(Players:GetPlayers()) do
+            if pl.Character and pl.Character:FindFirstChild("HumanoidRootPart") then
+                local hrp = pl.Character.HumanoidRootPart
+                if showPlayerHitbox then
+                    if not hitboxBoxes[hrp] then
+                        hitboxBoxes[hrp] = createHitboxBox(hrp)
+                    end
+                else
+                    if hitboxBoxes[hrp] then
+                        hitboxBoxes[hrp]:Destroy()
+                        hitboxBoxes[hrp] = nil
+                    end
+                end
+            end
+        end
+        
+        -- 敵 HITBOX
+        for _, enemy in pairs(workspace:GetChildren()) do
+            if enemy:IsA("Model") and enemy:FindFirstChild("HumanoidRootPart") and enemy:FindFirstChildOfClass("Humanoid") then
+                local hrp = enemy.HumanoidRootPart
+                if showEnemyHitbox then
+                    if not hitboxBoxes[hrp] then
+                        hitboxBoxes[hrp] = createHitboxBox(hrp)
+                    end
+                else
+                    if hitboxBoxes[hrp] then
+                        hitboxBoxes[hrp]:Destroy()
+                        hitboxBoxes[hrp] = nil
+                    end
+                end
+            end
+        end
+        
+        task.wait(0.15)
+    end
+end)
+
+--=================== HITBOX トグル ===================--
+espTab:CreateToggle({
+    Name = "Player Hitbox ESP",
+    CurrentValue = false,
+    Callback = function(val)
+        showPlayerHitbox = val
+        RayField:Notify({
+            Title="Player Hitbox",
+            Content = val and "ON" or "OFF",
+            Duration = 1
+        })
+    end
+})
+
+espTab:CreateToggle({
+    Name = "Enemy Hitbox ESP",
+    CurrentValue = false,
+    Callback = function(val)
+        showEnemyHitbox = val
+        RayField:Notify({
+            Title="Enemy Hitbox",
+            Content = val and "ON" or "OFF",
+            Duration = 1
+        })
+    end
+})
+
+
 -- トグル作成
 espTab:CreateToggle({Name="Player ESP", CurrentValue=false, Callback=function(val) showPlayerESP=val end})
 espTab:CreateToggle({Name="Enemy/Bot ESP", CurrentValue=false, Callback=function(val) showEnemyESP=val end})
