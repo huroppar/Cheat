@@ -920,11 +920,14 @@ run.RenderStepped:Connect(function()
     end
 end)
 
---============================
--- ハンティ・ゾンビタブ
---============================
-local huntTab = Window:CreateTab("ハンティ・ゾンビ", 4483362459) -- 安全なID
+--=============================
+-- ハンティ・ゾンビタブ用安全スライド
+--=============================
 
+local RunService = game:GetService("RunService")
+local player = game:GetService("Players").LocalPlayer
+local UIS = game:GetService("UserInputService")
+local workspace = game:GetService("Workspace")
 
 local selectedItems = {}
 local slideSpeed = 10 -- デフォルト
@@ -969,64 +972,87 @@ huntTab:CreateToggle({
     end
 })
 
---============================
--- スライド移動処理
---============================
-local RunService = game:GetService("RunService")
-local player = game:GetService("Players").LocalPlayer
-local UIS = game:GetService("UserInputService")
-
+--=============================
+-- ターゲット取得関数（安全版）
+--=============================
 local function getTargets()
     local targets = {}
+    if not workspace then return targets end
+
     for _, obj in ipairs(workspace:GetChildren()) do
-        if obj:FindFirstChild("PickupHitbox") or obj:FindFirstChild("Pipe") then
-            local nameCheck = obj.Name
-            if selectedItems[nameCheck] or obj:FindFirstChild("Pipe") then
-                table.insert(targets, obj)
+        if obj and obj:IsA("Model") then
+            local pickup = obj:FindFirstChild("PickupHitbox")
+            local pipe = obj:FindFirstChild("Pipe")
+            if pickup or pipe then
+                local nameCheck = obj.Name
+                if selectedItems[nameCheck] or pipe then
+                    table.insert(targets, obj)
+                end
             end
         end
     end
     return targets
 end
 
+--=============================
+-- スライド移動処理（安全版）
+--=============================
 RunService.RenderStepped:Connect(function(dt)
     if not slideActive then return end
+
     local char = player.Character
-    if not char or not char:FindFirstChild("HumanoidRootPart") then return end
-    local hrp = char.HumanoidRootPart
+    if not char then return end
+
+    local hrp = char:FindFirstChild("HumanoidRootPart")
+    if not hrp then return end
 
     local targets = getTargets()
     if #targets == 0 then return end
 
-    local target = targets[1] -- 常に先頭を取得
+    local target = targets[1]
+    if not target or not target.Parent then return end
+
     local targetPos
-    if target:FindFirstChild("PickupHitbox") then
-        targetPos = target.PickupHitbox.Position
-    elseif target:FindFirstChild("Pipe") then
-        targetPos = target.Pipe.Position
+    local pickup = target:FindFirstChild("PickupHitbox")
+    local pipe = target:FindFirstChild("Pipe")
+
+    if pickup then
+        targetPos = pickup.Position
+    elseif pipe then
+        targetPos = pipe.Position
     end
 
     if targetPos then
-        -- CFrameをスライドで移動
-        hrp.CFrame = hrp.CFrame:Lerp(CFrame.new(targetPos + Vector3.new(0,3,0)), slideSpeed * dt)
+        -- CFrameを滑らかに移動
+        hrp.CFrame = hrp.CFrame:Lerp(CFrame.new(targetPos + Vector3.new(0,3,0)), math.clamp(slideSpeed * dt, 0, 1))
 
         -- 対象に近づいたら処理
         if (hrp.Position - targetPos).Magnitude < 3 then
-            -- アイテムなら拾う処理
-            if target:FindFirstChild("PickupHitbox") then
-                firetouchinterest(hrp, target.PickupHitbox, 0)
-                firetouchinterest(hrp, target.PickupHitbox, 1)
+            -- アイテム取得
+            if pickup then
+                pcall(function()
+                    firetouchinterest(hrp, pickup, 0)
+                    firetouchinterest(hrp, pickup, 1)
+                end)
             end
-            -- Pipeなら技を打つ
-            if target:FindFirstChild("Pipe") then
+
+            -- Pipe操作
+            if pipe then
                 for _, key in ipairs({"Z","X","C"}) do
-                    UIS.InputBegan:Fire({KeyCode=Enum.KeyCode[key]}, false)
+                    local keyEnum = Enum.KeyCode[key]
+                    if keyEnum then
+                        pcall(function()
+                            UIS.InputBegan:Fire({KeyCode=keyEnum}, false)
+                        end)
+                    end
                 end
             end
-            target:Destroy() -- 処理済みは消す（リストから次へ）
+
+            -- 対象削除（処理済み）
+            if target and target.Parent then
+                pcall(function() target:Destroy() end)
+            end
         end
     end
 end)
-
-
 
