@@ -898,9 +898,10 @@ local player = game.Players.LocalPlayer
 local run = game:GetService("RunService")
 local enemyFolder = workspace:FindFirstChild("Enemies") -- 存在しない場合は nil
 if enemyFolder then
-    -- 吸引処理のループ
+    for _, enemy in pairs(enemyFolder:GetChildren()) do
+        ...
+    end
 end
-
 
 run.RenderStepped:Connect(function()
     local char = player.Character
