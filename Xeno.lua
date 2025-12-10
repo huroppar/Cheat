@@ -919,7 +919,7 @@ end)
 --============================
 -- ハンティ・ゾンビタブ
 --============================
-local huntTab = Window:CreateTab("ハンティ・ゾンビ", 4483362458) -- 安全なID
+local huntTab = Window:CreateTab("ハンティ・ゾンビ", 4483362459) -- 安全なID
 
 
 local selectedItems = {}
