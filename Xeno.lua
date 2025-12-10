@@ -896,7 +896,11 @@ local RadiusSlider = EnemyTab:CreateSlider({
 --============================
 local player = game.Players.LocalPlayer
 local run = game:GetService("RunService")
-local enemyFolder = workspace:WaitForChild("Enemies")  -- 敵フォルダ名を合わせてね
+local enemyFolder = workspace:FindFirstChild("Enemies") -- 存在しない場合は nil
+if enemyFolder then
+    -- 吸引処理のループ
+end
+
 
 run.RenderStepped:Connect(function()
     local char = player.Character
