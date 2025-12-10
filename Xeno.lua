@@ -763,7 +763,7 @@ RunService.Heartbeat:Connect(function()
         local tHRP = selectedTarget.Character:FindFirstChild("HumanoidRootPart")
         local myHRP = player.Character:FindFirstChild("HumanoidRootPart")
         if tHRP and myHRP then
-            myHRP.CFrame = tHRP.CFrame * CFrame.new(0,0,3)
+            myHRP.CFrame = tHRP.CFrame * CFrame.new(0,0,7)
         end
     end
 end)
