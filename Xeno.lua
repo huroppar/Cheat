@@ -921,143 +921,77 @@ run.RenderStepped:Connect(function()
 end)
 
 
---=============================
--- ハンティ・ゾンビタブ用改良版・安全スライド
---=============================
-local huntTab = Window:CreateTab("ハンティ・ゾンビ", 4483362458)
 
-local RunService = game:GetService("RunService")
+--=============================
+-- ハンティ・ゾンビ・Pickup自動取得
+--=============================
 local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
 local UIS = game:GetService("UserInputService")
-local workspace = game:GetService("Workspace")
+local Workspace = game:GetService("Workspace")
 
 local player = Players.LocalPlayer
-local selectedItems = {}
-local slideSpeed = 10
+local slideSpeed = 20 -- 好きな移動速度
 local slideActive = false
 
--- アイテム一覧
-local itemNames = {"Health", "Boost", "RegenAll"}
+-- ScreenGui作成
+local screenGui = Instance.new("ScreenGui")
+screenGui.Parent = player:WaitForChild("PlayerGui")
+screenGui.ResetOnSpawn = false
 
---=============================
--- アイテム選択トグル作成
---=============================
-for _, name in ipairs(itemNames) do
-    huntTab:CreateToggle({
-        Name = name,
-        CurrentValue = false,
-        Callback = function(state)
-            if state then
-                selectedItems[name] = true
-            else
-                selectedItems[name] = nil
-            end
-        end
-    })
-end
+-- トグルボタン
+local toggleButton = Instance.new("TextButton")
+toggleButton.Size = UDim2.new(0, 150, 0, 50)
+toggleButton.Position = UDim2.new(0, 50, 0, 50)
+toggleButton.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+toggleButton.TextColor3 = Color3.new(1,1,1)
+toggleButton.Text = "自動Pickup ON/OFF"
+toggleButton.Parent = screenGui
 
---=============================
--- スライド速度スライダー
---=============================
-huntTab:CreateSlider({
-    Name = "移動速度",
-    Range = {5, 50},
-    Increment = 1,
-    CurrentValue = slideSpeed,
-    Suffix = " stud/s",
-    Flag = "SlideSpeed",
-    Callback = function(val)
-        slideSpeed = val
-    end
-})
+toggleButton.MouseButton1Click:Connect(function()
+    slideActive = not slideActive
+    toggleButton.Text = slideActive and "自動Pickup ON" or "自動Pickup OFF"
+end)
 
---=============================
--- 自動スライド取得トグル
---=============================
-huntTab:CreateToggle({
-    Name = "自動スライド取得",
-    CurrentValue = false,
-    Callback = function(state)
-        slideActive = state
-    end
-})
-
---=============================
--- ターゲット取得関数
---=============================
-local function getTargets()
+-- Pickup取得関数
+local function getPickups()
     local targets = {}
-    for _, obj in ipairs(workspace:GetChildren()) do
-        if obj:IsA("Model") then
-            local pickup = obj:FindFirstChild("PickupHitbox")
-            local pipe = obj:FindFirstChild("Pipe")
-            if pickup or pipe then
-                -- アイテム名が選択されている or Pipe は常に対象
-                if selectedItems[obj.Name] or pipe then
-                    table.insert(targets, obj)
-                end
-            end
+    for _, obj in pairs(Workspace:GetDescendants()) do
+        if obj:IsA("BasePart") and obj.Name == "PickupHitbox" and obj.Parent then
+            table.insert(targets, obj)
         end
     end
-    -- 距離が近い順にソート
-    table.sort(targets, function(a,b)
-        local aPos = (a:FindFirstChild("PickupHitbox") or a:FindFirstChild("Pipe")).Position
-        local bPos = (b:FindFirstChild("PickupHitbox") or b:FindFirstChild("Pipe")).Position
-        local hrp = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
-        if hrp then
-            return (hrp.Position - aPos).Magnitude < (hrp.Position - bPos).Magnitude
-        end
-        return false
-    end)
     return targets
 end
 
---=============================
--- スライド移動処理
---=============================
+-- 自動スライド取得
 RunService.RenderStepped:Connect(function(dt)
     if not slideActive then return end
+
     local char = player.Character
     if not char then return end
     local hrp = char:FindFirstChild("HumanoidRootPart")
     if not hrp then return end
 
-    local targets = getTargets()
-    if #targets == 0 then return end
+    local pickups = getPickups()
+    if #pickups == 0 then return end
 
-    local target = targets[1]
+    local target = pickups[1]
     if not target or not target.Parent then return end
 
-    local pickup = target:FindFirstChild("PickupHitbox")
-    local pipe = target:FindFirstChild("Pipe")
-    local targetPos = pickup and pickup.Position or pipe and pipe.Position
+    -- 滑らかに移動
+    hrp.CFrame = hrp.CFrame:Lerp(CFrame.new(target.Position + Vector3.new(0,3,0)), math.clamp(slideSpeed * dt, 0, 1))
 
-    if targetPos then
-        -- 滑らか移動
-        hrp.CFrame = hrp.CFrame:Lerp(CFrame.new(targetPos + Vector3.new(0,3,0)), math.clamp(slideSpeed * dt, 0, 1))
-
-        -- 近づいたら取得・操作
-        if (hrp.Position - targetPos).Magnitude < 3 then
-            if pickup then
-                pcall(function()
-                    firetouchinterest(hrp, pickup, 0)
-                    firetouchinterest(hrp, pickup, 1)
-                end)
-            end
-
-            if pipe then
-                for _, key in ipairs({"Z","X","C"}) do
-                    local keyEnum = Enum.KeyCode[key]
-                    pcall(function()
-                        UIS.InputBegan:Fire({KeyCode=keyEnum}, false)
-                    end)
-                end
-            end
-
-            -- 処理済み削除
+    -- 近づいたら取得
+    if (hrp.Position - target.Position).Magnitude < 3 then
+        pcall(function()
+            firetouchinterest(hrp, target, 0)
+            firetouchinterest(hrp, target, 1)
+        end)
+        pcall(function()
             if target and target.Parent then
-                pcall(function() target:Destroy() end)
+                target:Destroy()
             end
-        end
+        end)
     end
 end)
