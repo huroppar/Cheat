@@ -987,3 +987,80 @@ RunService.RenderStepped:Connect(function()
 end)
 
 
+--========================================================--
+--                 🧟‍♂️ ハンティ・ゾンビ Tab               --
+--========================================================--
+
+local huntTab = Window:CreateTab("ハンティ・ゾンビ", 4483362458)
+
+local autoPipeActive = false
+
+-- 技キーの順番
+local skillKeys = {"Z", "X", "C"}
+
+-- Pipe一覧取得関数
+local function getPipes()
+	local pipes = {}
+	for _, obj in ipairs(workspace:GetDescendants()) do
+		if obj.Name == "Pipe" and obj:IsA("BasePart") then
+			table.insert(pipes, obj)
+		end
+	end
+	return pipes
+end
+
+-- 技発動関数
+local function useSkills()
+	for _, key in ipairs(skillKeys) do
+		game:GetService("VirtualInputManager"):SendKeyEvent(true, key, false, game)
+		wait(0.1)
+		game:GetService("VirtualInputManager"):SendKeyEvent(false, key, false, game)
+		wait(0.1)
+	end
+end
+
+-- 自動Pipe処理ループ
+spawn(function()
+	while true do
+		if autoPipeActive then
+			local pipes = getPipes()
+			for _, pipe in ipairs(pipes) do
+				if not autoPipeActive then break end
+				if pipe and pipe.Parent then
+					local hrp = game.Players.LocalPlayer.Character and game.Players.LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+					if hrp then
+						-- Pipeの上にTP
+						hrp.CFrame = pipe.CFrame + Vector3.new(0,3,0)
+						wait(0.1)
+						useSkills()
+						-- Pipeが消えるまで待機
+						repeat wait(0.1) until not pipe.Parent or not autoPipeActive
+					end
+				end
+			end
+		end
+		wait(0.5)
+	end
+end)
+
+-- GUIトグル
+huntTab:CreateToggle({
+	Name = "自動Pipe破壊",
+	CurrentValue = false,
+	Callback = function(state)
+		autoPipeActive = state
+		if state then
+			RayField:Notify({
+				Title = "開始",
+				Content = "自動Pipe破壊を開始しました",
+				Duration = 2
+			})
+		else
+			RayField:Notify({
+				Title = "停止",
+				Content = "自動Pipe破壊を停止しました",
+				Duration = 2
+			})
+		end
+	end
+})
