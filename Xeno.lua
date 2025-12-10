@@ -675,7 +675,6 @@ combatTab:CreateToggle({
 
 
 
-
 local freeViewActive = false
 local selectedTarget = nil
 
@@ -788,16 +787,17 @@ RunService.RenderStepped:Connect(function()
 	local yaw = math.rad(camYaw)
 	local pitch = math.rad(camPitch)
 
-	-- カメラ位置計算（FPSゲーム方式）
-	local offset = Vector3.new(
+	-- 視点方向ベクトル（FPS式）
+	local lookDir = Vector3.new(
 		math.cos(pitch) * math.sin(yaw),
 		math.sin(pitch),
 		math.cos(pitch) * math.cos(yaw)
-	) * zoomDist
+	)
 
-	local camPos = head.Position - offset
+	local camPos = head.Position - lookDir * zoomDist
 
-	camera.CFrame = CFrame.new(camPos, head.Position)
+	-- 注視点を camPos + lookDir に変更
+	camera.CFrame = CFrame.new(camPos, camPos + lookDir)
 end)
 
 --========================================================--
