@@ -923,8 +923,10 @@ end)
 
 
 --=============================
--- ハンティ・ゾンビ・Pickup自動取得
+-- ハンティ・ゾンビタブ用改良版・安全スライド
 --=============================
+local huntTab = Window:CreateTab("ハンティ・ゾンビ", 4483362458)
+
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UIS = game:GetService("UserInputService")
