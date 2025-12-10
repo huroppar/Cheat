@@ -923,7 +923,7 @@ end)
 
 
 --=============================
--- ハンティ・ゾンビタブ用改良版・安全スライド
+-- ハンティ・ゾンビタブ用・Pickupスライド
 --=============================
 local huntTab = Window:CreateTab("ハンティ・ゾンビ", 4483362458)
 
@@ -933,29 +933,10 @@ local UIS = game:GetService("UserInputService")
 local Workspace = game:GetService("Workspace")
 
 local player = Players.LocalPlayer
-local slideSpeed = 20 -- 好きな移動速度
+local slideSpeed = 20 -- デフォルト速度
 local slideActive = false
 
--- ScreenGui作成
-local screenGui = Instance.new("ScreenGui")
-screenGui.Parent = player:WaitForChild("PlayerGui")
-screenGui.ResetOnSpawn = false
-
--- トグルボタン
-local toggleButton = Instance.new("TextButton")
-toggleButton.Size = UDim2.new(0, 150, 0, 50)
-toggleButton.Position = UDim2.new(0, 50, 0, 50)
-toggleButton.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
-toggleButton.TextColor3 = Color3.new(1,1,1)
-toggleButton.Text = "自動Pickup ON/OFF"
-toggleButton.Parent = screenGui
-
-toggleButton.MouseButton1Click:Connect(function()
-    slideActive = not slideActive
-    toggleButton.Text = slideActive and "自動Pickup ON" or "自動Pickup OFF"
-end)
-
--- Pickup取得関数
+-- アイテム取得関数
 local function getPickups()
     local targets = {}
     for _, obj in pairs(Workspace:GetDescendants()) do
@@ -966,10 +947,31 @@ local function getPickups()
     return targets
 end
 
--- 自動スライド取得
+-- スライド速度スライダー
+huntTab:CreateSlider({
+    Name = "移動速度",
+    Range = {5,50},
+    Increment = 1,
+    CurrentValue = slideSpeed,
+    Suffix = " stud/s",
+    Flag = "SlideSpeed",
+    Callback = function(val)
+        slideSpeed = val
+    end
+})
+
+-- 自動スライド取得トグル
+huntTab:CreateToggle({
+    Name = "自動スライド取得",
+    CurrentValue = false,
+    Callback = function(state)
+        slideActive = state
+    end
+})
+
+-- RenderSteppedで移動
 RunService.RenderStepped:Connect(function(dt)
     if not slideActive then return end
-
     local char = player.Character
     if not char then return end
     local hrp = char:FindFirstChild("HumanoidRootPart")
@@ -982,15 +984,13 @@ RunService.RenderStepped:Connect(function(dt)
     if not target or not target.Parent then return end
 
     -- 滑らかに移動
-    hrp.CFrame = hrp.CFrame:Lerp(CFrame.new(target.Position + Vector3.new(0,3,0)), math.clamp(slideSpeed * dt, 0, 1))
+    hrp.CFrame = hrp.CFrame:Lerp(CFrame.new(target.Position + Vector3.new(0,3,0)), math.clamp(slideSpeed*dt,0,1))
 
     -- 近づいたら取得
     if (hrp.Position - target.Position).Magnitude < 3 then
         pcall(function()
             firetouchinterest(hrp, target, 0)
             firetouchinterest(hrp, target, 1)
-        end)
-        pcall(function()
             if target and target.Parent then
                 target:Destroy()
             end
