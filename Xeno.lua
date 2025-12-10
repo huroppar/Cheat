@@ -923,7 +923,7 @@ end)
 
 
 --=============================
--- ハンティ・ゾンビタブ用・Pickupスライド
+-- ハンティ・ゾンビタブ用・Pickup & Pipe追尾
 --=============================
 local huntTab = Window:CreateTab("ハンティ・ゾンビ", 4483362458)
 
@@ -933,10 +933,13 @@ local UIS = game:GetService("UserInputService")
 local Workspace = game:GetService("Workspace")
 
 local player = Players.LocalPlayer
-local slideSpeed = 20 -- デフォルト速度
+
+-- =====================
+-- Pickupスライド設定
+-- =====================
+local slideSpeed = 20
 local slideActive = false
 
--- アイテム取得関数
 local function getPickups()
     local targets = {}
     for _, obj in pairs(Workspace:GetDescendants()) do
@@ -947,7 +950,6 @@ local function getPickups()
     return targets
 end
 
--- スライド速度スライダー
 huntTab:CreateSlider({
     Name = "移動速度",
     Range = {5,50},
@@ -960,7 +962,6 @@ huntTab:CreateSlider({
     end
 })
 
--- 自動スライド取得トグル
 huntTab:CreateToggle({
     Name = "自動スライド取得",
     CurrentValue = false,
@@ -969,31 +970,113 @@ huntTab:CreateToggle({
     end
 })
 
--- RenderSteppedで移動
+-- =====================
+-- Pipe追尾設定
+-- =====================
+local followActive = false
+local originalCFrame = nil
+local pipeCache = {}
+local searchCooldown = 0.5
+local lastSearch = 0
+
+local function updatePipeCache()
+    pipeCache = {}
+    for _, obj in pairs(Workspace:GetDescendants()) do
+        if obj:IsA("Model") and (obj.Name == "Pipe" or obj.Name == "SewerPipeModel") then
+            if obj.PrimaryPart then
+                table.insert(pipeCache, obj)
+            else
+                local part = obj:FindFirstChildWhichIsA("BasePart")
+                if part then
+                    obj.PrimaryPart = part
+                    table.insert(pipeCache, obj)
+                end
+            end
+        end
+    end
+end
+
+huntTab:CreateToggle({
+    Name = "Pipe追尾",
+    CurrentValue = false,
+    Callback = function(state)
+        followActive = state
+        local char = player.Character
+        if state and char then
+            local hrp = char:FindFirstChild("HumanoidRootPart")
+            if hrp then originalCFrame = hrp.CFrame end
+        elseif not state and char and originalCFrame then
+            local hrp = char:FindFirstChild("HumanoidRootPart")
+            if hrp then hrp.CFrame = originalCFrame end
+        end
+    end
+})
+
+-- =====================
+-- RenderStepped処理
+-- =====================
 RunService.RenderStepped:Connect(function(dt)
-    if not slideActive then return end
     local char = player.Character
     if not char then return end
     local hrp = char:FindFirstChild("HumanoidRootPart")
     if not hrp then return end
 
-    local pickups = getPickups()
-    if #pickups == 0 then return end
-
-    local target = pickups[1]
-    if not target or not target.Parent then return end
-
-    -- 滑らかに移動
-    hrp.CFrame = hrp.CFrame:Lerp(CFrame.new(target.Position + Vector3.new(0,3,0)), math.clamp(slideSpeed*dt,0,1))
-
-    -- 近づいたら取得
-    if (hrp.Position - target.Position).Magnitude < 3 then
-        pcall(function()
-            firetouchinterest(hrp, target, 0)
-            firetouchinterest(hrp, target, 1)
+    -- Pickupスライド
+    if slideActive then
+        local pickups = getPickups()
+        if #pickups > 0 then
+            local target = pickups[1]
             if target and target.Parent then
-                target:Destroy()
+                hrp.CFrame = hrp.CFrame:Lerp(CFrame.new(target.Position + Vector3.new(0,3,0)), math.clamp(slideSpeed*dt,0,1))
+                if (hrp.Position - target.Position).Magnitude < 3 then
+                    pcall(function()
+                        firetouchinterest(hrp, target, 0)
+                        firetouchinterest(hrp, target, 1)
+                        if target and target.Parent then target:Destroy() end
+                    end)
+                end
             end
+        end
+    end
+
+    -- Pipe追尾
+    if followActive then
+        lastSearch = lastSearch + dt
+        if lastSearch >= searchCooldown then
+            updatePipeCache()
+            lastSearch = 0
+        end
+        if #pipeCache == 0 then return end
+
+        table.sort(pipeCache, function(a,b)
+            return (hrp.Position - a.PrimaryPart.Position).Magnitude < (hrp.Position - b.PrimaryPart.Position).Magnitude
         end)
+
+        local target = pipeCache[1]
+        if not target or not target.PrimaryPart then return end
+
+        local distance = (hrp.Position - target.PrimaryPart.Position).Magnitude
+        local moveTarget = target.PrimaryPart.Position
+        if distance > 50 then
+            moveTarget = hrp.Position + (target.PrimaryPart.Position - hrp.Position).Unit * (distance - 50)
+        end
+
+        hrp.CFrame = hrp.CFrame:Lerp(CFrame.new(moveTarget + Vector3.new(0,3,0)), math.clamp(slideSpeed*dt,0,1))
+
+        if distance <= 50 then
+            for _, key in ipairs({"X","C"}) do
+                local keyEnum = Enum.KeyCode[key]
+                if keyEnum then
+                    pcall(function()
+                        UIS.InputBegan:Fire({KeyCode=keyEnum}, false)
+                    end)
+                end
+            end
+        end
+
+        if not target or not target.Parent then
+            followActive = false
+            if hrp and originalCFrame then hrp.CFrame = originalCFrame end
+        end
     end
 end)
