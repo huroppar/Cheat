@@ -904,6 +904,8 @@ run.RenderStepped:Connect(function()
     local hrp = char:FindFirstChild("HumanoidRootPart")
     if not hrp then return end
 
+    local enemyFolder = workspace:FindFirstChild("Enemies") -- 毎フレーム確認
+
     if enemyFolder then
         for _, enemy in pairs(enemyFolder:GetChildren()) do
             local eHRP = enemy:FindFirstChild("HumanoidRootPart")
@@ -916,6 +918,7 @@ run.RenderStepped:Connect(function()
         end
     end
 end)
+
 
 --=============================
 -- ハンティ・ゾンビタブ用安全スライド
