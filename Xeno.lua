@@ -916,3 +916,74 @@ run.RenderStepped:Connect(function()
     end
 end)
 
+
+
+--=============================
+-- 🔥 ハンティ・ゾンビ タブ追加
+--=============================
+local huntTab = Window:CreateTab("ハンティ・ゾンビ", 4483362458)
+
+-- アイテム選択用テーブル
+local itemsToTP = {
+    Health = true,
+    Boost = false,
+    RegenAll = false
+}
+
+-- アイテム一覧を作る
+local itemNames = {"Health","Boost","RegenAll"}
+local itemToggles = {}
+
+for _, name in ipairs(itemNames) do
+    itemToggles[name] = huntTab:CreateToggle({
+        Name = name,
+        CurrentValue = itemsToTP[name],
+        Callback = function(state)
+            itemsToTP[name] = state
+        end
+    })
+end
+
+-- TPループ用状態変数
+local tpActive = false
+local tpIndex = 1
+
+-- TPトグルスイッチ
+huntTab:CreateToggle({
+    Name = "TPオン/オフ",
+    CurrentValue = false,
+    Callback = function(state)
+        tpActive = state
+    end
+})
+
+-- TP処理
+local RunService = game:GetService("RunService")
+local player = game.Players.LocalPlayer
+
+RunService.RenderStepped:Connect(function()
+    if not tpActive then return end
+    if not player.Character or not player.Character:FindFirstChild("HumanoidRootPart") then return end
+    local hrp = player.Character.HumanoidRootPart
+
+    local found = nil
+    -- 選択したアイテム順にチェック
+    for _, itemName in ipairs(itemNames) do
+        if itemsToTP[itemName] then
+            for _, obj in pairs(workspace:GetDescendants()) do
+                if obj.Name == itemName and obj:IsA("BasePart") then
+                    found = obj
+                    break
+                end
+            end
+        end
+        if found then break end
+    end
+
+    if found then
+        -- 少し上にずらしてTP
+        hrp.CFrame = found.CFrame + Vector3.new(0,3,0)
+    end
+end)
+
+
