@@ -194,7 +194,7 @@ local Window = Rayfield:CreateWindow({
 })
 
 --================ プレイヤータブ =================
-local playerTab = Window:CreateTab("Player", 4483362458)
+local playerTab = Window:CreateTab("プレイヤー", 4483362458)
 
 -- スピードオンオフ
 local speedEnabled = false
@@ -605,7 +605,7 @@ local player = Players.LocalPlayer
 local camera = workspace.CurrentCamera
 local UIS = game:GetService("UserInputService")
 
-local combatTab = Window:CreateTab("Combat", 4483362458)
+local combatTab = Window:CreateTab("戦闘", 4483362458)
 
 --============================
 -- 状態変数
