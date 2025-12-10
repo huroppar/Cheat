@@ -674,7 +674,7 @@ combatTab:CreateToggle({
 })
 
 
-
+--================ カメラ自由追従 =================
 local freeViewActive = false
 local selectedTarget = nil
 
@@ -689,6 +689,7 @@ local minZoom, maxZoom = 3, 25
 
 -- 安全座標（絶対攻撃されない）
 local safePos = CFrame.new(0, 1500, 0)
+local originalCFrame = nil  -- 元の位置保存用
 
 ----------------------------------
 -- 選択したターゲットを設定する関数
@@ -698,7 +699,6 @@ _G.SetTarget = function(tar)
 		selectedTarget = tar
 	end
 end
-
 
 ----------------------------------
 -- 🔥 カメラ固定トグル ボタン
@@ -725,30 +725,33 @@ combatTab:CreateToggle({
 		local hum = char:FindFirstChild("Humanoid")
 
 		if state then
-			-- カメラをスクリプト制御
 			camera.CameraType = Enum.CameraType.Scriptable
 
-			-- 本体を安全位置へ
+			-- 元の位置を保存して安全位置にTP
 			if hrp then
+				originalCFrame = hrp.CFrame
 				hrp.CFrame = safePos
 			end
+
 			if hum then
 				hum.PlatformStand = true
 			end
 
-			-- 視点初期化
-			camYaw = 0
-			camPitch = 0
-
+			camYaw, camPitch = 0,0
 		else
 			camera.CameraType = Enum.CameraType.Custom
+
+			-- 元の位置に戻す
+			if hrp and originalCFrame then
+				hrp.CFrame = originalCFrame
+			end
+
 			if hum then
 				hum.PlatformStand = false
 			end
 		end
 	end
 })
-
 
 -------------------------------------------
 -- 🖱 マウス移動で視点操作（右クリック不要）
@@ -757,7 +760,6 @@ UIS.InputChanged:Connect(function(input)
 	if not freeViewActive then return end
 	if input.UserInputType == Enum.UserInputType.MouseMovement then
 		local dx, dy = input.Delta.X, input.Delta.Y
-
 		camYaw = camYaw - dx * sensitivity
 		camPitch = math.clamp(camPitch - dy * sensitivity, -75, 75)
 	end
@@ -773,7 +775,6 @@ UIS.InputChanged:Connect(function(input)
 	end
 end)
 
-
 -----------------------------------------
 -- 🎥 カメラ処理（回転 + ズーム + 追従）
 -----------------------------------------
@@ -784,21 +785,22 @@ RunService.RenderStepped:Connect(function()
 	local head = selectedTarget.Character:FindFirstChild("Head")
 	if not head then return end
 
+	-- 視点方向ベクトル（FPS式）
 	local yaw = math.rad(camYaw)
 	local pitch = math.rad(camPitch)
-
-	-- 視点方向ベクトル（FPS式）
 	local lookDir = Vector3.new(
 		math.cos(pitch) * math.sin(yaw),
 		math.sin(pitch),
 		math.cos(pitch) * math.cos(yaw)
 	)
 
+	-- カメラ位置計算
 	local camPos = head.Position - lookDir * zoomDist
 
-	-- 注視点を camPos + lookDir に変更
-	camera.CFrame = CFrame.new(camPos, camPos + lookDir)
+	-- カメラセット（注視点はターゲット）
+	camera.CFrame = CFrame.new(camPos, head.Position)
 end)
+
 
 --========================================================--
 -- プレイヤー一覧（HPリアルタイム）
