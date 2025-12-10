@@ -863,7 +863,7 @@ local AttractionRadius = 20 -- 半径20スタッド以内だけ吸引（初期�
 --============================
 -- RayField UI
 --============================
-local EnemyTab = Window:CreateTab("EnemyControl", 4483362458)
+local EnemyTab = Window:CreateTab("敵処理", 4483362458)
 
 -- 距離スライダー
 local DistanceSlider = EnemyTab:CreateSlider({
@@ -916,151 +916,112 @@ run.RenderStepped:Connect(function()
     end
 end)
 
+--============================
+-- ハンティ・ゾンビタブ
+--============================
+local huntTab = Window:CreateTab("ハンティ・ゾンビ", 4483360148)
 
+local selectedItems = {}
+local slideSpeed = 10 -- デフォルト
+local slideActive = false
 
---=============================
--- 🔥 ハンティ・ゾンビ タブ追加
---=============================
-local huntTab = Window:CreateTab("ハンティ・ゾンビ", 4483362458)
-
--- アイテム選択用テーブル
-local itemsToTP = {
-    Health = true,
-    Boost = false,
-    RegenAll = false
-}
-
--- アイテム一覧を作る
-local itemNames = {"Health","Boost","RegenAll"}
-local itemToggles = {}
+-- アイテム一覧
+local itemNames = {"Health", "Boost", "RegenAll"}
 
 for _, name in ipairs(itemNames) do
-    itemToggles[name] = huntTab:CreateToggle({
+    huntTab:CreateToggle({
         Name = name,
-        CurrentValue = itemsToTP[name],
+        CurrentValue = false,
         Callback = function(state)
-            itemsToTP[name] = state
+            if state then
+                selectedItems[name] = true
+            else
+                selectedItems[name] = nil
+            end
         end
     })
 end
 
--- TPループ用状態変数
-local tpActive = false
-local tpIndex = 1
+-- スライド速度スライダー
+huntTab:CreateSlider({
+    Name = "移動速度",
+    Min = 5,
+    Max = 50,
+    Default = slideSpeed,
+    Increment = 1,
+    Suffix = " stud/s",
+    Callback = function(val)
+        slideSpeed = val
+    end
+})
 
--- TPトグルスイッチ
+-- 自動スライドTPトグル
 huntTab:CreateToggle({
-    Name = "TPオン/オフ",
+    Name = "自動スライド取得",
     CurrentValue = false,
     Callback = function(state)
-        tpActive = state
+        slideActive = state
     end
 })
 
--- TP処理
+--============================
+-- スライド移動処理
+--============================
 local RunService = game:GetService("RunService")
-local player = game.Players.LocalPlayer
+local player = game:GetService("Players").LocalPlayer
+local UIS = game:GetService("UserInputService")
 
-RunService.RenderStepped:Connect(function()
-    if not tpActive then return end
-    if not player.Character or not player.Character:FindFirstChild("HumanoidRootPart") then return end
-    local hrp = player.Character.HumanoidRootPart
-
-    local found = nil
-    -- 選択したアイテム順にチェック
-    for _, itemName in ipairs(itemNames) do
-        if itemsToTP[itemName] then
-            for _, obj in pairs(workspace:GetDescendants()) do
-                if obj.Name == itemName and obj:IsA("BasePart") then
-                    found = obj
-                    break
-                end
+local function getTargets()
+    local targets = {}
+    for _, obj in ipairs(workspace:GetChildren()) do
+        if obj:FindFirstChild("PickupHitbox") or obj:FindFirstChild("Pipe") then
+            local nameCheck = obj.Name
+            if selectedItems[nameCheck] or obj:FindFirstChild("Pipe") then
+                table.insert(targets, obj)
             end
         end
-        if found then break end
+    end
+    return targets
+end
+
+RunService.RenderStepped:Connect(function(dt)
+    if not slideActive then return end
+    local char = player.Character
+    if not char or not char:FindFirstChild("HumanoidRootPart") then return end
+    local hrp = char.HumanoidRootPart
+
+    local targets = getTargets()
+    if #targets == 0 then return end
+
+    local target = targets[1] -- 常に先頭を取得
+    local targetPos
+    if target:FindFirstChild("PickupHitbox") then
+        targetPos = target.PickupHitbox.Position
+    elseif target:FindFirstChild("Pipe") then
+        targetPos = target.Pipe.Position
     end
 
-    if found then
-        -- 少し上にずらしてTP
-        hrp.CFrame = found.CFrame + Vector3.new(0,3,0)
+    if targetPos then
+        -- CFrameをスライドで移動
+        hrp.CFrame = hrp.CFrame:Lerp(CFrame.new(targetPos + Vector3.new(0,3,0)), slideSpeed * dt)
+
+        -- 対象に近づいたら処理
+        if (hrp.Position - targetPos).Magnitude < 3 then
+            -- アイテムなら拾う処理
+            if target:FindFirstChild("PickupHitbox") then
+                firetouchinterest(hrp, target.PickupHitbox, 0)
+                firetouchinterest(hrp, target.PickupHitbox, 1)
+            end
+            -- Pipeなら技を打つ
+            if target:FindFirstChild("Pipe") then
+                for _, key in ipairs({"Z","X","C"}) do
+                    UIS.InputBegan:Fire({KeyCode=Enum.KeyCode[key]}, false)
+                end
+            end
+            target:Destroy() -- 処理済みは消す（リストから次へ）
+        end
     end
 end)
 
 
---========================================================--
---                 🧟‍♂️ ハンティ・ゾンビ Tab               --
---========================================================--
 
-local huntTab = Window:CreateTab("ハンティ・ゾンビ", 4483362458)
-
-local autoPipeActive = false
-
--- 技キーの順番
-local skillKeys = {"Z", "X", "C"}
-
--- Pipe一覧取得関数
-local function getPipes()
-	local pipes = {}
-	for _, obj in ipairs(workspace:GetDescendants()) do
-		if obj.Name == "Pipe" and obj:IsA("BasePart") then
-			table.insert(pipes, obj)
-		end
-	end
-	return pipes
-end
-
--- 技発動関数
-local function useSkills()
-	for _, key in ipairs(skillKeys) do
-		game:GetService("VirtualInputManager"):SendKeyEvent(true, key, false, game)
-		wait(0.1)
-		game:GetService("VirtualInputManager"):SendKeyEvent(false, key, false, game)
-		wait(0.1)
-	end
-end
-
--- 自動Pipe処理ループ
-spawn(function()
-	while true do
-		if autoPipeActive then
-			local pipes = getPipes()
-			for _, pipe in ipairs(pipes) do
-				if not autoPipeActive then break end
-				if pipe and pipe.Parent then
-					local hrp = game.Players.LocalPlayer.Character and game.Players.LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
-					if hrp then
-						-- Pipeの上にTP
-						hrp.CFrame = pipe.CFrame + Vector3.new(0,3,0)
-						wait(0.1)
-						useSkills()
-						-- Pipeが消えるまで待機
-						repeat wait(0.1) until not pipe.Parent or not autoPipeActive
-					end
-				end
-			end
-		end
-		wait(0.5)
-	end
-end)
-
--- GUIトグル
-huntTab:CreateToggle({
-	Name = "自動Pipe破壊",
-	CurrentValue = false,
-	Callback = function(state)
-		autoPipeActive = state
-		if state then
-			RayField:Notify({
-				Title = "開始",
-				Content = "自動Pipe破壊を開始しました",
-				Duration = 2
-			})
-		else
-			RayField:Notify({
-				Title = "停止",
-				Content = "自動Pipe破壊を停止しました",
-				Duration = 2
-			})
-		end
-	end
-})
