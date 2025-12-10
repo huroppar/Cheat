@@ -955,15 +955,16 @@ end
 -- スライド速度スライダー
 huntTab:CreateSlider({
     Name = "移動速度",
-    Min = 5,
-    Max = 50,
-    Default = slideSpeed,
+    Range = {5, 50},       -- Min と Max を Range にまとめる
     Increment = 1,
     Suffix = " stud/s",
+    CurrentValue = slideSpeed,  -- Default → CurrentValue
+    Flag = "SlideSpeed",
     Callback = function(val)
         slideSpeed = val
     end
 })
+
 
 -- 自動スライドTPトグル
 huntTab:CreateToggle({
