@@ -674,22 +674,36 @@ combatTab:CreateToggle({
 })
 
 --============================
--- ★ 敵頭に追従する FreeCamera（完全版）
+-- ★ 敵頭に追従する FreeCamera（ホイールズーム版）
 --============================
 
 local freeViewActive = false
-local camRot = Vector2.new()
-local camSensitivity = 0.2
+local rotX = 0
+local rotY = 0
+local sensitivity = 0.25
+
+local zoomDist = 10
+local minZoom = 3
+local maxZoom = 35
+
 local originalCamMode
 
--- マウス視点回転
+-- マウスドラッグで回転
 UIS.InputChanged:Connect(function(input)
     if freeViewActive and input.UserInputType == Enum.UserInputType.MouseMovement then
-        camRot = camRot + Vector2.new(-input.Delta.y * camSensitivity, -input.Delta.x * camSensitivity)
+        rotY = rotY - input.Delta.X * sensitivity
+        rotX = math.clamp(rotX - input.Delta.Y * sensitivity, -80, 80)
     end
 end)
 
--- FreeCamトグル
+-- ホイールでズーム
+UIS.InputChanged:Connect(function(input)
+    if not freeViewActive then return end
+    if input.UserInputType == Enum.UserInputType.MouseWheel then
+        zoomDist = math.clamp(zoomDist - input.Position.Z * 2, minZoom, maxZoom)
+    end
+end)
+
 combatTab:CreateToggle({
     Name = "敵の頭に視点固定（追従カメラ）",
     CurrentValue = false,
@@ -715,7 +729,7 @@ combatTab:CreateToggle({
 
             RayField:Notify({
                 Title = "追従視点 ON",
-                Content = "敵の頭に視点を固定したよ！",
+                Content = "敵の頭を中心に自由に視点回せるよ！",
                 Duration = 3
             })
         else
@@ -726,12 +740,33 @@ combatTab:CreateToggle({
 
             RayField:Notify({
                 Title = "追従視点 OFF",
-                Content = "視点を元に戻したよ！",
+                Content = "元の視点に戻したよ！",
                 Duration = 3
             })
         end
     end
 })
+
+-- カメラ追従ループ
+RunService.RenderStepped:Connect(function()
+    if freeViewActive and selectedTarget and selectedTarget.Character then
+        
+        local head = selectedTarget.Character:FindFirstChild("Head")
+        if not head then return end
+
+        local headPos = head.Position
+
+        -- カメラ位置を球面座標で計算
+        local camOffset =
+            CFrame.Angles(math.rad(rotX), math.rad(rotY), 0)
+            * Vector3.new(0, 0, zoomDist)
+
+        local camPos = headPos + camOffset
+
+        -- カメラを対象の頭を見るようにセット
+        camera.CFrame = CFrame.new(camPos, headPos)
+    end
+end)
 
 -- カメラ追従ループ
 RunService.RenderStepped:Connect(function()
