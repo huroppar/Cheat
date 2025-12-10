@@ -919,7 +919,8 @@ end)
 --============================
 -- ハンティ・ゾンビタブ
 --============================
-local huntTab = Window:CreateTab("ハンティ・ゾンビ", 0)
+local huntTab = Window:CreateTab("ハンティ・ゾンビ", 4483362458) -- 安全なID
+
 
 local selectedItems = {}
 local slideSpeed = 10 -- デフォルト
