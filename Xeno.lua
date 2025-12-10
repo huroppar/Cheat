@@ -673,132 +673,114 @@ combatTab:CreateToggle({
     end
 })
 
--- =========================
--- 安全版：敵頭追従カメラ（nilチェック強化・Xeno対応）
--- 置き換え用 — Combat タブ内の既存カメラ部分と差し替えてください
--- =========================
+
+-- ======================================
+-- 敵の頭にカメラ追従 + 視点回転 + ズーム
+-- 本体は空中に固定して絶対に動かない安全版
+-- ======================================
 
 local freeViewActive = false
-local camPitch = 0      -- 上下（deg）
-local camYaw = 0        -- 左右（deg）
-local sensitivity = 0.18
+local camPitch = 0
+local camYaw = 0
+local sensitivity = 4
 
-local zoomDist = 10
-local minZoom = 3
-local maxZoom = 35
+local zoomDist = 8
+local minZoom, maxZoom = 3, 25
 
 local dragging = false
-local originalCamMode = nil
+local safePos = CFrame.new(0, 1000, 0)
 
--- 右クリックでドラッグ、ホイールでズーム（タッチは別途対応可）
-UIS.InputBegan:Connect(function(input, gp)
-    if gp then return end
-    if not freeViewActive then return end
-    if input.UserInputType == Enum.UserInputType.MouseButton2 then
-        dragging = true
-    end
+local Players = game:GetService("Players")
+local player = Players.LocalPlayer
+local UIS = game:GetService("UserInputService")
+local RunService = game:GetService("RunService")
+local camera = workspace.CurrentCamera
+
+
+-- 右クリックドラッグ
+UIS.InputBegan:Connect(function(input)
+	if input.UserInputType == Enum.UserInputType.MouseButton2 then
+		dragging = true
+	end
 end)
 
 UIS.InputEnded:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.MouseButton2 then
-        dragging = false
-    end
+	if input.UserInputType == Enum.UserInputType.MouseButton2 then
+		dragging = false
+	end
 end)
 
--- 安全な InputChanged ハンドラ
+-- ホイールズーム
 UIS.InputChanged:Connect(function(input)
-    if not freeViewActive then return end
-
-    -- マウス移動 (Delta を参照するのは MouseMovement の時だけ)
-    if input.UserInputType == Enum.UserInputType.MouseMovement then
-        -- input.Delta が nil のケースに念のためガード
-        local ok, delta = pcall(function() return input.Delta end)
-        if ok and delta then
-            -- delta.X / delta.Y を使って回転更新
-            camYaw = camYaw - delta.X * sensitivity
-            camPitch = math.clamp(camPitch - delta.Y * sensitivity, -80, 80)
-        end
-        return
-    end
-
-    -- ホイールズーム（MouseWheel の場合 Position.Z に値が入る）
-    if input.UserInputType == Enum.UserInputType.MouseWheel then
-        local ok, pos = pcall(function() return input.Position end)
-        if ok and pos and typeof(pos) == "Vector3" then
-            -- pos.Z はホイール量（プラットフォーム依存）
-            zoomDist = math.clamp(zoomDist - pos.Z * 2, minZoom, maxZoom)
-        end
-        return
-    end
+	if not freeViewActive then return end
+	if input.UserInputType == Enum.UserInputType.MouseWheel then
+		zoomDist = math.clamp(zoomDist - input.Position.Z * 2, minZoom, maxZoom)
+	end
 end)
 
--- トグル（既存の combatTab:CreateToggle 部分と置き換える）
+
+-- トグル
 combatTab:CreateToggle({
-    Name = "敵の頭に視点固定（追従カメラ）",
-    CurrentValue = false,
-    Callback = function(state)
-        -- まずターゲットの存在チェック
-        if not selectedTarget or not selectedTarget.Character then
-            RayField:Notify({Title="エラー", Content="先にターゲット選んで！", Duration=2})
-            return
-        end
+	Name = "敵の頭に視点固定（安全カメラ）",
+	CurrentValue = false,
+	Callback = function(state)
 
-        freeViewActive = state
-        camPitch = 0
-        camYaw = 0
+		if not selectedTarget then
+			RayField:Notify({Title = "エラー", Content = "ターゲット選んで！", Duration = 2})
+			return
+		end
 
-        if state then
-            -- プレイヤー本体の落下防止（任意）
-            local myHRP = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
-            if myHRP then
-                pcall(function() myHRP.Anchored = true end)
-            end
+		freeViewActive = state
 
-            originalCamMode = camera.CameraType
-            pcall(function() camera.CameraType = Enum.CameraType.Scriptable end)
+		if state then
+			camera.CameraType = Enum.CameraType.Scriptable
 
-            RayField:Notify({Title="追従視点 ON", Content="右クリックで視点を回せるよ！", Duration=2})
-        else
-            pcall(function() camera.CameraType = originalCamMode or Enum.CameraType.Custom end)
+			-- ★ 本体を空中に固定（絶対に攻撃されない）
+			local hrp = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
+			local humanoid = player.Character and player.Character:FindFirstChild("Humanoid")
+			if hrp then hrp.CFrame = safePos end
+			if humanoid then humanoid.PlatformStand = true end
 
-            local myHRP = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
-            if myHRP then pcall(function() myHRP.Anchored = false end) end
+			camYaw, camPitch = 0, 0
+		else
+			camera.CameraType = Enum.CameraType.Custom
 
-            RayField:Notify({Title="追従視点 OFF", Content="元に戻したよ！", Duration=2})
-        end
-    end
+			-- 元に戻す
+			local humanoid = player.Character and player.Character:FindFirstChild("Humanoid")
+			if humanoid then humanoid.PlatformStand = false end
+		end
+	end
 })
 
--- カメラ更新ループ（RenderStepped）
+
+-- カメラ追従・回転・ズーム
 RunService.RenderStepped:Connect(function()
-    if not freeViewActive then return end
+	if not freeViewActive then return end
+	if not selectedTarget or not selectedTarget.Character then return end
 
-    -- 選択ターゲットとその Head の存在を厳密にチェック
-    if not selectedTarget then return end
-    local ok, char = pcall(function() return selectedTarget.Character end)
-    if not ok or not char then return end
+	local head = selectedTarget.Character:FindFirstChild("Head")
+	if not head then return end
 
-    local head = char:FindFirstChild("Head")
-    if not head or not head:IsA("BasePart") then return end
+	-- マウス回転
+	if dragging then
+		local dx, dy = UIS:GetMouseDelta()
+		camYaw = camYaw - dx * sensitivity * 0.01
+		camPitch = math.clamp(camPitch - dy * sensitivity * 0.01, -80, 80)
+	end
 
-    -- 安全に head.Position を取る
-    local headPos = head.Position
+	local yaw = math.rad(camYaw)
+	local pitch = math.rad(camPitch)
 
-    -- 球面座標的なオフセット計算（Yaw, Pitch -> カメラ位置）
-    local yawRad = math.rad(camYaw)
-    local pitchRad = math.rad(camPitch)
+	local offset = Vector3.new(
+		math.cos(pitch) * math.sin(yaw),
+		math.sin(pitch),
+		math.cos(pitch) * math.cos(yaw)
+	) * zoomDist
 
-    local x = math.cos(pitchRad) * math.sin(yawRad)
-    local y = math.sin(pitchRad)
-    local z = math.cos(pitchRad) * math.cos(yawRad)
+	local camPos = head.Position - offset
 
-    local offset = Vector3.new(x, y, z) * zoomDist
-    local camPos = headPos - offset
-
-    -- カメラCFrameを安全に設定（pcallで保護）
-    pcall(function()
-        camera.CFrame = CFrame.new(camPos, headPos)
-    end)
+	-- ★ カメラだけ完全追従
+	camera.CFrame = CFrame.new(camPos, head.Position)
 end)
 
 
