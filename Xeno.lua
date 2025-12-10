@@ -673,24 +673,26 @@ combatTab:CreateToggle({
     end
 })
 
---============================
--- ★ FreeCam（Xeno対応・視点確実に動く版）
---============================
+-- =========================
+-- 安全版：敵頭追従カメラ（nilチェック強化・Xeno対応）
+-- 置き換え用 — Combat タブ内の既存カメラ部分と差し替えてください
+-- =========================
 
 local freeViewActive = false
-local camX = 0
-local camY = 0
-local sens = 0.18
+local camPitch = 0      -- 上下（deg）
+local camYaw = 0        -- 左右（deg）
+local sensitivity = 0.18
 
-local zoom = 10
-local zoomMin = 3
-local zoomMax = 30
+local zoomDist = 10
+local minZoom = 3
+local maxZoom = 35
 
 local dragging = false
-local originalCamType
+local originalCamMode = nil
 
--- クリックした時だけ視点が動く
-UIS.InputBegan:Connect(function(input)
+-- 右クリックでドラッグ、ホイールでズーム（タッチは別途対応可）
+UIS.InputBegan:Connect(function(input, gp)
+    if gp then return end
     if not freeViewActive then return end
     if input.UserInputType == Enum.UserInputType.MouseButton2 then
         dragging = true
@@ -703,88 +705,102 @@ UIS.InputEnded:Connect(function(input)
     end
 end)
 
--- マウス移動でカメラ回転（Xenoで止まらない方式）
+-- 安全な InputChanged ハンドラ
 UIS.InputChanged:Connect(function(input)
     if not freeViewActive then return end
 
-    if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
-        camX = camX - input.Delta.Y * sens
-        camY = camY - input.Delta.X * sens
-
-        -- 上下限
-        camX = math.clamp(camX, -80, 80)
+    -- マウス移動 (Delta を参照するのは MouseMovement の時だけ)
+    if input.UserInputType == Enum.UserInputType.MouseMovement then
+        -- input.Delta が nil のケースに念のためガード
+        local ok, delta = pcall(function() return input.Delta end)
+        if ok and delta then
+            -- delta.X / delta.Y を使って回転更新
+            camYaw = camYaw - delta.X * sensitivity
+            camPitch = math.clamp(camPitch - delta.Y * sensitivity, -80, 80)
+        end
+        return
     end
 
-    -- ホイールズーム
+    -- ホイールズーム（MouseWheel の場合 Position.Z に値が入る）
     if input.UserInputType == Enum.UserInputType.MouseWheel then
-        zoom = zoom - input.Position.Z * 2
-        zoom = math.clamp(zoom, zoomMin, zoomMax)
+        local ok, pos = pcall(function() return input.Position end)
+        if ok and pos and typeof(pos) == "Vector3" then
+            -- pos.Z はホイール量（プラットフォーム依存）
+            zoomDist = math.clamp(zoomDist - pos.Z * 2, minZoom, maxZoom)
+        end
+        return
     end
 end)
 
+-- トグル（既存の combatTab:CreateToggle 部分と置き換える）
 combatTab:CreateToggle({
-    Name = "敵の頭に視点固定（FreeCam）",
+    Name = "敵の頭に視点固定（追従カメラ）",
     CurrentValue = false,
     Callback = function(state)
-
+        -- まずターゲットの存在チェック
         if not selectedTarget or not selectedTarget.Character then
-            RayField:Notify({
-                Title = "エラー",
-                Content = "ターゲット先選んで！",
-                Duration = 3
-            })
+            RayField:Notify({Title="エラー", Content="先にターゲット選んで！", Duration=2})
             return
         end
 
         freeViewActive = state
+        camPitch = 0
+        camYaw = 0
 
         if state then
-            -- プレイヤーを固定
-            local hrp = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
-            if hrp then hrp.Anchored = true end
+            -- プレイヤー本体の落下防止（任意）
+            local myHRP = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
+            if myHRP then
+                pcall(function() myHRP.Anchored = true end)
+            end
 
-            originalCamType = camera.CameraType
-            camera.CameraType = Enum.CameraType.Scriptable
+            originalCamMode = camera.CameraType
+            pcall(function() camera.CameraType = Enum.CameraType.Scriptable end)
 
-            RayField:Notify({
-                Title = "FreeCam ON",
-                Content = "右クリックで視点を動かせるよ！",
-                Duration = 3
-            })
+            RayField:Notify({Title="追従視点 ON", Content="右クリックで視点を回せるよ！", Duration=2})
         else
-            camera.CameraType = originalCamType or Enum.CameraType.Custom
+            pcall(function() camera.CameraType = originalCamMode or Enum.CameraType.Custom end)
 
-            local hrp = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
-            if hrp then hrp.Anchored = false end
+            local myHRP = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
+            if myHRP then pcall(function() myHRP.Anchored = false end) end
 
-            RayField:Notify({
-                Title = "FreeCam OFF",
-                Content = "視点戻したよ！",
-                Duration = 3
-            })
+            RayField:Notify({Title="追従視点 OFF", Content="元に戻したよ！", Duration=2})
         end
     end
 })
 
--- カメラ追従
+-- カメラ更新ループ（RenderStepped）
 RunService.RenderStepped:Connect(function()
     if not freeViewActive then return end
-    if not selectedTarget or not selectedTarget.Character then return end
 
-    local head = selectedTarget.Character:FindFirstChild("Head")
-    if not head then return end
-    
+    -- 選択ターゲットとその Head の存在を厳密にチェック
+    if not selectedTarget then return end
+    local ok, char = pcall(function() return selectedTarget.Character end)
+    if not ok or not char then return end
+
+    local head = char:FindFirstChild("Head")
+    if not head or not head:IsA("BasePart") then return end
+
+    -- 安全に head.Position を取る
     local headPos = head.Position
 
-    -- 回転とズームからカメラ位置を求める
-    local camCF =
-        CFrame.new(headPos)
-        * CFrame.Angles(0, math.rad(camY), 0)
-        * CFrame.Angles(math.rad(camX), 0, 0)
-        * CFrame.new(0, 0, zoom)
+    -- 球面座標的なオフセット計算（Yaw, Pitch -> カメラ位置）
+    local yawRad = math.rad(camYaw)
+    local pitchRad = math.rad(camPitch)
 
-    camera.CFrame = CFrame.new(camCF.Position, headPos)
+    local x = math.cos(pitchRad) * math.sin(yawRad)
+    local y = math.sin(pitchRad)
+    local z = math.cos(pitchRad) * math.cos(yawRad)
+
+    local offset = Vector3.new(x, y, z) * zoomDist
+    local camPos = headPos - offset
+
+    -- カメラCFrameを安全に設定（pcallで保護）
+    pcall(function()
+        camera.CFrame = CFrame.new(camPos, headPos)
+    end)
 end)
+
 
 
 --========================================================--
