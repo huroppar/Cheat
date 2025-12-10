@@ -835,14 +835,15 @@ Players.PlayerRemoving:Connect(UpdatePlayerList)
 
 -- HP更新 + 張り付き
 RunService.Heartbeat:Connect(function()
-    for plr, btn in pairs(playerButtons) do
-        if plr.Character then
-            local hp,maxhp = GetHP(plr)
-            pcall(function()
-                btn:Set(plr.Name.." ["..hp.."/"..maxhp.."]")
-            end)
-        end
+for plr, btn in pairs(playerButtons) do
+    if btn and plr.Character then  -- btn が存在するかチェック
+        local hp,maxhp = GetHP(plr)
+        pcall(function()
+            btn:Set(plr.Name.." ["..hp.."/"..maxhp.."]")
+        end)
     end
+end
+
 
     if followActive and selectedTarget and selectedTarget.Character and player.Character then
         local tHRP = selectedTarget.Character:FindFirstChild("HumanoidRootPart")
