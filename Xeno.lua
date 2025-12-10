@@ -274,6 +274,51 @@ local airTPBtn = playerTab:CreateButton({
     end
 })
 
+
+
+-- 足場管理テーブル
+local createdPlatforms = {}
+
+-- 足場生成ボタン
+playerTab:CreateButton({
+    Name = "足場生成",
+    Callback = function()
+        local char, hum, root = getCharacter()
+        if not root then return end
+
+        -- 足場パーツ作成
+        local platform = Instance.new("Part")
+        platform.Size = Vector3.new(6, 1, 6)          -- 広めの安定足場
+        platform.Anchored = true                     -- 固定
+        platform.CanCollide = true                   -- 当たり判定あり
+        platform.Color = Color3.fromRGB(255, 200, 0) -- 見やすい色
+        platform.Material = Enum.Material.Neon
+
+        -- プレイヤーの真下に配置
+        local pos = root.Position + Vector3.new(0, -3, 0)
+        platform.CFrame = CFrame.new(pos)
+
+        platform.Parent = workspace
+
+        -- リストに保存
+        table.insert(createdPlatforms, platform)
+    end
+})
+
+-- 足場削除ボタン
+playerTab:CreateButton({
+    Name = "足場削除",
+    Callback = function()
+        for _, p in ipairs(createdPlatforms) do
+            if p and p.Parent then
+                p:Destroy()
+            end
+        end
+        createdPlatforms = {} -- リセット
+    end
+})
+
+
 --================ 内部処理 =================
 -- スピード更新
 RunService.RenderStepped:Connect(function()
