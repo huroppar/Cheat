@@ -372,12 +372,13 @@ espTab:CreateToggle({
 -- ======= トグル追加終わり =======
 
 --=================== HITBOX ESP ===================--
+
 local showPlayerHitbox = false
 local showEnemyHitbox = false
 
-local hitboxBoxes = {} -- 管理テーブル（Highlightとは別管理）
+local hitboxBoxes = {} -- HRPごとに管理
 
--- ボックス作成
+-- Box（枠線）を作成
 local function createHitboxBox(part)
     local box = Instance.new("BoxHandleAdornment")
     box.Adornee = part
@@ -385,19 +386,30 @@ local function createHitboxBox(part)
     box.ZIndex = 10
     box.Size = part.Size
     box.Color3 = Color3.new(1,0,0) -- 赤
-    box.Transparency = 0.5
+    box.Transparency = 0           -- 枠線は透明度0
+    box.AlwaysOnTop = true
+    box.AdornCullingMode = Enum.AdornCullingMode.Never
     box.Parent = part
+
+    -- 枠線だけにする設定
+    box.Name = "HitboxESP"
+    box.Transparency = 1            -- 中身透明
+    box.Thickness = 3               -- 枠線の太さ
+    box.ZIndex = 10
+
     return box
 end
 
--- HITBOX 更新ループ
+
+-- HITBOX 更新
 task.spawn(function()
     while true do
         
-        -- プレイヤー Hitbox
+        --===== プレイヤーの Hitbox =====--
         for _, pl in pairs(Players:GetPlayers()) do
             if pl.Character and pl.Character:FindFirstChild("HumanoidRootPart") then
                 local hrp = pl.Character.HumanoidRootPart
+
                 if showPlayerHitbox then
                     if not hitboxBoxes[hrp] then
                         hitboxBoxes[hrp] = createHitboxBox(hrp)
@@ -410,31 +422,36 @@ task.spawn(function()
                 end
             end
         end
-        
-        -- 敵 HITBOX
+
+        --===== 敵の Hitbox =====--
         for _, enemy in pairs(workspace:GetChildren()) do
             if enemy:IsA("Model") and enemy:FindFirstChild("HumanoidRootPart") and enemy:FindFirstChildOfClass("Humanoid") then
-                local hrp = enemy.HumanoidRootPart
-                if showEnemyHitbox then
-                    if not hitboxBoxes[hrp] then
-                        hitboxBoxes[hrp] = createHitboxBox(hrp)
-                    end
-                else
-                    if hitboxBoxes[hrp] then
-                        hitboxBoxes[hrp]:Destroy()
-                        hitboxBoxes[hrp] = nil
+                if enemy:FindFirstChild("Humanoid").Health > 0 then
+                    local hrp = enemy.HumanoidRootPart
+
+                    if showEnemyHitbox then
+                        if not hitboxBoxes[hrp] then
+                            hitboxBoxes[hrp] = createHitboxBox(hrp)
+                        end
+                    else
+                        if hitboxBoxes[hrp] then
+                            hitboxBoxes[hrp]:Destroy()
+                            hitboxBoxes[hrp] = nil
+                        end
                     end
                 end
             end
         end
-        
+
         task.wait(0.15)
     end
 end)
 
+
 --=================== HITBOX トグル ===================--
+
 espTab:CreateToggle({
-    Name = "Player Hitbox ESP",
+    Name = "Player Hitbox ESP（枠線）",
     CurrentValue = false,
     Callback = function(val)
         showPlayerHitbox = val
@@ -447,7 +464,7 @@ espTab:CreateToggle({
 })
 
 espTab:CreateToggle({
-    Name = "Enemy Hitbox ESP",
+    Name = "Enemy Hitbox ESP（枠線）",
     CurrentValue = false,
     Callback = function(val)
         showEnemyHitbox = val
@@ -458,7 +475,6 @@ espTab:CreateToggle({
         })
     end
 })
-
 
 -- トグル作成
 espTab:CreateToggle({Name="Player ESP", CurrentValue=false, Callback=function(val) showPlayerESP=val end})
