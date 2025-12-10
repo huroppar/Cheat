@@ -674,45 +674,63 @@ combatTab:CreateToggle({
 })
 
 --============================
--- ★ 敵頭に追従する FreeCamera（ホイールズーム版）
+-- ★ FreeCam（Xeno対応・視点確実に動く版）
 --============================
 
 local freeViewActive = false
-local rotX = 0
-local rotY = 0
-local sensitivity = 0.25
+local camX = 0
+local camY = 0
+local sens = 0.18
 
-local zoomDist = 10
-local minZoom = 3
-local maxZoom = 35
+local zoom = 10
+local zoomMin = 3
+local zoomMax = 30
 
-local originalCamMode
+local dragging = false
+local originalCamType
 
--- マウスドラッグで回転
-UIS.InputChanged:Connect(function(input)
-    if freeViewActive and input.UserInputType == Enum.UserInputType.MouseMovement then
-        rotY = rotY - input.Delta.X * sensitivity
-        rotX = math.clamp(rotX - input.Delta.Y * sensitivity, -80, 80)
+-- クリックした時だけ視点が動く
+UIS.InputBegan:Connect(function(input)
+    if not freeViewActive then return end
+    if input.UserInputType == Enum.UserInputType.MouseButton2 then
+        dragging = true
     end
 end)
 
--- ホイールでズーム
+UIS.InputEnded:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton2 then
+        dragging = false
+    end
+end)
+
+-- マウス移動でカメラ回転（Xenoで止まらない方式）
 UIS.InputChanged:Connect(function(input)
     if not freeViewActive then return end
+
+    if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
+        camX = camX - input.Delta.Y * sens
+        camY = camY - input.Delta.X * sens
+
+        -- 上下限
+        camX = math.clamp(camX, -80, 80)
+    end
+
+    -- ホイールズーム
     if input.UserInputType == Enum.UserInputType.MouseWheel then
-        zoomDist = math.clamp(zoomDist - input.Position.Z * 2, minZoom, maxZoom)
+        zoom = zoom - input.Position.Z * 2
+        zoom = math.clamp(zoom, zoomMin, zoomMax)
     end
 end)
 
 combatTab:CreateToggle({
-    Name = "敵の頭に視点固定（追従カメラ）",
+    Name = "敵の頭に視点固定（FreeCam）",
     CurrentValue = false,
     Callback = function(state)
 
-        if not selectedTarget then
+        if not selectedTarget or not selectedTarget.Character then
             RayField:Notify({
                 Title = "エラー",
-                Content = "先にターゲット選んで！",
+                Content = "ターゲット先選んで！",
                 Duration = 3
             })
             return
@@ -721,69 +739,51 @@ combatTab:CreateToggle({
         freeViewActive = state
 
         if state then
+            -- プレイヤーを固定
             local hrp = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
             if hrp then hrp.Anchored = true end
 
-            originalCamMode = camera.CameraType
+            originalCamType = camera.CameraType
             camera.CameraType = Enum.CameraType.Scriptable
 
             RayField:Notify({
-                Title = "追従視点 ON",
-                Content = "敵の頭を中心に自由に視点回せるよ！",
+                Title = "FreeCam ON",
+                Content = "右クリックで視点を動かせるよ！",
                 Duration = 3
             })
         else
-            camera.CameraType = originalCamMode or Enum.CameraType.Custom
+            camera.CameraType = originalCamType or Enum.CameraType.Custom
 
             local hrp = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
             if hrp then hrp.Anchored = false end
 
             RayField:Notify({
-                Title = "追従視点 OFF",
-                Content = "元の視点に戻したよ！",
+                Title = "FreeCam OFF",
+                Content = "視点戻したよ！",
                 Duration = 3
             })
         end
     end
 })
 
--- カメラ追従ループ
+-- カメラ追従
 RunService.RenderStepped:Connect(function()
-    if freeViewActive and selectedTarget and selectedTarget.Character then
-        
-        local head = selectedTarget.Character:FindFirstChild("Head")
-        if not head then return end
+    if not freeViewActive then return end
+    if not selectedTarget or not selectedTarget.Character then return end
 
-        local headPos = head.Position
+    local head = selectedTarget.Character:FindFirstChild("Head")
+    if not head then return end
+    
+    local headPos = head.Position
 
-        -- カメラ位置を球面座標で計算
-        local camOffset =
-            CFrame.Angles(math.rad(rotX), math.rad(rotY), 0)
-            * Vector3.new(0, 0, zoomDist)
+    -- 回転とズームからカメラ位置を求める
+    local camCF =
+        CFrame.new(headPos)
+        * CFrame.Angles(0, math.rad(camY), 0)
+        * CFrame.Angles(math.rad(camX), 0, 0)
+        * CFrame.new(0, 0, zoom)
 
-        local camPos = headPos + camOffset
-
-        -- カメラを対象の頭を見るようにセット
-        camera.CFrame = CFrame.new(camPos, headPos)
-    end
-end)
-
--- カメラ追従ループ
-RunService.RenderStepped:Connect(function()
-    if freeViewActive and selectedTarget and selectedTarget.Character then
-        local head = selectedTarget.Character:FindFirstChild("Head")
-        if not head then return end
-
-        local basePos = head.Position + Vector3.new(0, 1.5, 0)
-
-        local rot = CFrame.Angles(
-            math.rad(camRot.X),
-            math.rad(camRot.Y),
-            0
-        )
-
-        camera.CFrame = CFrame.new(basePos) * rot
-    end
+    camera.CFrame = CFrame.new(camCF.Position, headPos)
 end)
 
 
