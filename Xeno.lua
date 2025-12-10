@@ -629,10 +629,24 @@ combatTab:CreateToggle({
 })
 
 --============================
--- ★ 敵視点 FreeCamera トグル
+-- ★ 敵頭に追従する FreeCamera（完全版）
 --============================
+
+local freeViewActive = false
+local camRot = Vector2.new()
+local camSensitivity = 0.2
+local originalCamMode
+
+-- マウス視点回転
+UIS.InputChanged:Connect(function(input)
+    if freeViewActive and input.UserInputType == Enum.UserInputType.MouseMovement then
+        camRot = camRot + Vector2.new(-input.Delta.y * camSensitivity, -input.Delta.x * camSensitivity)
+    end
+end)
+
+-- FreeCamトグル
 combatTab:CreateToggle({
-    Name = "選択中の敵の視点へ（FreeCam）",
+    Name = "敵の頭に視点固定（追従カメラ）",
     CurrentValue = false,
     Callback = function(state)
 
@@ -645,53 +659,53 @@ combatTab:CreateToggle({
             return
         end
 
-        freeCamActive = state
+        freeViewActive = state
 
         if state then
-            --======================
-            -- カメラをFreeCamにする
-            --======================
-            local hrp = player.Character:FindFirstChild("HumanoidRootPart")
-            if hrp then
-                savedY = hrp.Position.Y
-                hrp.Anchored = true
-            end
+            local hrp = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
+            if hrp then hrp.Anchored = true end
 
-            local tHRP = selectedTarget.Character and selectedTarget.Character:FindFirstChild("HumanoidRootPart")
-            if not tHRP then
-                RayField:Notify({Title="エラー", Content="敵のHRPが無い！"})
-                return
-            end
-
-            originalCamType = camera.CameraType
+            originalCamMode = camera.CameraType
             camera.CameraType = Enum.CameraType.Scriptable
-            camera.CFrame = tHRP.CFrame
 
             RayField:Notify({
-                Title = "FreeCam開始",
-                Content = "視点が敵に移動したよ！",
+                Title = "追従視点 ON",
+                Content = "敵の頭に視点を固定したよ！",
                 Duration = 3
             })
         else
-            --======================
-            -- カメラと体を戻す
-            --======================
-            camera.CameraType = originalCamType or Enum.CameraType.Custom
+            camera.CameraType = originalCamMode or Enum.CameraType.Custom
 
             local hrp = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
-            if hrp then
-                hrp.Anchored = false
-                hrp.CFrame = CFrame.new(hrp.Position.X, savedY, hrp.Position.Z)
-            end
+            if hrp then hrp.Anchored = false end
 
             RayField:Notify({
-                Title = "FreeCam終了",
-                Content = "視点が戻ったよ！",
+                Title = "追従視点 OFF",
+                Content = "視点を元に戻したよ！",
                 Duration = 3
             })
         end
     end
 })
+
+-- カメラ追従ループ
+RunService.RenderStepped:Connect(function()
+    if freeViewActive and selectedTarget and selectedTarget.Character then
+        local head = selectedTarget.Character:FindFirstChild("Head")
+        if not head then return end
+
+        local basePos = head.Position + Vector3.new(0, 1.5, 0)
+
+        local rot = CFrame.Angles(
+            math.rad(camRot.X),
+            math.rad(camRot.Y),
+            0
+        )
+
+        camera.CFrame = CFrame.new(basePos) * rot
+    end
+end)
+
 
 --========================================================--
 -- プレイヤー一覧（HPリアルタイム）
