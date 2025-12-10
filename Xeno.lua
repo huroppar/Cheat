@@ -897,11 +897,6 @@ local RadiusSlider = EnemyTab:CreateSlider({
 local player = game.Players.LocalPlayer
 local run = game:GetService("RunService")
 local enemyFolder = workspace:FindFirstChild("Enemies") -- 存在しない場合は nil
-if enemyFolder then
-    for _, enemy in pairs(enemyFolder:GetChildren()) do
-        ...
-    end
-end
 
 run.RenderStepped:Connect(function()
     local char = player.Character
@@ -909,13 +904,14 @@ run.RenderStepped:Connect(function()
     local hrp = char:FindFirstChild("HumanoidRootPart")
     if not hrp then return end
 
-    for _, enemy in pairs(enemyFolder:GetChildren()) do
-        local eHRP = enemy:FindFirstChild("HumanoidRootPart")
-        if eHRP then
-            local distance = (eHRP.Position - hrp.Position).Magnitude
-            if distance <= AttractionRadius then
-                -- プレイヤー前方 FollowDistance スタッドに固定
-                eHRP.CFrame = hrp.CFrame * CFrame.new(0, 0, -FollowDistance)
+    if enemyFolder then
+        for _, enemy in pairs(enemyFolder:GetChildren()) do
+            local eHRP = enemy:FindFirstChild("HumanoidRootPart")
+            if eHRP then
+                local distance = (eHRP.Position - hrp.Position).Magnitude
+                if distance <= AttractionRadius then
+                    eHRP.CFrame = hrp.CFrame * CFrame.new(0,0,-FollowDistance)
+                end
             end
         end
     end
