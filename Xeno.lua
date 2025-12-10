@@ -922,22 +922,26 @@ end)
 
 
 --=============================
--- ハンティ・ゾンビタブ用安全スライド
+-- ハンティ・ゾンビタブ用改良版・安全スライド
 --=============================
 local huntTab = Window:CreateTab("ハンティ・ゾンビ", 4483362458)
 
 local RunService = game:GetService("RunService")
-local player = game:GetService("Players").LocalPlayer
+local Players = game:GetService("Players")
 local UIS = game:GetService("UserInputService")
 local workspace = game:GetService("Workspace")
 
+local player = Players.LocalPlayer
 local selectedItems = {}
-local slideSpeed = 10 -- デフォルト
+local slideSpeed = 10
 local slideActive = false
 
 -- アイテム一覧
 local itemNames = {"Health", "Boost", "RegenAll"}
 
+--=============================
+-- アイテム選択トグル作成
+--=============================
 for _, name in ipairs(itemNames) do
     huntTab:CreateToggle({
         Name = name,
@@ -952,12 +956,14 @@ for _, name in ipairs(itemNames) do
     })
 end
 
+--=============================
 -- スライド速度スライダー
+--=============================
 huntTab:CreateSlider({
     Name = "移動速度",
-    Range = {5, 50},       -- MinとMaxをRangeにまとめる
+    Range = {5, 50},
     Increment = 1,
-    CurrentValue = slideSpeed,  -- Default → CurrentValue
+    CurrentValue = slideSpeed,
     Suffix = " stud/s",
     Flag = "SlideSpeed",
     Callback = function(val)
@@ -965,9 +971,9 @@ huntTab:CreateSlider({
     end
 })
 
-
-
--- 自動スライドTPトグル
+--=============================
+-- 自動スライド取得トグル
+--=============================
 huntTab:CreateToggle({
     Name = "自動スライド取得",
     CurrentValue = false,
@@ -977,36 +983,42 @@ huntTab:CreateToggle({
 })
 
 --=============================
--- ターゲット取得関数（安全版）
+-- ターゲット取得関数
 --=============================
 local function getTargets()
     local targets = {}
-    if not workspace then return targets end
-
     for _, obj in ipairs(workspace:GetChildren()) do
-        if obj and obj:IsA("Model") then
+        if obj:IsA("Model") then
             local pickup = obj:FindFirstChild("PickupHitbox")
             local pipe = obj:FindFirstChild("Pipe")
             if pickup or pipe then
-                local nameCheck = obj.Name
-                if selectedItems[nameCheck] or pipe then
+                -- アイテム名が選択されている or Pipe は常に対象
+                if selectedItems[obj.Name] or pipe then
                     table.insert(targets, obj)
                 end
             end
         end
     end
+    -- 距離が近い順にソート
+    table.sort(targets, function(a,b)
+        local aPos = (a:FindFirstChild("PickupHitbox") or a:FindFirstChild("Pipe")).Position
+        local bPos = (b:FindFirstChild("PickupHitbox") or b:FindFirstChild("Pipe")).Position
+        local hrp = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
+        if hrp then
+            return (hrp.Position - aPos).Magnitude < (hrp.Position - bPos).Magnitude
+        end
+        return false
+    end)
     return targets
 end
 
 --=============================
--- スライド移動処理（安全版）
+-- スライド移動処理
 --=============================
 RunService.RenderStepped:Connect(function(dt)
     if not slideActive then return end
-
     local char = player.Character
     if not char then return end
-
     local hrp = char:FindFirstChild("HumanoidRootPart")
     if not hrp then return end
 
@@ -1016,23 +1028,16 @@ RunService.RenderStepped:Connect(function(dt)
     local target = targets[1]
     if not target or not target.Parent then return end
 
-    local targetPos
     local pickup = target:FindFirstChild("PickupHitbox")
     local pipe = target:FindFirstChild("Pipe")
-
-    if pickup then
-        targetPos = pickup.Position
-    elseif pipe then
-        targetPos = pipe.Position
-    end
+    local targetPos = pickup and pickup.Position or pipe and pipe.Position
 
     if targetPos then
-        -- CFrameを滑らかに移動
+        -- 滑らか移動
         hrp.CFrame = hrp.CFrame:Lerp(CFrame.new(targetPos + Vector3.new(0,3,0)), math.clamp(slideSpeed * dt, 0, 1))
 
-        -- 対象に近づいたら処理
+        -- 近づいたら取得・操作
         if (hrp.Position - targetPos).Magnitude < 3 then
-            -- アイテム取得
             if pickup then
                 pcall(function()
                     firetouchinterest(hrp, pickup, 0)
@@ -1040,23 +1045,19 @@ RunService.RenderStepped:Connect(function(dt)
                 end)
             end
 
-            -- Pipe操作
             if pipe then
                 for _, key in ipairs({"Z","X","C"}) do
                     local keyEnum = Enum.KeyCode[key]
-                    if keyEnum then
-                        pcall(function()
-                            UIS.InputBegan:Fire({KeyCode=keyEnum}, false)
-                        end)
-                    end
+                    pcall(function()
+                        UIS.InputBegan:Fire({KeyCode=keyEnum}, false)
+                    end)
                 end
             end
 
-            -- 対象削除（処理済み）
+            -- 処理済み削除
             if target and target.Parent then
                 pcall(function() target:Destroy() end)
             end
         end
     end
 end)
-
