@@ -674,43 +674,99 @@ combatTab:CreateToggle({
 })
 
 
--- ======================================
--- 敵の頭にカメラ追従 + 視点回転 + ズーム
--- 本体は空中に固定して絶対に動かない安全版
--- ======================================
+
 
 local freeViewActive = false
-local camPitch = 0
-local camYaw = 0
-local sensitivity = 4
+local selectedTarget = nil
 
+-- 視点回転値
+local camYaw = 0
+local camPitch = 0
+local sensitivity = 0.25
+
+-- ズーム
 local zoomDist = 8
 local minZoom, maxZoom = 3, 25
 
-local dragging = false
-local safePos = CFrame.new(0, 1000, 0)
+-- 安全座標（絶対攻撃されない）
+local safePos = CFrame.new(0, 1500, 0)
 
-local Players = game:GetService("Players")
-local player = Players.LocalPlayer
-local UIS = game:GetService("UserInputService")
-local RunService = game:GetService("RunService")
-local camera = workspace.CurrentCamera
+----------------------------------
+-- 選択したターゲットを設定する関数
+----------------------------------
+_G.SetTarget = function(tar)
+	if typeof(tar) == "Instance" and tar:FindFirstChild("Humanoid") then
+		selectedTarget = tar
+	end
+end
 
 
--- 右クリックドラッグ
-UIS.InputBegan:Connect(function(input)
-	if input.UserInputType == Enum.UserInputType.MouseButton2 then
-		dragging = true
+----------------------------------
+-- 🔥 カメラ固定トグル ボタン
+----------------------------------
+combatTab:CreateToggle({
+	Name = "視点のみTP",
+	CurrentValue = false,
+	Callback = function(state)
+		if not selectedTarget then
+			RayField:Notify({
+				Title = "エラー",
+				Content = "ターゲット選んで！",
+				Duration = 2
+			})
+			return
+		end
+
+		freeViewActive = state
+
+		local char = player.Character
+		if not char then return end
+
+		local hrp = char:FindFirstChild("HumanoidRootPart")
+		local hum = char:FindFirstChild("Humanoid")
+
+		if state then
+			-- カメラをスクリプト制御
+			camera.CameraType = Enum.CameraType.Scriptable
+
+			-- 本体を安全位置へ
+			if hrp then
+				hrp.CFrame = safePos
+			end
+			if hum then
+				hum.PlatformStand = true
+			end
+
+			-- 視点初期化
+			camYaw = 0
+			camPitch = 0
+
+		else
+			camera.CameraType = Enum.CameraType.Custom
+			if hum then
+				hum.PlatformStand = false
+			end
+		end
+	end
+})
+
+
+-------------------------------------------
+-- 🖱 マウス移動で視点操作（右クリック不要）
+-------------------------------------------
+UIS.InputChanged:Connect(function(input)
+	if not freeViewActive then return end
+	if input.UserInputType == Enum.UserInputType.MouseMovement then
+		local dx, dy = input.Delta.X, input.Delta.Y
+
+		camYaw = camYaw - dx * sensitivity
+		camPitch = math.clamp(camPitch - dy * sensitivity, -75, 75)
 	end
 end)
 
-UIS.InputEnded:Connect(function(input)
-	if input.UserInputType == Enum.UserInputType.MouseButton2 then
-		dragging = false
-	end
-end)
-
--- ホイールズーム
+---------------------------
+-- 🟦 ホイールでズーム
+---------------------------
 UIS.InputChanged:Connect(function(input)
 	if not freeViewActive then return end
 	if input.UserInputType == Enum.UserInputType.MouseWheel then
@@ -719,41 +775,9 @@ UIS.InputChanged:Connect(function(input)
 end)
 
 
--- トグル
-combatTab:CreateToggle({
-	Name = "敵の頭に視点固定（安全カメラ）",
-	CurrentValue = false,
-	Callback = function(state)
-
-		if not selectedTarget then
-			RayField:Notify({Title = "エラー", Content = "ターゲット選んで！", Duration = 2})
-			return
-		end
-
-		freeViewActive = state
-
-		if state then
-			camera.CameraType = Enum.CameraType.Scriptable
-
-			-- ★ 本体を空中に固定（絶対に攻撃されない）
-			local hrp = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
-			local humanoid = player.Character and player.Character:FindFirstChild("Humanoid")
-			if hrp then hrp.CFrame = safePos end
-			if humanoid then humanoid.PlatformStand = true end
-
-			camYaw, camPitch = 0, 0
-		else
-			camera.CameraType = Enum.CameraType.Custom
-
-			-- 元に戻す
-			local humanoid = player.Character and player.Character:FindFirstChild("Humanoid")
-			if humanoid then humanoid.PlatformStand = false end
-		end
-	end
-})
-
-
--- カメラ追従・回転・ズーム
+-----------------------------------------
+-- 🎥 カメラ処理（回転 + ズーム + 追従）
+-----------------------------------------
 RunService.RenderStepped:Connect(function()
 	if not freeViewActive then return end
 	if not selectedTarget or not selectedTarget.Character then return end
@@ -761,16 +785,10 @@ RunService.RenderStepped:Connect(function()
 	local head = selectedTarget.Character:FindFirstChild("Head")
 	if not head then return end
 
-	-- マウス回転
-	if dragging then
-		local dx, dy = UIS:GetMouseDelta()
-		camYaw = camYaw - dx * sensitivity * 0.01
-		camPitch = math.clamp(camPitch - dy * sensitivity * 0.01, -80, 80)
-	end
-
 	local yaw = math.rad(camYaw)
 	local pitch = math.rad(camPitch)
 
+	-- カメラ位置計算（FPSゲーム方式）
 	local offset = Vector3.new(
 		math.cos(pitch) * math.sin(yaw),
 		math.sin(pitch),
@@ -779,11 +797,8 @@ RunService.RenderStepped:Connect(function()
 
 	local camPos = head.Position - offset
 
-	-- ★ カメラだけ完全追従
 	camera.CFrame = CFrame.new(camPos, head.Position)
 end)
-
-
 
 --========================================================--
 -- プレイヤー一覧（HPリアルタイム）
