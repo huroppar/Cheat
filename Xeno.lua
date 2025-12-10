@@ -923,6 +923,7 @@ end)
 --=============================
 -- ハンティ・ゾンビタブ用安全スライド
 --=============================
+local huntTab = Window:CreateTab("ハンティ・ゾンビ", 4483362458)
 
 local RunService = game:GetService("RunService")
 local player = game:GetService("Players").LocalPlayer
