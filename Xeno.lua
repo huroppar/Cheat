@@ -615,7 +615,8 @@ local followActive = false
 local freeCamActive = false
 local originalPos = nil
 local originalCamType = nil
-local savedY = 0   -- 落下防止用
+local savedHRPCFrame = nil
+local savedPlatformStand = false
 
 --============================
 -- ★ プレイヤーへTP
@@ -653,15 +654,17 @@ combatTab:CreateToggle({
         end
         followActive = state
         local myHRP = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
+        if not myHRP then return end
+
         if state then
-            if myHRP then originalPos = myHRP.CFrame end
+            originalPos = myHRP.CFrame
             RayField:Notify({
                 Title = "張り付き開始",
                 Content = selectedTarget.Name .. " の後ろへ追従中",
                 Duration = 3
             })
         else
-            if originalPos and myHRP then
+            if originalPos then
                 player.Character:PivotTo(originalPos)
             end
             RayField:Notify({
@@ -673,132 +676,105 @@ combatTab:CreateToggle({
     end
 })
 
-
---================ カメラ自由追従 =================
-local freeViewActive = false
-local selectedTarget = nil
-
--- 視点回転値
-local camYaw = 0
-local camPitch = 0
+--============================
+-- ★ カメラ自由追従
+--============================
+local camYaw, camPitch = 0,0
 local sensitivity = 0.25
-
--- ズーム
 local zoomDist = 8
-local minZoom, maxZoom = 3, 25
+local minZoom, maxZoom = 3,25
+local safePos = CFrame.new(0,1500,0)
+local originalHRP = nil
 
--- 安全座標（絶対攻撃されない）
-local safePos = CFrame.new(0, 1500, 0)
-local originalCFrame = nil  -- 元の位置保存用
-
-----------------------------------
--- 選択したターゲットを設定する関数
-----------------------------------
 _G.SetTarget = function(tar)
 	if typeof(tar) == "Instance" and tar:FindFirstChild("Humanoid") then
 		selectedTarget = tar
 	end
 end
 
-----------------------------------
--- 🔥 カメラ固定トグル ボタン
-----------------------------------
 combatTab:CreateToggle({
-	Name = "視点のみTP",
-	CurrentValue = false,
-	Callback = function(state)
-		if not selectedTarget then
-			RayField:Notify({
-				Title = "エラー",
-				Content = "ターゲット選んで！",
-				Duration = 2
-			})
-			return
-		end
+    Name = "視点のみTP",
+    CurrentValue = false,
+    Callback = function(state)
+        if not selectedTarget then
+            RayField:Notify({
+                Title = "エラー",
+                Content = "ターゲット選んで！",
+                Duration = 2
+            })
+            return
+        end
 
-		freeViewActive = state
+        freeCamActive = state
 
-		local char = player.Character
-		if not char then return end
+        local char = player.Character
+        if not char then return end
+        local hrp = char:FindFirstChild("HumanoidRootPart")
+        local hum = char:FindFirstChild("Humanoid")
+        if not hrp or not hum then return end
 
-		local hrp = char:FindFirstChild("HumanoidRootPart")
-		local hum = char:FindFirstChild("Humanoid")
+        if state then
+            -- カメラ制御開始
+            originalHRP = hrp.CFrame
+            savedPlatformStand = hum.PlatformStand
 
-		if state then
-			camera.CameraType = Enum.CameraType.Scriptable
+            camera.CameraType = Enum.CameraType.Scriptable
+            hrp.CFrame = safePos
+            hum.PlatformStand = true
 
-			-- 元の位置を保存して安全位置にTP
-			if hrp then
-				originalCFrame = hrp.CFrame
-				hrp.CFrame = safePos
-			end
-
-			if hum then
-				hum.PlatformStand = true
-			end
-
-			camYaw, camPitch = 0,0
-		else
-			camera.CameraType = Enum.CameraType.Custom
-
-			-- 元の位置に戻す
-			if hrp and originalCFrame then
-				hrp.CFrame = originalCFrame
-			end
-
-			if hum then
-				hum.PlatformStand = false
-			end
-		end
-	end
+            camYaw, camPitch = 0,0
+        else
+            -- カメラ解除
+            camera.CameraType = Enum.CameraType.Custom
+            if originalHRP then
+                hrp.CFrame = originalHRP
+            end
+            hum.PlatformStand = savedPlatformStand
+        end
+    end
 })
 
--------------------------------------------
--- 🖱 マウス移動で視点操作（右クリック不要）
--------------------------------------------
+--============================
+-- マウス操作
+--============================
 UIS.InputChanged:Connect(function(input)
-	if not freeViewActive then return end
-	if input.UserInputType == Enum.UserInputType.MouseMovement then
-		local dx, dy = input.Delta.X, input.Delta.Y
-		camYaw = camYaw - dx * sensitivity
-		camPitch = math.clamp(camPitch - dy * sensitivity, -75, 75)
-	end
+    if not freeCamActive then return end
+    if input.UserInputType == Enum.UserInputType.MouseMovement then
+        camYaw = camYaw - input.Delta.X * sensitivity
+        camPitch = math.clamp(camPitch - input.Delta.Y * sensitivity, -75, 75)
+    elseif input.UserInputType == Enum.UserInputType.MouseWheel then
+        zoomDist = math.clamp(zoomDist - input.Position.Z * 2, minZoom, maxZoom)
+    end
 end)
 
----------------------------
--- 🟦 ホイールでズーム
----------------------------
-UIS.InputChanged:Connect(function(input)
-	if not freeViewActive then return end
-	if input.UserInputType == Enum.UserInputType.MouseWheel then
-		zoomDist = math.clamp(zoomDist - input.Position.Z * 2, minZoom, maxZoom)
-	end
-end)
-
------------------------------------------
--- 🎥 カメラ処理（回転 + ズーム + 追従）
------------------------------------------
+--============================
+-- RenderStepped カメラ制御
+--============================
 RunService.RenderStepped:Connect(function()
-	if not freeViewActive then return end
-	if not selectedTarget or not selectedTarget.Character then return end
+    -- Follow処理
+    if followActive and selectedTarget and selectedTarget.Character and player.Character then
+        local targetHRP = selectedTarget.Character:FindFirstChild("HumanoidRootPart")
+        local myHRP = player.Character:FindFirstChild("HumanoidRootPart")
+        if targetHRP and myHRP then
+            myHRP.CFrame = targetHRP.CFrame * CFrame.new(0,0,-3)
+        end
+    end
 
-	local head = selectedTarget.Character:FindFirstChild("Head")
-	if not head then return end
+    -- 自由カメラ処理
+    if freeCamActive and selectedTarget and selectedTarget.Character then
+        local head = selectedTarget.Character:FindFirstChild("Head")
+        if not head then return end
 
-	-- 視点方向ベクトル（FPS式）
-	local yaw = math.rad(camYaw)
-	local pitch = math.rad(camPitch)
-	local lookDir = Vector3.new(
-		math.cos(pitch) * math.sin(yaw),
-		math.sin(pitch),
-		math.cos(pitch) * math.cos(yaw)
-	)
-
-	-- カメラ位置計算
-	local camPos = head.Position - lookDir * zoomDist
-
-	-- カメラセット（注視点はターゲット）
-	camera.CFrame = CFrame.new(camPos, head.Position)
+        local yaw = math.rad(camYaw)
+        local pitch = math.rad(camPitch)
+        local lookDir = Vector3.new(
+            math.cos(pitch) * math.sin(yaw),
+            math.sin(pitch),
+            math.cos(pitch) * math.cos(yaw)
+        )
+        local camPos = head.Position - lookDir * zoomDist
+        camera.CFrame = CFrame.new(camPos, head.Position)
+    end
 end)
 
 
