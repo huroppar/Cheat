@@ -344,7 +344,7 @@ RunService.RenderStepped:Connect(function()
 end)
 
 --=============================
--- Fly機能
+-- Fly機能（PC用: WASD + Space/Shift）
 --=============================
 local flyActive = false
 local flySpeed = 50
@@ -377,7 +377,8 @@ playerTab:CreateSlider({
 })
 
 -- キー入力
-UserInputService.InputBegan:Connect(function(input)
+UserInputService.InputBegan:Connect(function(input, gpe)
+    if gpe then return end
     if input.UserInputType == Enum.UserInputType.Keyboard then
         if flyKeys[input.KeyCode.Name] ~= nil then
             flyKeys[input.KeyCode.Name] = true
@@ -385,7 +386,8 @@ UserInputService.InputBegan:Connect(function(input)
     end
 end)
 
-UserInputService.InputEnded:Connect(function(input)
+UserInputService.InputEnded:Connect(function(input, gpe)
+    if gpe then return end
     if input.UserInputType == Enum.UserInputType.Keyboard then
         if flyKeys[input.KeyCode.Name] ~= nil then
             flyKeys[input.KeyCode.Name] = false
@@ -393,7 +395,7 @@ UserInputService.InputEnded:Connect(function(input)
     end
 end)
 
--- Fly制御
+-- Fly制御ループ
 RunService.RenderStepped:Connect(function(dt)
     if not flyActive then return end
     local _, _, root = getCharacter()
@@ -401,19 +403,23 @@ RunService.RenderStepped:Connect(function(dt)
 
     local cam = workspace.CurrentCamera
     local move = Vector3.new(0,0,0)
-    local look = cam.CFrame.LookVector
 
-    if flyKeys.W then move = move + look end
-    if flyKeys.S then move = move - look end
+    -- 前後左右
+    if flyKeys.W then move = move + cam.CFrame.LookVector end
+    if flyKeys.S then move = move - cam.CFrame.LookVector end
     if flyKeys.A then move = move - cam.CFrame.RightVector end
     if flyKeys.D then move = move + cam.CFrame.RightVector end
+
+    -- 上下
     if flyKeys.Space then move = move + Vector3.new(0,1,0) end
     if flyKeys.LeftShift then move = move - Vector3.new(0,1,0) end
 
+    -- 移動
     if move.Magnitude > 0 then
         root.CFrame = root.CFrame + move.Unit * flySpeed * dt
     end
 end)
+
 
 
 --================ ESPタブ =================
