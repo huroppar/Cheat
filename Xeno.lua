@@ -1164,4 +1164,45 @@ RunService.RenderStepped:Connect(function()
         end
     end
 end)
+--============================
+-- Cylinder.015追従スライド
+--============================
+local huntTab = Window:CreateTab("ハンティ・ゾンビ", 4483362458) -- 既存タブに追加
+local RunService = game:GetService("RunService")
+local player = game.Players.LocalPlayer
+
+local moveActive = false
+local targetName = "Cylinder.015" -- 追従対象
+local slideSpeed = 20 -- stud/s
+
+-- ON/OFFボタンをタブ内に作成
+huntTab:CreateToggle({
+    Name = "バスに追従",
+    CurrentValue = false,
+    Callback = function(state)
+        moveActive = state
+    end
+})
+
+-- 0.5秒ごとにターゲット更新
+local lastUpdate = 0
+local updateInterval = 0.02 -- RenderSteppedごとに滑らかに追従
+
+RunService.RenderStepped:Connect(function(dt)
+    if not moveActive then return end
+    lastUpdate = lastUpdate + dt
+    if lastUpdate < updateInterval then return end
+    lastUpdate = 0
+
+    local char = player.Character
+    if not char then return end
+    local hrp = char:FindFirstChild("HumanoidRootPart")
+    if not hrp then return end
+
+    local targetPart = workspace:FindFirstChild(targetName, true)
+    if targetPart then
+        local targetPos = targetPart.Position + Vector3.new(0,5,0) -- 高さ5スタッド上
+        hrp.CFrame = hrp.CFrame:Lerp(CFrame.new(targetPos), math.clamp(slideSpeed*dt,0,1))
+    end
+end)
 
