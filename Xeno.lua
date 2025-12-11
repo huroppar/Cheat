@@ -1001,7 +1001,7 @@ end)
 
 
 --=============================
--- ハンティ・ゾンビタブ用・Pickup & Pipe追尾 / 敵ESP / Cylinder.015追従
+-- ハンティ・ゾンビタブ
 --=============================
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
@@ -1010,15 +1010,10 @@ local Workspace = game:GetService("Workspace")
 
 local player = Players.LocalPlayer
 
---=============================
--- GUIタブ
---=============================
 local huntTab = Window:CreateTab("ハンティ・ゾンビ", 4483362458)
 local enemyTab = Window:CreateTab("敵処理", 4483362458)
 
---=============================
--- Pickupスライド設定
---=============================
+-- Pickupスライド
 local slideSpeed = 20
 local slideActive = false
 local pickupCooldown = 0.5
@@ -1050,9 +1045,7 @@ huntTab:CreateToggle({
     Callback = function(state) slideActive = state end
 })
 
---=============================
--- Pipe追尾設定
---=============================
+-- Pipe追尾
 local followActive = false
 local originalCFrame = nil
 local pipeCache = {}
@@ -1084,18 +1077,13 @@ huntTab:CreateToggle({
         local char = player.Character
         if char then
             local hrp = char:FindFirstChild("HumanoidRootPart")
-            if state then
-                if hrp then originalCFrame = hrp.CFrame end
-            else
-                if hrp and originalCFrame then hrp.CFrame = originalCFrame end
-            end
+            if state and hrp then originalCFrame = hrp.CFrame end
+            if not state and hrp and originalCFrame then hrp.CFrame = originalCFrame end
         end
     end
 })
 
---=============================
--- 敵ESP（数字のみ）
---=============================
+-- 敵ESP
 local pulling = false
 
 enemyTab:CreateToggle({
@@ -1104,7 +1092,6 @@ enemyTab:CreateToggle({
     Callback = function(state)
         pulling = state
         if not pulling then
-            -- オフ時は全て削除
             local entities = Workspace:FindFirstChild("Entities")
             if entities then
                 for _, zombie in pairs(entities:GetChildren()) do
@@ -1139,26 +1126,20 @@ local function createESP(hrp)
     bbg.Parent = hrp
 end
 
---=============================
--- Cylinder.015追従スライド
---=============================
+-- Cylinder.015追従
 local moveActive = false
 local targetName = "Cylinder.015"
 
 huntTab:CreateToggle({
     Name = "バスに追従",
     CurrentValue = false,
-    Callback = function(state)
-        moveActive = state
-    end
+    Callback = function(state) moveActive = state end
 })
 
+-- RenderStepped
 local lastUpdate = 0
-local updateInterval = 0.02 -- RenderSteppedで滑らか追従
+local updateInterval = 0.02
 
---=============================
--- RenderStepped処理
---=============================
 RunService.RenderStepped:Connect(function(dt)
     local char = player.Character
     if not char then return end
@@ -1198,7 +1179,6 @@ RunService.RenderStepped:Connect(function(dt)
             table.sort(pipeCache, function(a,b)
                 return (hrp.Position - a.PrimaryPart.Position).Magnitude < (hrp.Position - b.PrimaryPart.Position).Magnitude
             end)
-
             local target = pipeCache[1]
             if target and target.PrimaryPart then
                 local distance = (hrp.Position - target.PrimaryPart.Position).Magnitude
@@ -1207,27 +1187,11 @@ RunService.RenderStepped:Connect(function(dt)
                     moveTarget = hrp.Position + (target.PrimaryPart.Position - hrp.Position).Unit * (distance - 50)
                 end
                 hrp.CFrame = hrp.CFrame:Lerp(CFrame.new(moveTarget + Vector3.new(0,3,0)), math.clamp(slideSpeed*dt,0,1))
-
-                if distance <= 50 then
-                    for _, key in ipairs({"X","C"}) do
-                        local keyEnum = Enum.KeyCode[key]
-                        if keyEnum then
-                            pcall(function()
-                                UIS.InputBegan:Fire({KeyCode=keyEnum}, false)
-                            end)
-                        end
-                    end
-                end
-
-                if not target or not target.Parent then
-                    followActive = false
-                    if hrp and originalCFrame then hrp.CFrame = originalCFrame end
-                end
             end
         end
     end
 
-    -- Cylinder.015追従スライド
+    -- Cylinder.015追従
     if moveActive then
         lastUpdate = lastUpdate + dt
         if lastUpdate >= updateInterval then
@@ -1247,9 +1211,9 @@ RunService.RenderStepped:Connect(function(dt)
             for _, zombie in pairs(entities:GetChildren()) do
                 if zombie.Name == "Zombie" then
                     for _, e in pairs(zombie:GetChildren()) do
-                        local hrp = e:FindFirstChild("HumanoidRootPart")
-                        if hrp then
-                            createESP(hrp)
+                        local hrp2 = e:FindFirstChild("HumanoidRootPart")
+                        if hrp2 then
+                            createESP(hrp2)
                         end
                     end
                 end
