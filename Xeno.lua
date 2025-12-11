@@ -1092,3 +1092,76 @@ RunService.RenderStepped:Connect(function(dt)
         end
     end
 end)
+
+
+--============================
+-- 敵ESP（数字のみ）
+--============================
+local EnemyTab = Window:CreateTab("敵処理", 4483362458)
+
+local pulling = false
+
+-- ON/OFFボタン
+EnemyTab:CreateToggle({
+    Name = "敵ESP",
+    CurrentValue = false,
+    Callback = function(state)
+        pulling = state
+        if not pulling then
+            -- オフ時は全て削除
+            local entities = workspace:FindFirstChild("Entities")
+            if entities then
+                for _, zombie in pairs(entities:GetChildren()) do
+                    for _, e in pairs(zombie:GetChildren()) do
+                        local hrp = e:FindFirstChild("HumanoidRootPart")
+                        if hrp then
+                            local gui = hrp:FindFirstChild("ESP")
+                            if gui then gui:Destroy() end
+                        end
+                    end
+                end
+            end
+        end
+    end
+})
+
+-- ESP作成関数
+local function createESP(hrp)
+    if hrp:FindFirstChild("ESP") then return end
+    local bbg = Instance.new("BillboardGui")
+    bbg.Name = "ESP"
+    bbg.Adornee = hrp
+    bbg.Size = UDim2.new(0,50,0,20)
+    bbg.AlwaysOnTop = true
+
+    local text = Instance.new("TextLabel", bbg)
+    text.Size = UDim2.new(1,0,1,0)
+    text.BackgroundTransparency = 1
+    text.TextColor3 = Color3.fromRGB(255,0,0)
+    text.TextScaled = true
+    text.Text = hrp.Parent.Name
+
+    bbg.Parent = hrp
+end
+
+-- 更新処理
+local RunService = game:GetService("RunService")
+local player = game.Players.LocalPlayer
+
+RunService.RenderStepped:Connect(function()
+    if not pulling then return end
+    local entities = workspace:FindFirstChild("Entities")
+    if entities then
+        for _, zombie in pairs(entities:GetChildren()) do
+            if zombie.Name == "Zombie" then
+                for _, e in pairs(zombie:GetChildren()) do
+                    local hrp = e:FindFirstChild("HumanoidRootPart")
+                    if hrp then
+                        createESP(hrp)
+                    end
+                end
+            end
+        end
+    end
+end)
+
