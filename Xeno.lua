@@ -940,6 +940,9 @@ local player = Players.LocalPlayer
 local slideSpeed = 20
 local slideActive = false
 
+local pickupCooldown = 0.5
+local lastPickupSearch = 0
+
 local function getPickups()
     local targets = {}
     for _, obj in pairs(Workspace:GetDescendants()) do
@@ -1021,25 +1024,34 @@ RunService.RenderStepped:Connect(function(dt)
     local hrp = char:FindFirstChild("HumanoidRootPart")
     if not hrp then return end
 
-    -- Pickupスライド
+    -- =============================
+    -- Pickupスライド（0.5秒おき）
+    -- =============================
     if slideActive then
-        local pickups = getPickups()
-        if #pickups > 0 then
-            local target = pickups[1]
-            if target and target.Parent then
-                hrp.CFrame = hrp.CFrame:Lerp(CFrame.new(target.Position + Vector3.new(0,3,0)), math.clamp(slideSpeed*dt,0,1))
-                if (hrp.Position - target.Position).Magnitude < 3 then
-                    pcall(function()
-                        firetouchinterest(hrp, target, 0)
-                        firetouchinterest(hrp, target, 1)
-                        if target and target.Parent then target:Destroy() end
-                    end)
+        lastPickupSearch = lastPickupSearch + dt
+        if lastPickupSearch >= pickupCooldown then
+            lastPickupSearch = 0
+
+            local pickups = getPickups()
+            if #pickups > 0 then
+                local target = pickups[1]
+                if target and target.Parent then
+                    hrp.CFrame = CFrame.new(target.Position + Vector3.new(0,3,0))
+                    if (hrp.Position - target.Position).Magnitude < 3 then
+                        pcall(function()
+                            firetouchinterest(hrp, target, 0)
+                            firetouchinterest(hrp, target, 1)
+                            if target and target.Parent then target:Destroy() end
+                        end)
+                    end
                 end
             end
         end
     end
 
-    -- Pipe追尾
+    -- =============================
+    -- Pipe追尾（既存の0.5秒制御）
+    -- =============================
     if followActive then
         lastSearch = lastSearch + dt
         if lastSearch >= searchCooldown then
