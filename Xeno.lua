@@ -383,6 +383,69 @@ playerTab:CreateToggle({
 
 
 
+--========================================================--
+--         位置記録（1つだけ上書き）＆テレポート        --
+--========================================================--
+
+local Players = game:GetService("Players")
+local player = Players.LocalPlayer
+local savedCFrame = nil  -- ← 常に1つだけ保存する
+
+-- ★ ここを書き換えて → 君が使ってる既存のタブ名に合わせて
+local tab = Window:CreateTab("Teleport", 4483362458)
+-- 例：playerTab なら  local tab = playerTab
+
+
+-- 位置記録ボタン
+tab:CreateButton({
+    Name = "位置記録（上書き）",
+    Callback = function()
+        local char = player.Character
+        local hrp = char and char:FindFirstChild("HumanoidRootPart")
+
+        if hrp then
+            savedCFrame = hrp.CFrame  -- ← 上書き保存
+            RayField:Notify({
+                Title = "位置記録",
+                Content = "現在位置を保存したよ！（前のデータは削除）",
+                Duration = 2
+            })
+        else
+            RayField:Notify({
+                Title = "エラー",
+                Content = "キャラが見つからないよ！",
+                Duration = 2
+            })
+        end
+    end
+})
+
+
+-- TPボタン
+tab:CreateButton({
+    Name = "記録位置にTP",
+    Callback = function()
+        local char = player.Character
+        local hrp = char and char:FindFirstChild("HumanoidRootPart")
+
+        if savedCFrame and hrp then
+            hrp.CFrame = savedCFrame
+            RayField:Notify({
+                Title = "テレポート",
+                Content = "保存した場所へTPしたよ！",
+                Duration = 2
+            })
+        else
+            RayField:Notify({
+                Title = "エラー",
+                Content = "保存された位置がないよ！",
+                Duration = 2
+            })
+        end
+    end
+})
+
+
 --=============================
 -- Fly機能（PC用: WASD + Space/Shift）
 --=============================
