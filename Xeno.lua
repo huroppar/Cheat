@@ -343,6 +343,46 @@ RunService.RenderStepped:Connect(function()
     setWallClip(wallClipEnabled)
 end)
 
+
+
+--================ 位置固定（Freeze） =================
+local freezeEnabled = false
+local freezeConnection = nil
+local freezeCFrame = nil
+
+playerTab:CreateToggle({
+    Name = "位置固定",
+    CurrentValue = false,
+    Flag = "FreezeToggle",
+    Callback = function(state)
+        freezeEnabled = state
+
+        local char = player.Character
+        if not char then return end
+
+        local hrp = char:FindFirstChild("HumanoidRootPart")
+        if not hrp then return end
+
+        if freezeEnabled then
+            -- 固定ON
+            freezeCFrame = hrp.CFrame
+            freezeConnection = RunService.RenderStepped:Connect(function()
+                pcall(function()
+                    hrp.CFrame = freezeCFrame
+                end)
+            end)
+        else
+            -- 固定OFF
+            if freezeConnection then
+                freezeConnection:Disconnect()
+                freezeConnection = nil
+            end
+        end
+    end
+})
+
+
+
 --=============================
 -- Fly機能（PC用: WASD + Space/Shift）
 --=============================
