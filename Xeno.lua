@@ -1126,6 +1126,25 @@ local function createESP(hrp)
     bbg.Parent = hrp
 end
 
+
+
+--========================================================--
+--            🌴 Endless・Island 専用 TP ボタン            --
+--========================================================--
+
+huntTab:CreateButton({
+    Name = "🌴 Endless Island 放置場所TP",
+    Callback = function()
+        local player = Players.LocalPlayer
+        local char = player.Character or player.CharacterAdded:Wait()
+        local hrp = char:WaitForChild("HumanoidRootPart")
+
+        -- ここで座標指定（例: X12.4 Y-14.2 Z-31.8）
+        hrp.CFrame = CFrame.new(12.4, -14.2, -31.8)
+    end
+})
+
+
 -- Cylinder.015追従
 local moveActive = false
 local targetName = "Cylinder.015"
