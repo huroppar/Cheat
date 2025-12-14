@@ -213,145 +213,127 @@ tab:CreateSlider({
     end
 })
 
---================ ESPタブ =================
+--================ ESP TAB (FULL FIXED) =================--
+
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local Lighting = game:GetService("Lighting")
+
+-- ESP Tab
 local espTab = Window:CreateTab("ESP", 4483362458)
 
-local showPlayerESP, showEnemyESP, showItemESP = false, false, false
-local highlights = {}
-
-
-
-
--- ======= ESPタブ用トグル（espTab が既にある前提） =======
--- もし espTab が nil なら作る
-if not espTab then
-    espTab = Window:CreateTab("ESP", 4483362458)
-end
-
--- プレイヤーX-Ray トグル
-espTab:CreateToggle({
-    Name = "X-Ray: プレイヤー透過",
-    CurrentValue = false,
-    Callback = function(val)
-        ToggleXRayPlayers()
-        if val then
-            -- 即反映（Optional：通知）
-            RayField:Notify({Title="X-Ray", Content="プレイヤー透過 ON", Duration=2})
-        else
-            RayField:Notify({Title="X-Ray", Content="プレイヤー透過 OFF", Duration=1})
-        end
-    end
-})
-
--- ワールドX-Ray トグル（壁透け）
-espTab:CreateToggle({
-    Name = "X-Ray: ワールド透過",
-    CurrentValue = false,
-    Callback = function(val)
-        ToggleXRayWorld()
-        if val then
-            RayField:Notify({Title="X-Ray", Content="ワールド透過 ON", Duration=2})
-        else
-            RayField:Notify({Title="X-Ray", Content="ワールド透過 OFF", Duration=1})
-        end
-    end
-})
-
--- 透過度スライダー（0 = 通常, 1 = 完全透明）
-espTab:CreateSlider({
-    Name = "X-Ray 透過度",
-    Range = {0, 1},
-    Increment = 0.05,
-    CurrentValue = XRayTransparency,
-    Suffix = "",
-    Flag = "XRayAlpha",
-    Callback = function(val)
-        XRayTransparency = val
-    end
-})
-
--- FullBright トグル
-espTab:CreateToggle({
-    Name = "FullBright（常時明るく）",
-    CurrentValue = false,
-    Callback = function(val)
-        ToggleFullBright()
-        if val then
-            RayField:Notify({Title="FullBright", Content="常時明るく ON", Duration=2})
-        else
-            RayField:Notify({Title="FullBright", Content="常時明るく OFF", Duration=1})
-        end
-    end
-})
--- ======= トグル追加終わり =======
-
---=================== HITBOX ESP ===================--
+-- ===== 状態 =====
+local showPlayerESP = false
+local showEnemyESP = false
+local showItemESP = false
 
 local showPlayerHitbox = false
 local showEnemyHitbox = false
 
-local hitboxBoxes = {} -- HRPごとに管理
+local XRayPlayers = false
+local XRayWorld = false
+local XRayTransparency = 0.7
+local FullBrightEnabled = false
 
--- Box（枠線）を作成
+local highlights = {}
+local hitboxBoxes = {}
+
+--================ X-RAY / FULLBRIGHT =================--
+
+local defaultLighting = {
+    Brightness = Lighting.Brightness,
+    ClockTime = Lighting.ClockTime,
+    FogEnd = Lighting.FogEnd
+}
+
+local function ToggleXRayPlayers(val)
+    XRayPlayers = val
+end
+
+local function ToggleXRayWorld(val)
+    XRayWorld = val
+end
+
+local function ToggleFullBright(val)
+    FullBrightEnabled = val
+
+    if val then
+        Lighting.Brightness = 5
+        Lighting.ClockTime = 14
+        Lighting.FogEnd = 1e9
+    else
+        Lighting.Brightness = defaultLighting.Brightness
+        Lighting.ClockTime = defaultLighting.ClockTime
+        Lighting.FogEnd = defaultLighting.FogEnd
+    end
+end
+
+RunService.RenderStepped:Connect(function()
+    -- Player X-Ray
+    for _, pl in ipairs(Players:GetPlayers()) do
+        if pl.Character then
+            for _, p in ipairs(pl.Character:GetDescendants()) do
+                if p:IsA("BasePart") then
+                    p.LocalTransparencyModifier = XRayPlayers and XRayTransparency or 0
+                end
+            end
+        end
+    end
+
+    -- World X-Ray
+    for _, obj in ipairs(workspace:GetDescendants()) do
+        if obj:IsA("BasePart") and not obj:IsDescendantOf(player.Character) then
+            obj.LocalTransparencyModifier = XRayWorld and XRayTransparency or 0
+        end
+    end
+end)
+
+--================ HITBOX =================--
+
 local function createHitboxBox(part)
     local box = Instance.new("BoxHandleAdornment")
+    box.Name = "HitboxESP"
     box.Adornee = part
+    box.Size = part.Size
     box.AlwaysOnTop = true
     box.ZIndex = 10
-    box.Size = part.Size
-    box.Color3 = Color3.new(1,0,0) -- 赤
-    box.Transparency = 0           -- 枠線は透明度0
-    box.AlwaysOnTop = true
+    box.Color3 = Color3.new(1,0,0)
+    box.Transparency = 1
+    box.Thickness = 3
     box.AdornCullingMode = Enum.AdornCullingMode.Never
     box.Parent = part
-
-    -- 枠線だけにする設定
-    box.Name = "HitboxESP"
-    box.Transparency = 1            -- 中身透明
-    box.Thickness = 3               -- 枠線の太さ
-    box.ZIndex = 10
-
     return box
 end
 
-
--- HITBOX 更新
 task.spawn(function()
     while true do
-        
-        --===== プレイヤーの Hitbox =====--
-        for _, pl in pairs(Players:GetPlayers()) do
+        -- Player Hitbox
+        for _, pl in ipairs(Players:GetPlayers()) do
             if pl.Character and pl.Character:FindFirstChild("HumanoidRootPart") then
                 local hrp = pl.Character.HumanoidRootPart
-
                 if showPlayerHitbox then
                     if not hitboxBoxes[hrp] then
                         hitboxBoxes[hrp] = createHitboxBox(hrp)
                     end
-                else
-                    if hitboxBoxes[hrp] then
-                        hitboxBoxes[hrp]:Destroy()
-                        hitboxBoxes[hrp] = nil
-                    end
+                elseif hitboxBoxes[hrp] then
+                    hitboxBoxes[hrp]:Destroy()
+                    hitboxBoxes[hrp] = nil
                 end
             end
         end
 
-        --===== 敵の Hitbox =====--
-        for _, enemy in pairs(workspace:GetChildren()) do
-            if enemy:IsA("Model") and enemy:FindFirstChild("HumanoidRootPart") and enemy:FindFirstChildOfClass("Humanoid") then
-                if enemy:FindFirstChild("Humanoid").Health > 0 then
-                    local hrp = enemy.HumanoidRootPart
-
+        -- Enemy Hitbox
+        for _, m in ipairs(workspace:GetChildren()) do
+            if m:IsA("Model") and m:FindFirstChild("HumanoidRootPart") and m:FindFirstChildOfClass("Humanoid") then
+                if m.Humanoid.Health > 0 then
+                    local hrp = m.HumanoidRootPart
                     if showEnemyHitbox then
                         if not hitboxBoxes[hrp] then
                             hitboxBoxes[hrp] = createHitboxBox(hrp)
                         end
-                    else
-                        if hitboxBoxes[hrp] then
-                            hitboxBoxes[hrp]:Destroy()
-                            hitboxBoxes[hrp] = nil
-                        end
+                    elseif hitboxBoxes[hrp] then
+                        hitboxBoxes[hrp]:Destroy()
+                        hitboxBoxes[hrp] = nil
                     end
                 end
             end
@@ -361,41 +343,8 @@ task.spawn(function()
     end
 end)
 
+--================ HIGHLIGHT ESP =================--
 
---=================== HITBOX トグル ===================--
-
-espTab:CreateToggle({
-    Name = "Player Hitbox ESP（枠線）",
-    CurrentValue = false,
-    Callback = function(val)
-        showPlayerHitbox = val
-        RayField:Notify({
-            Title="Player Hitbox",
-            Content = val and "ON" or "OFF",
-            Duration = 1
-        })
-    end
-})
-
-espTab:CreateToggle({
-    Name = "Enemy Hitbox ESP（枠線）",
-    CurrentValue = false,
-    Callback = function(val)
-        showEnemyHitbox = val
-        RayField:Notify({
-            Title="Enemy Hitbox",
-            Content = val and "ON" or "OFF",
-            Duration = 1
-        })
-    end
-})
-
--- トグル作成
-espTab:CreateToggle({Name="Player ESP", CurrentValue=false, Callback=function(val) showPlayerESP=val end})
-espTab:CreateToggle({Name="Enemy/Bot ESP", CurrentValue=false, Callback=function(val) showEnemyESP=val end})
-espTab:CreateToggle({Name="Item ESP", CurrentValue=false, Callback=function(val) showItemESP=val end})
-
--- ハイライト作成関数
 local function createHighlight(obj, color)
     local hl = Instance.new("Highlight")
     hl.Adornee = obj
@@ -406,62 +355,88 @@ local function createHighlight(obj, color)
     return hl
 end
 
--- ESP更新ループ
-spawn(function()
+task.spawn(function()
     while true do
-        -- プレイヤーESP
-        for _, pl in pairs(Players:GetPlayers()) do
+        -- Player ESP
+        for _, pl in ipairs(Players:GetPlayers()) do
             if pl ~= player and pl.Character and pl.Character:FindFirstChild("Humanoid") then
-                local hum = pl.Character.Humanoid
                 if showPlayerESP then
                     if not highlights[pl] then
                         highlights[pl] = createHighlight(pl.Character, Color3.new(0,1,0))
                     end
-                    -- HPに応じて色変更
-                    local hpRatio = hum.Health / hum.MaxHealth
-                    if hpRatio > 0.66 then
-                        highlights[pl].FillColor = Color3.new(0,1,0)
-                    elseif hpRatio > 0.33 then
-                        highlights[pl].FillColor = Color3.new(1,1,0)
-                    else
-                        highlights[pl].FillColor = Color3.new(1,0,0)
-                    end
-                else
-                    if highlights[pl] then highlights[pl]:Destroy(); highlights[pl]=nil end
+                elseif highlights[pl] then
+                    highlights[pl]:Destroy()
+                    highlights[pl] = nil
                 end
             end
         end
 
-        -- 敵/BOT ESP
-        for _, enemy in pairs(workspace:GetChildren()) do
+        -- Enemy ESP
+        for _, enemy in ipairs(workspace:GetChildren()) do
             if enemy:IsA("Model") and enemy:FindFirstChildOfClass("Humanoid") then
                 if showEnemyESP then
                     if not highlights[enemy] then
                         highlights[enemy] = createHighlight(enemy, Color3.new(1,0,0))
                     end
-                else
-                    if highlights[enemy] then highlights[enemy]:Destroy(); highlights[enemy]=nil end
+                elseif highlights[enemy] then
+                    highlights[enemy]:Destroy()
+                    highlights[enemy] = nil
                 end
             end
         end
 
-        -- アイテムESP（仮にworkspace.Itemsにある場合）
+        -- Item ESP
         if workspace:FindFirstChild("Items") then
-            for _, item in pairs(workspace.Items:GetChildren()) do
+            for _, item in ipairs(workspace.Items:GetChildren()) do
                 if showItemESP then
                     if not highlights[item] then
                         highlights[item] = createHighlight(item, Color3.fromRGB(0,170,255))
                     end
-                else
-                    if highlights[item] then highlights[item]:Destroy(); highlights[item]=nil end
+                elseif highlights[item] then
+                    highlights[item]:Destroy()
+                    highlights[item] = nil
                 end
             end
         end
 
-        wait(0.2)
+        task.wait(0.2)
     end
 end)
 
+--================ GUI TOGGLES =================--
+
+espTab:CreateToggle({Name="Player ESP", CurrentValue=false, Callback=function(v) showPlayerESP=v end})
+espTab:CreateToggle({Name="Enemy ESP", CurrentValue=false, Callback=function(v) showEnemyESP=v end})
+espTab:CreateToggle({Name="Item ESP", CurrentValue=false, Callback=function(v) showItemESP=v end})
+
+espTab:CreateToggle({Name="Player Hitbox", CurrentValue=false, Callback=function(v) showPlayerHitbox=v end})
+espTab:CreateToggle({Name="Enemy Hitbox", CurrentValue=false, Callback=function(v) showEnemyHitbox=v end})
+
+espTab:CreateToggle({
+    Name="X-Ray Player",
+    CurrentValue=false,
+    Callback=function(v) ToggleXRayPlayers(v) end
+})
+
+espTab:CreateToggle({
+    Name="X-Ray World",
+    CurrentValue=false,
+    Callback=function(v) ToggleXRayWorld(v) end
+})
+
+espTab:CreateSlider({
+    Name="X-Ray Transparency",
+    Range={0,1},
+    Increment=0.05,
+    CurrentValue=XRayTransparency,
+    Callback=function(v) XRayTransparency=v end
+})
+
+espTab:CreateToggle({
+    Name="FullBright",
+    CurrentValue=false,
+    Callback=function(v) ToggleFullBright(v) end
+})
 
 
 --========================================================--
