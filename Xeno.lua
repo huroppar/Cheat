@@ -1,14 +1,18 @@
 -- RayFieldロード
 local Rayfield = loadstring(game:HttpGet("https://sirius.menu/rayfield"))()
 
+-- Services
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
+local Lighting = game:GetService("Lighting")
+
 local player = Players.LocalPlayer
 
 --================ 設定 =================
-local speedDefaultOn, speedDefaultOff = 30, 30
+local speedDefaultOn = 30
 local speedMin, speedMax = 0, 500
+
 local infiniteJumpEnabled = false
 local wallClipEnabled = false
 local airTPActive = false
@@ -19,169 +23,103 @@ local airTPOriginalCFrame = nil
 local function getCharacter()
     local char = player.Character or player.CharacterAdded:Wait()
     local humanoid = char:FindFirstChildOfClass("Humanoid")
-    local root = char:FindFirstChild("HumanoidRootPart") or char:FindFirstChildWhichIsA("BasePart")
+    local root = char:FindFirstChild("HumanoidRootPart")
     return char, humanoid, root
 end
 
 local function setWallClip(enable)
     local char = player.Character
     if not char then return end
-    for _, part in pairs(char:GetDescendants()) do
+    for _, part in ipairs(char:GetDescendants()) do
         if part:IsA("BasePart") then
             part.CanCollide = not enable
         end
     end
 end
 
-
-
--- ======= X-Ray & FullBright 定義（そのまま貼ってOK） =======
-local Players = game:GetService("Players")
+--================ X-Ray & FullBright =================
 local LocalPlayer = Players.LocalPlayer
-local RunService = game:GetService("RunService")
-local Lighting = game:GetService("Lighting")
-
--- X-Ray 状態
-local XRayPlayersEnabled = false   -- プレイヤーだけ透過
-local XRayWorldEnabled   = false   -- ワールド（壁など）透過
-local XRayTransparency   = 0.6
-
--- ワールドパーツの元の LocalTransparencyModifier を保持
+local XRayPlayersEnabled = false
+local XRayWorldEnabled = false
+local XRayTransparency = 0.6
 local originalLocalTransparency = {}
 
--- FullBright 状態
 local FullBrightEnabled = false
 local FB_Original = {
-	Brightness = Lighting.Brightness,
-	ClockTime = Lighting.ClockTime,
-	Ambient = Lighting.Ambient,
-	OutdoorAmbient = Lighting.OutdoorAmbient
+    Brightness = Lighting.Brightness,
+    ClockTime = Lighting.ClockTime,
+    Ambient = Lighting.Ambient,
+    OutdoorAmbient = Lighting.OutdoorAmbient
 }
+
 local function ApplyFullBright()
-	Lighting.Brightness = 2
-	Lighting.ClockTime = 12
-	Lighting.Ambient = Color3.new(1,1,1)
-	Lighting.OutdoorAmbient = Color3.new(1,1,1)
+    Lighting.Brightness = 2
+    Lighting.ClockTime = 12
+    Lighting.Ambient = Color3.new(1,1,1)
+    Lighting.OutdoorAmbient = Color3.new(1,1,1)
 end
+
 local function RestoreFullBright()
-	if FB_Original then
-		Lighting.Brightness = FB_Original.Brightness
-		Lighting.ClockTime = FB_Original.ClockTime
-		Lighting.Ambient = FB_Original.Ambient
-		Lighting.OutdoorAmbient = FB_Original.OutdoorAmbient
-	end
+    Lighting.Brightness = FB_Original.Brightness
+    Lighting.ClockTime = FB_Original.ClockTime
+    Lighting.Ambient = FB_Original.Ambient
+    Lighting.OutdoorAmbient = FB_Original.OutdoorAmbient
 end
 
--- キャラ（プレイヤー）に対する透過適用
 local function SetCharacterXray(character, value)
-	if not character then return end
-	for _, obj in ipairs(character:GetDescendants()) do
-		if obj:IsA("BasePart") then
-			-- LocalTransparencyModifier を使うとクライアントだけ描画が変わる
-			obj.LocalTransparencyModifier = value
-		end
-	end
+    if not character then return end
+    for _, obj in ipairs(character:GetDescendants()) do
+        if obj:IsA("BasePart") then
+            obj.LocalTransparencyModifier = value
+        end
+    end
 end
 
--- ワールド（workspace 内の BasePart）に対する透過適用（安全に保持して戻す）
 local function SetWorldXray(value)
-	-- value = 0 なら元に戻す
-	if value == 0 then
-		for part, old in pairs(originalLocalTransparency) do
-			if part and part:IsA("BasePart") then
-				pcall(function() part.LocalTransparencyModifier = old end)
-			end
-		end
-		originalLocalTransparency = {}
-		return
-	end
+    if value == 0 then
+        for part, old in pairs(originalLocalTransparency) do
+            if part and part:IsA("BasePart") then
+                part.LocalTransparencyModifier = old
+            end
+        end
+        originalLocalTransparency = {}
+        return
+    end
 
-	-- 透過値を設定（対象フィルタ：CanCollide==true かつ Transparency < 1 を簡易壁判定）
-	for _, part in ipairs(workspace:GetDescendants()) do
-		if part:IsA("BasePart") and part ~= workspace.Terrain then
-			-- 簡易フィルタ（床や小道具全部透けたくないなら条件変更して）
-			if part.CanCollide and part.Transparency < 1 then
-				-- 保存しておく（最初だけ）
-				if originalLocalTransparency[part] == nil then
-					originalLocalTransparency[part] = part.LocalTransparencyModifier or 0
-				end
-				pcall(function() part.LocalTransparencyModifier = XRayTransparency end)
-			end
-		end
-	end
+    for _, part in ipairs(workspace:GetDescendants()) do
+        if part:IsA("BasePart") and part.CanCollide and part.Transparency < 1 then
+            if originalLocalTransparency[part] == nil then
+                originalLocalTransparency[part] = part.LocalTransparencyModifier or 0
+            end
+            part.LocalTransparencyModifier = XRayTransparency
+        end
+    end
 end
 
--- ループ：X-Ray（プレイヤー）更新
 task.spawn(function()
-	while true do
-		if XRayPlayersEnabled then
-			for _, plr in ipairs(Players:GetPlayers()) do
-				if plr ~= LocalPlayer then
-					SetCharacterXray(plr.Character, XRayTransparency)
-				end
-			end
-		else
-			for _, plr in ipairs(Players:GetPlayers()) do
-				if plr ~= LocalPlayer and plr.Character then
-					-- 元に戻す（0）
-					SetCharacterXray(plr.Character, 0)
-				end
-			end
-		end
-		task.wait(0.25)
-	end
+    while true do
+        for _, plr in ipairs(Players:GetPlayers()) do
+            if plr ~= LocalPlayer then
+                SetCharacterXray(plr.Character, XRayPlayersEnabled and XRayTransparency or 0)
+            end
+        end
+        task.wait(0.25)
+    end
 end)
 
--- ループ：X-Ray（ワールド）更新（常時上書き）
 task.spawn(function()
-	while true do
-		if XRayWorldEnabled then
-			-- set world parts to transparency
-			SetWorldXray(XRayTransparency)
-		else
-			-- restore original
-			SetWorldXray(0)
-		end
-		task.wait(0.5)
-	end
+    while true do
+        SetWorldXray(XRayWorldEnabled and XRayTransparency or 0)
+        task.wait(0.5)
+    end
 end)
 
--- ループ：FullBright維持
 task.spawn(function()
-	while true do
-		if FullBrightEnabled then
-			ApplyFullBright()
-		end
-		task.wait(0.1)
-	end
+    while true do
+        if FullBrightEnabled then ApplyFullBright() end
+        task.wait(0.1)
+    end
 end)
-
--- 外部から切り替えられる関数（GUI のコールバックで呼ぶ）
-local function ToggleXRayPlayers()
-	XRayPlayersEnabled = not XRayPlayersEnabled
-end
-local function ToggleXRayWorld()
-	XRayWorldEnabled = not XRayWorldEnabled
-end
-local function ToggleFullBright()
-	FullBrightEnabled = not FullBrightEnabled
-	if not FullBrightEnabled then
-		RestoreFullBright()
-	end
-end
-
--- 安全にスクリプト停止時に戻すための関数（必要なら呼んで）
-local function CleanupVisuals()
-	XRayPlayersEnabled = false
-	XRayWorldEnabled = false
-	FullBrightEnabled = false
-	SetWorldXray(0)
-	for _, plr in ipairs(Players:GetPlayers()) do
-		if plr.Character then SetCharacterXray(plr.Character, 0) end
-	end
-	RestoreFullBright()
-end
--- ======= 定義ブロック終わり =======
 
 --================ RayField GUI =================
 local Window = Rayfield:CreateWindow({
@@ -189,340 +127,150 @@ local Window = Rayfield:CreateWindow({
     LoadingTitle = "Utility Hub",
     LoadingSubtitle = "by Masashi",
     ConfigurationSaving = {Enabled=true, FolderName="UtilityHubConfigs", FileName="Config"},
-    Discord={Enabled=false},
-    KeySystem=false
+    KeySystem = false
 })
 
---================ プレイヤータブ =================
 local playerTab = Window:CreateTab("プレイヤー", 4483362458)
 
--- スピードオンオフ
+--================ Speed（完全修正版） =================
 local speedEnabled = false
+local speedOn = speedDefaultOn
+local originalWalkSpeed = nil
+
 playerTab:CreateToggle({
     Name = "Speed",
     CurrentValue = false,
-    Flag = "SpeedToggle",
-    Callback = function(val)
-        speedEnabled = val
+    Callback = function(state)
+        speedEnabled = state
+        local _, hum = getCharacter()
+        if not hum then return end
+
+        if state then
+            originalWalkSpeed = hum.WalkSpeed
+            hum.WalkSpeed = speedOn
+        else
+            if originalWalkSpeed then
+                hum.WalkSpeed = originalWalkSpeed
+            end
+        end
     end
 })
 
--- スライダー（オン）
-local speedOn = speedDefaultOn
 playerTab:CreateSlider({
-    Name = "Speed On",
+    Name = "Speed",
     Range = {speedMin, speedMax},
     Increment = 1,
-    Suffix = "WalkSpeed",
     CurrentValue = speedDefaultOn,
-    Flag = "SpeedOnSlider",
     Callback = function(val)
         speedOn = val
+        if speedEnabled then
+            local _, hum = getCharacter()
+            if hum then hum.WalkSpeed = speedOn end
+        end
     end
 })
 
--- スライダー（オフ）
-local speedOff = speedDefaultOff
-playerTab:CreateSlider({
-    Name = "Speed Off",
-    Range = {speedMin, speedMax},
-    Increment = 1,
-    Suffix = "WalkSpeed",
-    CurrentValue = speedDefaultOff,
-    Flag = "SpeedOffSlider",
-    Callback = function(val)
-        speedOff = val
-    end
-})
-
--- 無限ジャンプ
+--================ Infinite Jump =================
 playerTab:CreateToggle({
     Name = "Infinite Jump",
     CurrentValue = false,
-    Flag = "InfiniteJump",
     Callback = function(val)
         infiniteJumpEnabled = val
     end
 })
 
--- 壁貫通
+UserInputService.JumpRequest:Connect(function()
+    if infiniteJumpEnabled then
+        local _, hum = getCharacter()
+        if hum then hum:ChangeState(Enum.HumanoidStateType.Jumping) end
+    end
+end)
+
+--================ WallClip =================
 playerTab:CreateToggle({
     Name = "WallClip",
     CurrentValue = false,
-    Flag = "WallClip",
     Callback = function(val)
         wallClipEnabled = val
     end
 })
 
--- 空中TP（ボタン常時表示）
-local airTPBtn = playerTab:CreateButton({
+RunService.RenderStepped:Connect(function()
+    setWallClip(wallClipEnabled)
+end)
+
+--================ Air TP =================
+playerTab:CreateButton({
     Name = "Air TP",
     Callback = function()
-        local _, hum, root = getCharacter()
-        if not root or not hum then return end
+        local _, _, root = getCharacter()
+        if not root then return end
+
         if not airTPActive then
             airTPOriginalCFrame = root.CFrame
             root.CFrame = root.CFrame + Vector3.new(0, airHeight, 0)
-            pcall(function() root.Anchored = true end)
+            root.Anchored = true
             airTPActive = true
         else
-            if airTPOriginalCFrame then root.CFrame = airTPOriginalCFrame end
-            pcall(function() root.Anchored = false end)
+            root.CFrame = airTPOriginalCFrame
+            root.Anchored = false
             airTPActive = false
         end
     end
 })
 
-
-
--- 足場管理テーブル
-local createdPlatforms = {}
-
--- 足場生成ボタン
-playerTab:CreateButton({
-    Name = "足場生成",
-    Callback = function()
-        local char, hum, root = getCharacter()
-        if not root then return end
-
-        -- 足場パーツ作成
-        local platform = Instance.new("Part")
-        platform.Size = Vector3.new(6, 1, 6)          -- 広めの安定足場
-        platform.Anchored = true                     -- 固定
-        platform.CanCollide = true                   -- 当たり判定あり
-        platform.Color = Color3.fromRGB(255, 200, 0) -- 見やすい色
-        platform.Material = Enum.Material.Neon
-
-        -- プレイヤーの真下に配置
-        local pos = root.Position + Vector3.new(0, -3, 0)
-        platform.CFrame = CFrame.new(pos)
-
-        platform.Parent = workspace
-
-        -- リストに保存
-        table.insert(createdPlatforms, platform)
-    end
-})
-
--- 足場削除ボタン
-playerTab:CreateButton({
-    Name = "足場削除",
-    Callback = function()
-        for _, p in ipairs(createdPlatforms) do
-            if p and p.Parent then
-                p:Destroy()
-            end
-        end
-        createdPlatforms = {} -- リセット
-    end
-})
-
-
---================ 内部処理 =================
--- スピード更新
-RunService.RenderStepped:Connect(function()
-    local _, hum = getCharacter()
-    if hum then
-        hum.WalkSpeed = speedEnabled and speedOn or speedOff
-    end
-end)
-
--- 無限ジャンプ
-UserInputService.JumpRequest:Connect(function()
-    if infiniteJumpEnabled then
-        local _, hum = getCharacter()
-        if hum then
-            hum:ChangeState(Enum.HumanoidStateType.Jumping)
-        end
-    end
-end)
-
--- 壁貫通常時更新
-RunService.RenderStepped:Connect(function()
-    setWallClip(wallClipEnabled)
-end)
-
-
-
---================ 位置固定（Freeze） =================
-local freezeEnabled = false
-local freezeConnection = nil
-local freezeCFrame = nil
-
-playerTab:CreateToggle({
-    Name = "位置固定",
-    CurrentValue = false,
-    Flag = "FreezeToggle",
-    Callback = function(state)
-        freezeEnabled = state
-
-        local char = player.Character
-        if not char then return end
-
-        local hrp = char:FindFirstChild("HumanoidRootPart")
-        if not hrp then return end
-
-        if freezeEnabled then
-            -- 固定ON
-            freezeCFrame = hrp.CFrame
-            freezeConnection = RunService.RenderStepped:Connect(function()
-                pcall(function()
-                    hrp.CFrame = freezeCFrame
-                end)
-            end)
-        else
-            -- 固定OFF
-            if freezeConnection then
-                freezeConnection:Disconnect()
-                freezeConnection = nil
-            end
-        end
-    end
-})
-
-
-
---========================================================--
---         位置記録（1つだけ上書き）＆テレポート        --
---========================================================--
-
-local Players = game:GetService("Players")
-local player = Players.LocalPlayer
-local savedCFrame = nil  -- ← 常に1つだけ保存する
-
--- ★ ここを書き換えて → 君が使ってる既存のタブ名に合わせて
-local tab = Window:CreateTab("Teleport", 4483362458)
--- 例：playerTab なら  local tab = playerTab
-
-
--- 位置記録ボタン
-tab:CreateButton({
-    Name = "位置記録（上書き）",
-    Callback = function()
-        local char = player.Character
-        local hrp = char and char:FindFirstChild("HumanoidRootPart")
-
-        if hrp then
-            savedCFrame = hrp.CFrame  -- ← 上書き保存
-            RayField:Notify({
-                Title = "位置記録",
-                Content = "現在位置を保存したよ！（前のデータは削除）",
-                Duration = 2
-            })
-        else
-            RayField:Notify({
-                Title = "エラー",
-                Content = "キャラが見つからないよ！",
-                Duration = 2
-            })
-        end
-    end
-})
-
-
--- TPボタン
-tab:CreateButton({
-    Name = "記録位置にTP",
-    Callback = function()
-        local char = player.Character
-        local hrp = char and char:FindFirstChild("HumanoidRootPart")
-
-        if savedCFrame and hrp then
-            hrp.CFrame = savedCFrame
-            RayField:Notify({
-                Title = "テレポート",
-                Content = "保存した場所へTPしたよ！",
-                Duration = 2
-            })
-        else
-            RayField:Notify({
-                Title = "エラー",
-                Content = "保存された位置がないよ！",
-                Duration = 2
-            })
-        end
-    end
-})
-
-
---=============================
--- Fly機能（PC用: WASD + Space/Shift）
---=============================
+--================ Fly =================
 local flyActive = false
 local flySpeed = 50
-local flyKeys = {W=false, A=false, S=false, D=false, Space=false, LeftShift=false}
+local flyKeys = {W=false,A=false,S=false,D=false,Space=false,LeftShift=false}
 
--- Fly ON/OFFトグル
 playerTab:CreateToggle({
     Name = "Fly",
     CurrentValue = false,
-    Flag = "FlyToggle",
-    Callback = function(state)
-        flyActive = state
-        local _, _, root = getCharacter()
-        if root and not flyActive then
-            root.Velocity = Vector3.new(0,0,0)
-        end
+    Callback = function(v)
+        flyActive = v
     end
 })
 
--- Fly速度スライダー
 playerTab:CreateSlider({
     Name = "Fly速度",
     Range = {10,200},
     Increment = 5,
     CurrentValue = flySpeed,
-    Flag = "FlySpeedSlider",
-    Callback = function(val)
-        flySpeed = val
+    Callback = function(v)
+        flySpeed = v
     end
 })
 
--- キー入力
-UserInputService.InputBegan:Connect(function(input, gpe)
-    if gpe then return end
-    if input.UserInputType == Enum.UserInputType.Keyboard then
-        if flyKeys[input.KeyCode.Name] ~= nil then
-            flyKeys[input.KeyCode.Name] = true
-        end
-    end
+UserInputService.InputBegan:Connect(function(i,g)
+    if g then return end
+    if flyKeys[i.KeyCode.Name] ~= nil then flyKeys[i.KeyCode.Name] = true end
 end)
 
-UserInputService.InputEnded:Connect(function(input, gpe)
-    if gpe then return end
-    if input.UserInputType == Enum.UserInputType.Keyboard then
-        if flyKeys[input.KeyCode.Name] ~= nil then
-            flyKeys[input.KeyCode.Name] = false
-        end
-    end
+UserInputService.InputEnded:Connect(function(i,g)
+    if g then return end
+    if flyKeys[i.KeyCode.Name] ~= nil then flyKeys[i.KeyCode.Name] = false end
 end)
 
--- Fly制御ループ
 RunService.RenderStepped:Connect(function(dt)
     if not flyActive then return end
     local _, _, root = getCharacter()
     if not root then return end
 
     local cam = workspace.CurrentCamera
-    local move = Vector3.new(0,0,0)
+    local move = Vector3.zero
 
-    -- 前後左右
-    if flyKeys.W then move = move + cam.CFrame.LookVector end
-    if flyKeys.S then move = move - cam.CFrame.LookVector end
-    if flyKeys.A then move = move - cam.CFrame.RightVector end
-    if flyKeys.D then move = move + cam.CFrame.RightVector end
+    if flyKeys.W then move += cam.CFrame.LookVector end
+    if flyKeys.S then move -= cam.CFrame.LookVector end
+    if flyKeys.A then move -= cam.CFrame.RightVector end
+    if flyKeys.D then move += cam.CFrame.RightVector end
+    if flyKeys.Space then move += Vector3.new(0,1,0) end
+    if flyKeys.LeftShift then move -= Vector3.new(0,1,0) end
 
-    -- 上下
-    if flyKeys.Space then move = move + Vector3.new(0,1,0) end
-    if flyKeys.LeftShift then move = move - Vector3.new(0,1,0) end
-
-    -- 移動
     if move.Magnitude > 0 then
-        root.CFrame = root.CFrame + move.Unit * flySpeed * dt
+        root.CFrame += move.Unit * flySpeed * dt
     end
 end)
-
 
 
 --================ ESPタブ =================
