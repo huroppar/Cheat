@@ -24,16 +24,43 @@ local function getCharacter()
     return char, humanoid, root
 end
 
-local function setWallClip(enable)
+
+--================ 壁貫通（安定版 Noclip） =================
+local noclipEnabled = false
+local noclipConnection = nil
+
+local function enableNoclip()
+    if noclipConnection then return end
+    noclipConnection = RunService.Stepped:Connect(function()
+        if not noclipEnabled then return end
+        local char = player.Character
+        if not char then return end
+
+        for _, part in ipairs(char:GetDescendants()) do
+            if part:IsA("BasePart") then
+                part.CanCollide = false
+            end
+        end
+    end)
+end
+
+local function disableNoclip()
+    noclipEnabled = false
+
+    if noclipConnection then
+        noclipConnection:Disconnect()
+        noclipConnection = nil
+    end
+
     local char = player.Character
     if not char then return end
-    for _, part in pairs(char:GetDescendants()) do
+
+    for _, part in ipairs(char:GetDescendants()) do
         if part:IsA("BasePart") then
-            part.CanCollide = not enable
+            part.CanCollide = true
         end
     end
 end
-
 
 
 -- ======= X-Ray & FullBright 定義（そのまま貼ってOK） =======
@@ -250,15 +277,22 @@ playerTab:CreateToggle({
     end
 })
 
--- 壁貫通
+
+-- 壁貫通（安定版）
 playerTab:CreateToggle({
     Name = "WallClip",
     CurrentValue = false,
     Flag = "WallClip",
     Callback = function(val)
-        wallClipEnabled = val
+        noclipEnabled = val
+        if val then
+            enableNoclip()
+        else
+            disableNoclip()
+        end
     end
 })
+
 
 -- 空中TP（ボタン常時表示）
 local airTPBtn = playerTab:CreateButton({
@@ -342,11 +376,6 @@ UserInputService.JumpRequest:Connect(function()
             hum:ChangeState(Enum.HumanoidStateType.Jumping)
         end
     end
-end)
-
--- 壁貫通常時更新
-RunService.RenderStepped:Connect(function()
-    setWallClip(wallClipEnabled)
 end)
 
 
