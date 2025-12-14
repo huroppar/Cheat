@@ -1103,14 +1103,13 @@ end)
 
 
 --=============================
--- ハンティ・ゾンビタブ（敵ESPなし）
+-- ハンティ・ゾンビタブ（敵ESP統合）
 --=============================
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local Workspace = game:GetService("Workspace")
 
 local player = Players.LocalPlayer
-
 local huntTab = Window:CreateTab("ハンティ・ゾンビ", 4483362458)
 
 --=============================
@@ -1204,7 +1203,7 @@ huntTab:CreateButton({
 })
 
 --=============================
--- Cylinder.015 追従
+-- バス追従
 --=============================
 local moveActive = false
 local targetName = "Cylinder.015"
@@ -1220,12 +1219,56 @@ huntTab:CreateToggle({
 })
 
 --=============================
+-- 敵ESP
+--=============================
+local enemyESPEnabled = false
+
+huntTab:CreateToggle({
+    Name = "🧟 敵ESP",
+    CurrentValue = false,
+    Callback = function(v)
+        enemyESPEnabled = v
+        if not v then
+            local entities = Workspace:FindFirstChild("Entities")
+            if entities then
+                for _, g in pairs(entities:GetDescendants()) do
+                    if g:IsA("BillboardGui") and g.Name == "EnemyESP" then
+                        g:Destroy()
+                    end
+                end
+            end
+        end
+    end
+})
+
+local function createEnemyESP(hrp)
+    if hrp:FindFirstChild("EnemyESP") then return end
+
+    local gui = Instance.new("BillboardGui")
+    gui.Name = "EnemyESP"
+    gui.Adornee = hrp
+    gui.Size = UDim2.new(0,90,0,24)
+    gui.StudsOffset = Vector3.new(0,2.5,0)
+    gui.AlwaysOnTop = true
+
+    local txt = Instance.new("TextLabel")
+    txt.Size = UDim2.fromScale(1,1)
+    txt.BackgroundTransparency = 1
+    txt.TextScaled = true
+    txt.TextColor3 = Color3.fromRGB(255,60,60)
+    txt.TextStrokeTransparency = 0
+    txt.Text = hrp.Parent.Name
+    txt.Parent = gui
+
+    gui.Parent = hrp
+end
+
+--=============================
 -- RenderStepped
 --=============================
 RunService.RenderStepped:Connect(function(dt)
     local char = player.Character
     if not char then return end
-
     local hrp = char:FindFirstChild("HumanoidRootPart")
     if not hrp then return end
 
@@ -1242,9 +1285,7 @@ RunService.RenderStepped:Connect(function(dt)
                     pcall(function()
                         firetouchinterest(hrp, target, 0)
                         firetouchinterest(hrp, target, 1)
-                        if target.Parent then
-                            target:Destroy()
-                        end
+                        if target.Parent then target:Destroy() end
                     end)
                 end
             end
@@ -1267,29 +1308,43 @@ RunService.RenderStepped:Connect(function(dt)
 
             local target = pipeCache[1]
             if target and target.PrimaryPart then
-                local pos = target.PrimaryPart.Position + Vector3.new(0,3,0)
                 hrp.CFrame = hrp.CFrame:Lerp(
-                    CFrame.new(pos),
+                    CFrame.new(target.PrimaryPart.Position + Vector3.new(0,3,0)),
                     math.clamp(slideSpeed * dt, 0, 1)
                 )
             end
         end
     end
 
-    -- Cylinder追従
+    -- バス追従
     if moveActive then
         lastUpdate += dt
         if lastUpdate >= updateInterval then
             lastUpdate = 0
             local part = Workspace:FindFirstChild(targetName, true)
             if part then
-                local pos = part.Position + Vector3.new(0,5,0)
                 hrp.CFrame = hrp.CFrame:Lerp(
-                    CFrame.new(pos),
+                    CFrame.new(part.Position + Vector3.new(0,5,0)),
                     math.clamp(slideSpeed * dt, 0, 1)
                 )
             end
         end
     end
-end)
 
+    -- 敵ESP
+    if enemyESPEnabled then
+        local entities = Workspace:FindFirstChild("Entities")
+        if entities then
+            for _, zombie in pairs(entities:GetChildren()) do
+                if zombie.Name == "Zombie" then
+                    for _, enemy in pairs(zombie:GetChildren()) do
+                        local ehrp = enemy:FindFirstChild("HumanoidRootPart")
+                        if ehrp then
+                            createEnemyESP(ehrp)
+                        end
+                    end
+                end
+            end
+        end
+    end
+end)
