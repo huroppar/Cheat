@@ -14,6 +14,7 @@ local wallClipEnabled = false
 local airTPActive = false
 local airHeight = 2000
 local airTPOriginalCFrame = nil
+local originalWalkSpeed = nil
 
 --================ Helper =================
 local function getCharacter()
@@ -202,10 +203,24 @@ playerTab:CreateToggle({
     Name = "Speed",
     CurrentValue = false,
     Flag = "SpeedToggle",
-    Callback = function(val)
-        speedEnabled = val
+Callback = function(val)
+    speedEnabled = val
+    local _, hum = getCharacter()
+    if hum then
+        if val then
+            -- ON時：元の速度を保存（初回のみ）
+            if not originalWalkSpeed then
+                originalWalkSpeed = hum.WalkSpeed
+            end
+        else
+            -- OFF時：元の速度に戻す
+            if originalWalkSpeed then
+                hum.WalkSpeed = originalWalkSpeed
+            end
+        end
     end
-})
+end
+
 
 -- スライダー（オン）
 local speedOn = speedDefaultOn
@@ -221,19 +236,7 @@ playerTab:CreateSlider({
     end
 })
 
--- スライダー（オフ）
-local speedOff = speedDefaultOff
-playerTab:CreateSlider({
-    Name = "Speed Off",
-    Range = {speedMin, speedMax},
-    Increment = 1,
-    Suffix = "WalkSpeed",
-    CurrentValue = speedDefaultOff,
-    Flag = "SpeedOffSlider",
-    Callback = function(val)
-        speedOff = val
-    end
-})
+
 
 -- 無限ジャンプ
 playerTab:CreateToggle({
@@ -323,10 +326,11 @@ playerTab:CreateButton({
 -- スピード更新
 RunService.RenderStepped:Connect(function()
     local _, hum = getCharacter()
-    if hum then
-        hum.WalkSpeed = speedEnabled and speedOn or speedOff
+    if hum and speedEnabled then
+        hum.WalkSpeed = speedOn
     end
 end)
+
 
 -- 無限ジャンプ
 UserInputService.JumpRequest:Connect(function()
