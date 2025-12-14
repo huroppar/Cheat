@@ -1,339 +1,670 @@
---========================================================--
---                 Utility Hub v5 FINAL                   --
---   Speed / Infinite Jump / WallClip / Fly (LOCAL ONLY)  --
---========================================================--
-
--- Rayfield
+-- RayFieldロード
 local Rayfield = loadstring(game:HttpGet("https://sirius.menu/rayfield"))()
 
--- Services
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
-
 local player = Players.LocalPlayer
 
 --================ 設定 =================
-local speedDefaultOn = 30
+local speedDefaultOn, speedDefaultOff = 30, 30
 local speedMin, speedMax = 0, 500
-
-local speedEnabled = false
-local speedValue = speedDefaultOn
 local infiniteJumpEnabled = false
 local wallClipEnabled = false
-local flyActive = false
-local flySpeed = 50
+local airTPActive = false
+local airHeight = 2000
+local airTPOriginalCFrame = nil
 
 --================ Helper =================
 local function getCharacter()
     local char = player.Character or player.CharacterAdded:Wait()
-    local hum = char:WaitForChild("Humanoid")
-    local root = char:WaitForChild("HumanoidRootPart")
-    return char, hum, root
+    local humanoid = char:FindFirstChildOfClass("Humanoid")
+    local root = char:FindFirstChild("HumanoidRootPart") or char:FindFirstChildWhichIsA("BasePart")
+    return char, humanoid, root
 end
 
---========================================================--
---                 WallClip（最終安定版）                --
---========================================================--
-RunService.RenderStepped:Connect(function()
-    if not wallClipEnabled then return end
-
+local function setWallClip(enable)
     local char = player.Character
     if not char then return end
-
-    for _, part in ipairs(char:GetDescendants()) do
+    for _, part in pairs(char:GetDescendants()) do
         if part:IsA("BasePart") then
-            part.CanCollide = false
-        end
-    end
-end)
-
--- OFF時に戻す
-local function restoreCollision()
-    local char = player.Character
-    if not char then return end
-
-    for _, part in ipairs(char:GetDescendants()) do
-        if part:IsA("BasePart") then
-            part.CanCollide = true
+            part.CanCollide = not enable
         end
     end
 end
 
--- 死亡復帰対策
-player.CharacterAdded:Connect(function()
-    task.wait(0.3)
 
-    if speedEnabled then
-        local _, hum = getCharacter()
-        hum.WalkSpeed = speedValue
-    end
 
-    if wallClipEnabled then
-        restoreCollision()
-    end
-end)
+-- ======= X-Ray & FullBright 定義（そのまま貼ってOK） =======
+local Players = game:GetService("Players")
+local LocalPlayer = Players.LocalPlayer
+local RunService = game:GetService("RunService")
+local Lighting = game:GetService("Lighting")
 
---========================================================--
---                 Infinite Jump                          --
---========================================================--
-UserInputService.JumpRequest:Connect(function()
-    if infiniteJumpEnabled then
-        local _, hum = getCharacter()
-        hum:ChangeState(Enum.HumanoidStateType.Jumping)
-    end
-end)
+-- X-Ray 状態
+local XRayPlayersEnabled = false   -- プレイヤーだけ透過
+local XRayWorldEnabled   = false   -- ワールド（壁など）透過
+local XRayTransparency   = 0.6
 
---========================================================--
---                       Fly                              --
---========================================================--
-local flyKeys = {
-    W = false,
-    A = false,
-    S = false,
-    D = false,
-    Space = false,
-    LeftShift = false
+-- ワールドパーツの元の LocalTransparencyModifier を保持
+local originalLocalTransparency = {}
+
+-- FullBright 状態
+local FullBrightEnabled = false
+local FB_Original = {
+	Brightness = Lighting.Brightness,
+	ClockTime = Lighting.ClockTime,
+	Ambient = Lighting.Ambient,
+	OutdoorAmbient = Lighting.OutdoorAmbient
 }
+local function ApplyFullBright()
+	Lighting.Brightness = 2
+	Lighting.ClockTime = 12
+	Lighting.Ambient = Color3.new(1,1,1)
+	Lighting.OutdoorAmbient = Color3.new(1,1,1)
+end
+local function RestoreFullBright()
+	if FB_Original then
+		Lighting.Brightness = FB_Original.Brightness
+		Lighting.ClockTime = FB_Original.ClockTime
+		Lighting.Ambient = FB_Original.Ambient
+		Lighting.OutdoorAmbient = FB_Original.OutdoorAmbient
+	end
+end
 
-UserInputService.InputBegan:Connect(function(i,g)
-    if g then return end
-    if flyKeys[i.KeyCode.Name] ~= nil then
-        flyKeys[i.KeyCode.Name] = true
-    end
+-- キャラ（プレイヤー）に対する透過適用
+local function SetCharacterXray(character, value)
+	if not character then return end
+	for _, obj in ipairs(character:GetDescendants()) do
+		if obj:IsA("BasePart") then
+			-- LocalTransparencyModifier を使うとクライアントだけ描画が変わる
+			obj.LocalTransparencyModifier = value
+		end
+	end
+end
+
+-- ワールド（workspace 内の BasePart）に対する透過適用（安全に保持して戻す）
+local function SetWorldXray(value)
+	-- value = 0 なら元に戻す
+	if value == 0 then
+		for part, old in pairs(originalLocalTransparency) do
+			if part and part:IsA("BasePart") then
+				pcall(function() part.LocalTransparencyModifier = old end)
+			end
+		end
+		originalLocalTransparency = {}
+		return
+	end
+
+	-- 透過値を設定（対象フィルタ：CanCollide==true かつ Transparency < 1 を簡易壁判定）
+	for _, part in ipairs(workspace:GetDescendants()) do
+		if part:IsA("BasePart") and part ~= workspace.Terrain then
+			-- 簡易フィルタ（床や小道具全部透けたくないなら条件変更して）
+			if part.CanCollide and part.Transparency < 1 then
+				-- 保存しておく（最初だけ）
+				if originalLocalTransparency[part] == nil then
+					originalLocalTransparency[part] = part.LocalTransparencyModifier or 0
+				end
+				pcall(function() part.LocalTransparencyModifier = XRayTransparency end)
+			end
+		end
+	end
+end
+
+-- ループ：X-Ray（プレイヤー）更新
+task.spawn(function()
+	while true do
+		if XRayPlayersEnabled then
+			for _, plr in ipairs(Players:GetPlayers()) do
+				if plr ~= LocalPlayer then
+					SetCharacterXray(plr.Character, XRayTransparency)
+				end
+			end
+		else
+			for _, plr in ipairs(Players:GetPlayers()) do
+				if plr ~= LocalPlayer and plr.Character then
+					-- 元に戻す（0）
+					SetCharacterXray(plr.Character, 0)
+				end
+			end
+		end
+		task.wait(0.25)
+	end
 end)
 
-UserInputService.InputEnded:Connect(function(i,g)
-    if g then return end
-    if flyKeys[i.KeyCode.Name] ~= nil then
-        flyKeys[i.KeyCode.Name] = false
-    end
+-- ループ：X-Ray（ワールド）更新（常時上書き）
+task.spawn(function()
+	while true do
+		if XRayWorldEnabled then
+			-- set world parts to transparency
+			SetWorldXray(XRayTransparency)
+		else
+			-- restore original
+			SetWorldXray(0)
+		end
+		task.wait(0.5)
+	end
 end)
 
-RunService.RenderStepped:Connect(function(dt)
-    if not flyActive then return end
-
-    local _, _, root = getCharacter()
-    if not root then return end
-
-    local cam = workspace.CurrentCamera
-    local move = Vector3.zero
-
-    if flyKeys.W then move += cam.CFrame.LookVector end
-    if flyKeys.S then move -= cam.CFrame.LookVector end
-    if flyKeys.A then move -= cam.CFrame.RightVector end
-    if flyKeys.D then move += cam.CFrame.RightVector end
-    if flyKeys.Space then move += Vector3.new(0,1,0) end
-    if flyKeys.LeftShift then move -= Vector3.new(0,1,0) end
-
-    if move.Magnitude > 0 then
-        root.CFrame += move.Unit * flySpeed * dt
-    end
+-- ループ：FullBright維持
+task.spawn(function()
+	while true do
+		if FullBrightEnabled then
+			ApplyFullBright()
+		end
+		task.wait(0.1)
+	end
 end)
 
---========================================================--
---                        GUI                             --
---========================================================--
+-- 外部から切り替えられる関数（GUI のコールバックで呼ぶ）
+local function ToggleXRayPlayers()
+	XRayPlayersEnabled = not XRayPlayersEnabled
+end
+local function ToggleXRayWorld()
+	XRayWorldEnabled = not XRayWorldEnabled
+end
+local function ToggleFullBright()
+	FullBrightEnabled = not FullBrightEnabled
+	if not FullBrightEnabled then
+		RestoreFullBright()
+	end
+end
+
+-- 安全にスクリプト停止時に戻すための関数（必要なら呼んで）
+local function CleanupVisuals()
+	XRayPlayersEnabled = false
+	XRayWorldEnabled = false
+	FullBrightEnabled = false
+	SetWorldXray(0)
+	for _, plr in ipairs(Players:GetPlayers()) do
+		if plr.Character then SetCharacterXray(plr.Character, 0) end
+	end
+	RestoreFullBright()
+end
+-- ======= 定義ブロック終わり =======
+
+--================ RayField GUI =================
 local Window = Rayfield:CreateWindow({
     Name = "Utility Hub v5",
     LoadingTitle = "Utility Hub",
     LoadingSubtitle = "by Masashi",
-    ConfigurationSaving = {
-        Enabled = true,
-        FolderName = "UtilityHubConfigs",
-        FileName = "Config"
-    },
-    KeySystem = false
+    ConfigurationSaving = {Enabled=true, FolderName="UtilityHubConfigs", FileName="Config"},
+    Discord={Enabled=false},
+    KeySystem=false
 })
 
-local tab = Window:CreateTab("Player", 4483362458)
+--================ プレイヤータブ =================
+local playerTab = Window:CreateTab("プレイヤー", 4483362458)
 
--- Speed
-tab:CreateToggle({
+-- スピードオンオフ
+local speedEnabled = false
+playerTab:CreateToggle({
     Name = "Speed",
     CurrentValue = false,
-    Callback = function(v)
-        speedEnabled = v
-        local _, hum = getCharacter()
-        hum.WalkSpeed = v and speedValue or 16
+    Flag = "SpeedToggle",
+    Callback = function(val)
+        speedEnabled = val
     end
 })
 
-tab:CreateSlider({
-    Name = "Speed Value",
+-- スライダー（オン）
+local speedOn = speedDefaultOn
+playerTab:CreateSlider({
+    Name = "Speed On",
     Range = {speedMin, speedMax},
     Increment = 1,
+    Suffix = "WalkSpeed",
     CurrentValue = speedDefaultOn,
-    Callback = function(v)
-        speedValue = v
-        if speedEnabled then
-            local _, hum = getCharacter()
-            hum.WalkSpeed = speedValue
-        end
+    Flag = "SpeedOnSlider",
+    Callback = function(val)
+        speedOn = val
     end
 })
 
--- Infinite Jump
-tab:CreateToggle({
+-- スライダー（オフ）
+local speedOff = speedDefaultOff
+playerTab:CreateSlider({
+    Name = "Speed Off",
+    Range = {speedMin, speedMax},
+    Increment = 1,
+    Suffix = "WalkSpeed",
+    CurrentValue = speedDefaultOff,
+    Flag = "SpeedOffSlider",
+    Callback = function(val)
+        speedOff = val
+    end
+})
+
+-- 無限ジャンプ
+playerTab:CreateToggle({
     Name = "Infinite Jump",
     CurrentValue = false,
-    Callback = function(v)
-        infiniteJumpEnabled = v
+    Flag = "InfiniteJump",
+    Callback = function(val)
+        infiniteJumpEnabled = val
     end
 })
 
--- WallClip
-tab:CreateToggle({
+-- 壁貫通
+playerTab:CreateToggle({
     Name = "WallClip",
     CurrentValue = false,
-    Callback = function(v)
-        wallClipEnabled = v
-        if not v then
-            restoreCollision()
+    Flag = "WallClip",
+    Callback = function(val)
+        wallClipEnabled = val
+    end
+})
+
+-- 空中TP（ボタン常時表示）
+local airTPBtn = playerTab:CreateButton({
+    Name = "Air TP",
+    Callback = function()
+        local _, hum, root = getCharacter()
+        if not root or not hum then return end
+        if not airTPActive then
+            airTPOriginalCFrame = root.CFrame
+            root.CFrame = root.CFrame + Vector3.new(0, airHeight, 0)
+            pcall(function() root.Anchored = true end)
+            airTPActive = true
+        else
+            if airTPOriginalCFrame then root.CFrame = airTPOriginalCFrame end
+            pcall(function() root.Anchored = false end)
+            airTPActive = false
         end
     end
 })
 
--- Fly
-tab:CreateToggle({
-    Name = "Fly",
-    CurrentValue = false,
-    Callback = function(v)
-        flyActive = v
+
+
+-- 足場管理テーブル
+local createdPlatforms = {}
+
+-- 足場生成ボタン
+playerTab:CreateButton({
+    Name = "足場生成",
+    Callback = function()
+        local char, hum, root = getCharacter()
+        if not root then return end
+
+        -- 足場パーツ作成
+        local platform = Instance.new("Part")
+        platform.Size = Vector3.new(6, 1, 6)          -- 広めの安定足場
+        platform.Anchored = true                     -- 固定
+        platform.CanCollide = true                   -- 当たり判定あり
+        platform.Color = Color3.fromRGB(255, 200, 0) -- 見やすい色
+        platform.Material = Enum.Material.Neon
+
+        -- プレイヤーの真下に配置
+        local pos = root.Position + Vector3.new(0, -3, 0)
+        platform.CFrame = CFrame.new(pos)
+
+        platform.Parent = workspace
+
+        -- リストに保存
+        table.insert(createdPlatforms, platform)
     end
 })
 
-tab:CreateSlider({
-    Name = "Fly Speed",
-    Range = {10,200},
-    Increment = 5,
-    CurrentValue = flySpeed,
-    Callback = function(v)
-        flySpeed = v
-    end
-})
-
---================ ESP TAB (FULL FIXED) =================--
-
-local Players = game:GetService("Players")
-local RunService = game:GetService("RunService")
-local Lighting = game:GetService("Lighting")
-
--- ESP Tab
-local espTab = Window:CreateTab("ESP", 4483362458)
-
--- ===== 状態 =====
-local showPlayerESP = false
-local showEnemyESP = false
-local showItemESP = false
-
-local showPlayerHitbox = false
-local showEnemyHitbox = false
-
-local XRayPlayers = false
-local XRayWorld = false
-local XRayTransparency = 0.7
-local FullBrightEnabled = false
-
-local highlights = {}
-local hitboxBoxes = {}
-
---================ X-RAY / FULLBRIGHT =================--
-
-local defaultLighting = {
-    Brightness = Lighting.Brightness,
-    ClockTime = Lighting.ClockTime,
-    FogEnd = Lighting.FogEnd
-}
-
-local function ToggleXRayPlayers(val)
-    XRayPlayers = val
-end
-
-local function ToggleXRayWorld(val)
-    XRayWorld = val
-end
-
-local function ToggleFullBright(val)
-    FullBrightEnabled = val
-
-    if val then
-        Lighting.Brightness = 5
-        Lighting.ClockTime = 14
-        Lighting.FogEnd = 1e9
-    else
-        Lighting.Brightness = defaultLighting.Brightness
-        Lighting.ClockTime = defaultLighting.ClockTime
-        Lighting.FogEnd = defaultLighting.FogEnd
-    end
-end
-
-RunService.RenderStepped:Connect(function()
-    -- Player X-Ray
-    for _, pl in ipairs(Players:GetPlayers()) do
-        if pl.Character then
-            for _, p in ipairs(pl.Character:GetDescendants()) do
-                if p:IsA("BasePart") then
-                    p.LocalTransparencyModifier = XRayPlayers and XRayTransparency or 0
-                end
+-- 足場削除ボタン
+playerTab:CreateButton({
+    Name = "足場削除",
+    Callback = function()
+        for _, p in ipairs(createdPlatforms) do
+            if p and p.Parent then
+                p:Destroy()
             end
         end
+        createdPlatforms = {} -- リセット
     end
+})
 
-    -- World X-Ray
-    for _, obj in ipairs(workspace:GetDescendants()) do
-        if obj:IsA("BasePart") and not obj:IsDescendantOf(player.Character) then
-            obj.LocalTransparencyModifier = XRayWorld and XRayTransparency or 0
+
+--================ 内部処理 =================
+-- スピード更新
+RunService.RenderStepped:Connect(function()
+    local _, hum = getCharacter()
+    if hum then
+        hum.WalkSpeed = speedEnabled and speedOn or speedOff
+    end
+end)
+
+-- 無限ジャンプ
+UserInputService.JumpRequest:Connect(function()
+    if infiniteJumpEnabled then
+        local _, hum = getCharacter()
+        if hum then
+            hum:ChangeState(Enum.HumanoidStateType.Jumping)
         end
     end
 end)
 
---================ HITBOX =================--
+-- 壁貫通常時更新
+RunService.RenderStepped:Connect(function()
+    setWallClip(wallClipEnabled)
+end)
 
+
+
+--================ 位置固定（Freeze） =================
+local freezeEnabled = false
+local freezeConnection = nil
+local freezeCFrame = nil
+
+playerTab:CreateToggle({
+    Name = "位置固定",
+    CurrentValue = false,
+    Flag = "FreezeToggle",
+    Callback = function(state)
+        freezeEnabled = state
+
+        local char = player.Character
+        if not char then return end
+
+        local hrp = char:FindFirstChild("HumanoidRootPart")
+        if not hrp then return end
+
+        if freezeEnabled then
+            -- 固定ON
+            freezeCFrame = hrp.CFrame
+            freezeConnection = RunService.RenderStepped:Connect(function()
+                pcall(function()
+                    hrp.CFrame = freezeCFrame
+                end)
+            end)
+        else
+            -- 固定OFF
+            if freezeConnection then
+                freezeConnection:Disconnect()
+                freezeConnection = nil
+            end
+        end
+    end
+})
+
+
+
+--========================================================--
+--         位置記録（1つだけ上書き）＆テレポート        --
+--========================================================--
+
+local Players = game:GetService("Players")
+local player = Players.LocalPlayer
+local savedCFrame = nil  -- ← 常に1つだけ保存する
+
+-- ★ ここを書き換えて → 君が使ってる既存のタブ名に合わせて
+local tab = Window:CreateTab("Teleport", 4483362458)
+-- 例：playerTab なら  local tab = playerTab
+
+
+-- 位置記録ボタン
+tab:CreateButton({
+    Name = "位置記録（上書き）",
+    Callback = function()
+        local char = player.Character
+        local hrp = char and char:FindFirstChild("HumanoidRootPart")
+
+        if hrp then
+            savedCFrame = hrp.CFrame  -- ← 上書き保存
+            RayField:Notify({
+                Title = "位置記録",
+                Content = "現在位置を保存したよ！（前のデータは削除）",
+                Duration = 2
+            })
+        else
+            RayField:Notify({
+                Title = "エラー",
+                Content = "キャラが見つからないよ！",
+                Duration = 2
+            })
+        end
+    end
+})
+
+
+-- TPボタン
+tab:CreateButton({
+    Name = "記録位置にTP",
+    Callback = function()
+        local char = player.Character
+        local hrp = char and char:FindFirstChild("HumanoidRootPart")
+
+        if savedCFrame and hrp then
+            hrp.CFrame = savedCFrame
+            RayField:Notify({
+                Title = "テレポート",
+                Content = "保存した場所へTPしたよ！",
+                Duration = 2
+            })
+        else
+            RayField:Notify({
+                Title = "エラー",
+                Content = "保存された位置がないよ！",
+                Duration = 2
+            })
+        end
+    end
+})
+
+
+--=============================
+-- Fly機能（PC用: WASD + Space/Shift）
+--=============================
+local flyActive = false
+local flySpeed = 50
+local flyKeys = {W=false, A=false, S=false, D=false, Space=false, LeftShift=false}
+
+-- Fly ON/OFFトグル
+playerTab:CreateToggle({
+    Name = "Fly",
+    CurrentValue = false,
+    Flag = "FlyToggle",
+    Callback = function(state)
+        flyActive = state
+        local _, _, root = getCharacter()
+        if root and not flyActive then
+            root.Velocity = Vector3.new(0,0,0)
+        end
+    end
+})
+
+-- Fly速度スライダー
+playerTab:CreateSlider({
+    Name = "Fly速度",
+    Range = {10,200},
+    Increment = 5,
+    CurrentValue = flySpeed,
+    Flag = "FlySpeedSlider",
+    Callback = function(val)
+        flySpeed = val
+    end
+})
+
+-- キー入力
+UserInputService.InputBegan:Connect(function(input, gpe)
+    if gpe then return end
+    if input.UserInputType == Enum.UserInputType.Keyboard then
+        if flyKeys[input.KeyCode.Name] ~= nil then
+            flyKeys[input.KeyCode.Name] = true
+        end
+    end
+end)
+
+UserInputService.InputEnded:Connect(function(input, gpe)
+    if gpe then return end
+    if input.UserInputType == Enum.UserInputType.Keyboard then
+        if flyKeys[input.KeyCode.Name] ~= nil then
+            flyKeys[input.KeyCode.Name] = false
+        end
+    end
+end)
+
+-- Fly制御ループ
+RunService.RenderStepped:Connect(function(dt)
+    if not flyActive then return end
+    local _, _, root = getCharacter()
+    if not root then return end
+
+    local cam = workspace.CurrentCamera
+    local move = Vector3.new(0,0,0)
+
+    -- 前後左右
+    if flyKeys.W then move = move + cam.CFrame.LookVector end
+    if flyKeys.S then move = move - cam.CFrame.LookVector end
+    if flyKeys.A then move = move - cam.CFrame.RightVector end
+    if flyKeys.D then move = move + cam.CFrame.RightVector end
+
+    -- 上下
+    if flyKeys.Space then move = move + Vector3.new(0,1,0) end
+    if flyKeys.LeftShift then move = move - Vector3.new(0,1,0) end
+
+    -- 移動
+    if move.Magnitude > 0 then
+        root.CFrame = root.CFrame + move.Unit * flySpeed * dt
+    end
+end)
+
+
+
+
+--================ ESPタブ =================
+local espTab = Window:CreateTab("ESP", 4483362458)
+
+local showPlayerESP, showEnemyESP, showItemESP = false, false, false
+local highlights = {}
+
+
+
+
+-- ======= ESPタブ用トグル（espTab が既にある前提） =======
+-- もし espTab が nil なら作る
+if not espTab then
+    espTab = Window:CreateTab("ESP", 4483362458)
+end
+
+-- プレイヤーX-Ray トグル
+espTab:CreateToggle({
+    Name = "X-Ray: プレイヤー透過",
+    CurrentValue = false,
+    Callback = function(val)
+        ToggleXRayPlayers()
+        if val then
+            -- 即反映（Optional：通知）
+            RayField:Notify({Title="X-Ray", Content="プレイヤー透過 ON", Duration=2})
+        else
+            RayField:Notify({Title="X-Ray", Content="プレイヤー透過 OFF", Duration=1})
+        end
+    end
+})
+
+-- ワールドX-Ray トグル（壁透け）
+espTab:CreateToggle({
+    Name = "X-Ray: ワールド透過",
+    CurrentValue = false,
+    Callback = function(val)
+        ToggleXRayWorld()
+        if val then
+            RayField:Notify({Title="X-Ray", Content="ワールド透過 ON", Duration=2})
+        else
+            RayField:Notify({Title="X-Ray", Content="ワールド透過 OFF", Duration=1})
+        end
+    end
+})
+
+-- 透過度スライダー（0 = 通常, 1 = 完全透明）
+espTab:CreateSlider({
+    Name = "X-Ray 透過度",
+    Range = {0, 1},
+    Increment = 0.05,
+    CurrentValue = XRayTransparency,
+    Suffix = "",
+    Flag = "XRayAlpha",
+    Callback = function(val)
+        XRayTransparency = val
+    end
+})
+
+-- FullBright トグル
+espTab:CreateToggle({
+    Name = "FullBright（常時明るく）",
+    CurrentValue = false,
+    Callback = function(val)
+        ToggleFullBright()
+        if val then
+            RayField:Notify({Title="FullBright", Content="常時明るく ON", Duration=2})
+        else
+            RayField:Notify({Title="FullBright", Content="常時明るく OFF", Duration=1})
+        end
+    end
+})
+-- ======= トグル追加終わり =======
+
+--=================== HITBOX ESP ===================--
+
+local showPlayerHitbox = false
+local showEnemyHitbox = false
+
+local hitboxBoxes = {} -- HRPごとに管理
+
+-- Box（枠線）を作成
 local function createHitboxBox(part)
     local box = Instance.new("BoxHandleAdornment")
-    box.Name = "HitboxESP"
     box.Adornee = part
-    box.Size = part.Size
     box.AlwaysOnTop = true
     box.ZIndex = 10
-    box.Color3 = Color3.new(1,0,0)
-    box.Transparency = 1
-    box.Thickness = 3
+    box.Size = part.Size
+    box.Color3 = Color3.new(1,0,0) -- 赤
+    box.Transparency = 0           -- 枠線は透明度0
+    box.AlwaysOnTop = true
     box.AdornCullingMode = Enum.AdornCullingMode.Never
     box.Parent = part
+
+    -- 枠線だけにする設定
+    box.Name = "HitboxESP"
+    box.Transparency = 1            -- 中身透明
+    box.Thickness = 3               -- 枠線の太さ
+    box.ZIndex = 10
+
     return box
 end
 
+
+-- HITBOX 更新
 task.spawn(function()
     while true do
-        -- Player Hitbox
-        for _, pl in ipairs(Players:GetPlayers()) do
+        
+        --===== プレイヤーの Hitbox =====--
+        for _, pl in pairs(Players:GetPlayers()) do
             if pl.Character and pl.Character:FindFirstChild("HumanoidRootPart") then
                 local hrp = pl.Character.HumanoidRootPart
+
                 if showPlayerHitbox then
                     if not hitboxBoxes[hrp] then
                         hitboxBoxes[hrp] = createHitboxBox(hrp)
                     end
-                elseif hitboxBoxes[hrp] then
-                    hitboxBoxes[hrp]:Destroy()
-                    hitboxBoxes[hrp] = nil
+                else
+                    if hitboxBoxes[hrp] then
+                        hitboxBoxes[hrp]:Destroy()
+                        hitboxBoxes[hrp] = nil
+                    end
                 end
             end
         end
 
-        -- Enemy Hitbox
-        for _, m in ipairs(workspace:GetChildren()) do
-            if m:IsA("Model") and m:FindFirstChild("HumanoidRootPart") and m:FindFirstChildOfClass("Humanoid") then
-                if m.Humanoid.Health > 0 then
-                    local hrp = m.HumanoidRootPart
+        --===== 敵の Hitbox =====--
+        for _, enemy in pairs(workspace:GetChildren()) do
+            if enemy:IsA("Model") and enemy:FindFirstChild("HumanoidRootPart") and enemy:FindFirstChildOfClass("Humanoid") then
+                if enemy:FindFirstChild("Humanoid").Health > 0 then
+                    local hrp = enemy.HumanoidRootPart
+
                     if showEnemyHitbox then
                         if not hitboxBoxes[hrp] then
                             hitboxBoxes[hrp] = createHitboxBox(hrp)
                         end
-                    elseif hitboxBoxes[hrp] then
-                        hitboxBoxes[hrp]:Destroy()
-                        hitboxBoxes[hrp] = nil
+                    else
+                        if hitboxBoxes[hrp] then
+                            hitboxBoxes[hrp]:Destroy()
+                            hitboxBoxes[hrp] = nil
+                        end
                     end
                 end
             end
@@ -343,8 +674,41 @@ task.spawn(function()
     end
 end)
 
---================ HIGHLIGHT ESP =================--
 
+--=================== HITBOX トグル ===================--
+
+espTab:CreateToggle({
+    Name = "Player Hitbox ESP（枠線）",
+    CurrentValue = false,
+    Callback = function(val)
+        showPlayerHitbox = val
+        RayField:Notify({
+            Title="Player Hitbox",
+            Content = val and "ON" or "OFF",
+            Duration = 1
+        })
+    end
+})
+
+espTab:CreateToggle({
+    Name = "Enemy Hitbox ESP（枠線）",
+    CurrentValue = false,
+    Callback = function(val)
+        showEnemyHitbox = val
+        RayField:Notify({
+            Title="Enemy Hitbox",
+            Content = val and "ON" or "OFF",
+            Duration = 1
+        })
+    end
+})
+
+-- トグル作成
+espTab:CreateToggle({Name="Player ESP", CurrentValue=false, Callback=function(val) showPlayerESP=val end})
+espTab:CreateToggle({Name="Enemy/Bot ESP", CurrentValue=false, Callback=function(val) showEnemyESP=val end})
+espTab:CreateToggle({Name="Item ESP", CurrentValue=false, Callback=function(val) showItemESP=val end})
+
+-- ハイライト作成関数
 local function createHighlight(obj, color)
     local hl = Instance.new("Highlight")
     hl.Adornee = obj
@@ -355,88 +719,62 @@ local function createHighlight(obj, color)
     return hl
 end
 
-task.spawn(function()
+-- ESP更新ループ
+spawn(function()
     while true do
-        -- Player ESP
-        for _, pl in ipairs(Players:GetPlayers()) do
+        -- プレイヤーESP
+        for _, pl in pairs(Players:GetPlayers()) do
             if pl ~= player and pl.Character and pl.Character:FindFirstChild("Humanoid") then
+                local hum = pl.Character.Humanoid
                 if showPlayerESP then
                     if not highlights[pl] then
                         highlights[pl] = createHighlight(pl.Character, Color3.new(0,1,0))
                     end
-                elseif highlights[pl] then
-                    highlights[pl]:Destroy()
-                    highlights[pl] = nil
+                    -- HPに応じて色変更
+                    local hpRatio = hum.Health / hum.MaxHealth
+                    if hpRatio > 0.66 then
+                        highlights[pl].FillColor = Color3.new(0,1,0)
+                    elseif hpRatio > 0.33 then
+                        highlights[pl].FillColor = Color3.new(1,1,0)
+                    else
+                        highlights[pl].FillColor = Color3.new(1,0,0)
+                    end
+                else
+                    if highlights[pl] then highlights[pl]:Destroy(); highlights[pl]=nil end
                 end
             end
         end
 
-        -- Enemy ESP
-        for _, enemy in ipairs(workspace:GetChildren()) do
+        -- 敵/BOT ESP
+        for _, enemy in pairs(workspace:GetChildren()) do
             if enemy:IsA("Model") and enemy:FindFirstChildOfClass("Humanoid") then
                 if showEnemyESP then
                     if not highlights[enemy] then
                         highlights[enemy] = createHighlight(enemy, Color3.new(1,0,0))
                     end
-                elseif highlights[enemy] then
-                    highlights[enemy]:Destroy()
-                    highlights[enemy] = nil
+                else
+                    if highlights[enemy] then highlights[enemy]:Destroy(); highlights[enemy]=nil end
                 end
             end
         end
 
-        -- Item ESP
+        -- アイテムESP（仮にworkspace.Itemsにある場合）
         if workspace:FindFirstChild("Items") then
-            for _, item in ipairs(workspace.Items:GetChildren()) do
+            for _, item in pairs(workspace.Items:GetChildren()) do
                 if showItemESP then
                     if not highlights[item] then
                         highlights[item] = createHighlight(item, Color3.fromRGB(0,170,255))
                     end
-                elseif highlights[item] then
-                    highlights[item]:Destroy()
-                    highlights[item] = nil
+                else
+                    if highlights[item] then highlights[item]:Destroy(); highlights[item]=nil end
                 end
             end
         end
 
-        task.wait(0.2)
+        wait(0.2)
     end
 end)
 
---================ GUI TOGGLES =================--
-
-espTab:CreateToggle({Name="Player ESP", CurrentValue=false, Callback=function(v) showPlayerESP=v end})
-espTab:CreateToggle({Name="Enemy ESP", CurrentValue=false, Callback=function(v) showEnemyESP=v end})
-espTab:CreateToggle({Name="Item ESP", CurrentValue=false, Callback=function(v) showItemESP=v end})
-
-espTab:CreateToggle({Name="Player Hitbox", CurrentValue=false, Callback=function(v) showPlayerHitbox=v end})
-espTab:CreateToggle({Name="Enemy Hitbox", CurrentValue=false, Callback=function(v) showEnemyHitbox=v end})
-
-espTab:CreateToggle({
-    Name="X-Ray Player",
-    CurrentValue=false,
-    Callback=function(v) ToggleXRayPlayers(v) end
-})
-
-espTab:CreateToggle({
-    Name="X-Ray World",
-    CurrentValue=false,
-    Callback=function(v) ToggleXRayWorld(v) end
-})
-
-espTab:CreateSlider({
-    Name="X-Ray Transparency",
-    Range={0,1},
-    Increment=0.05,
-    CurrentValue=XRayTransparency,
-    Callback=function(v) XRayTransparency=v end
-})
-
-espTab:CreateToggle({
-    Name="FullBright",
-    CurrentValue=false,
-    Callback=function(v) ToggleFullBright(v) end
-})
 
 
 --========================================================--
