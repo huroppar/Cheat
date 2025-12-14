@@ -213,7 +213,7 @@ playerTab:CreateToggle({
                     originalWalkSpeed = hum.WalkSpeed
                 end
             else
-                -- OFF時：ゲーム本来の速度に戻す
+                -- OFF時：元の速度に戻す
                 if originalWalkSpeed then
                     hum.WalkSpeed = originalWalkSpeed
                 end
