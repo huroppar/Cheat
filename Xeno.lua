@@ -84,10 +84,15 @@ UserInputService.JumpRequest:Connect(function()
     end
 end)
 
---========================================================--
---                       Fly                              --
---========================================================--
-local flyKeys = {W=false,A=false,S=false,D=false,Space=false,LeftShift=false}
+--================ Fly =================
+local flyKeys = {
+    W = false,
+    A = false,
+    S = false,
+    D = false,
+    Space = false,
+    LeftShift = false
+}
 
 UserInputService.InputBegan:Connect(function(i,g)
     if g then return end
@@ -107,18 +112,32 @@ RunService.RenderStepped:Connect(function(dt)
     if not flyActive then return end
 
     local _, _, root = getCharacter()
-    local cam = workspace.CurrentCamera
-    local move = Vector3.zero
+    if not root then return end
 
-    if flyKeys.W then move += cam.CFrame.LookVector end
-    if flyKeys.S then move -= cam.CFrame.LookVector end
-    if flyKeys.A then move -= cam.CFrame.RightVector end
-    if flyKeys.D then move += cam.CFrame.RightVector end
-    if flyKeys.Space then move += Vector3.new(0,1,0) end
-    if flyKeys.LeftShift then move -= Vector3.new(0,1,0) end
+    local cam = workspace.CurrentCamera
+    local move = Vector3.new(0, 0, 0)
+
+    if flyKeys.W then
+        move = move + cam.CFrame.LookVector
+    end
+    if flyKeys.S then
+        move = move - cam.CFrame.LookVector
+    end
+    if flyKeys.A then
+        move = move - cam.CFrame.RightVector
+    end
+    if flyKeys.D then
+        move = move + cam.CFrame.RightVector
+    end
+    if flyKeys.Space then
+        move = move + Vector3.new(0, 1, 0)
+    end
+    if flyKeys.LeftShift then
+        move = move - Vector3.new(0, 1, 0)
+    end
 
     if move.Magnitude > 0 then
-        root.CFrame += move.Unit * flySpeed * dt
+        root.CFrame = root.CFrame + (move.Unit * flySpeed * dt)
     end
 end)
 
