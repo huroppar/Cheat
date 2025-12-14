@@ -1,9 +1,9 @@
 --========================================================--
---                 Utility Hub v5 FIXED                   --
---      Speed / Infinite Jump / WallClip / Fly (LOCAL)    --
+--                 Utility Hub v5 FINAL                   --
+--   Speed / Infinite Jump / WallClip / Fly (LOCAL ONLY)  --
 --========================================================--
 
--- RayField
+-- Rayfield
 local Rayfield = loadstring(game:HttpGet("https://sirius.menu/rayfield"))()
 
 -- Services
@@ -33,36 +33,36 @@ local function getCharacter()
 end
 
 --========================================================--
---                 WallClip（安定版）                     --
+--                 WallClip（最終安定版）                --
 --========================================================--
-local storedCollisions = {}
+RunService.RenderStepped:Connect(function()
+    if not wallClipEnabled then return end
 
-local function applyWallClip(enable)
     local char = player.Character
     if not char then return end
 
-    if enable then
-        for _, part in ipairs(char:GetDescendants()) do
-            if part:IsA("BasePart") then
-                if storedCollisions[part] == nil then
-                    storedCollisions[part] = part.CanCollide
-                end
-                part.CanCollide = false
-            end
+    for _, part in ipairs(char:GetDescendants()) do
+        if part:IsA("BasePart") then
+            part.CanCollide = false
         end
-    else
-        for part, old in pairs(storedCollisions) do
-            if part and part.Parent then
-                part.CanCollide = old
-            end
+    end
+end)
+
+-- OFF時に戻す
+local function restoreCollision()
+    local char = player.Character
+    if not char then return end
+
+    for _, part in ipairs(char:GetDescendants()) do
+        if part:IsA("BasePart") then
+            part.CanCollide = true
         end
-        storedCollisions = {}
     end
 end
 
--- 死亡対策
+-- 死亡復帰対策
 player.CharacterAdded:Connect(function()
-    task.wait(0.2)
+    task.wait(0.3)
 
     if speedEnabled then
         local _, hum = getCharacter()
@@ -70,7 +70,7 @@ player.CharacterAdded:Connect(function()
     end
 
     if wallClipEnabled then
-        applyWallClip(true)
+        restoreCollision()
     end
 end)
 
@@ -84,7 +84,9 @@ UserInputService.JumpRequest:Connect(function()
     end
 end)
 
---================ Fly =================
+--========================================================--
+--                       Fly                              --
+--========================================================--
 local flyKeys = {
     W = false,
     A = false,
@@ -115,29 +117,17 @@ RunService.RenderStepped:Connect(function(dt)
     if not root then return end
 
     local cam = workspace.CurrentCamera
-    local move = Vector3.new(0, 0, 0)
+    local move = Vector3.zero
 
-    if flyKeys.W then
-        move = move + cam.CFrame.LookVector
-    end
-    if flyKeys.S then
-        move = move - cam.CFrame.LookVector
-    end
-    if flyKeys.A then
-        move = move - cam.CFrame.RightVector
-    end
-    if flyKeys.D then
-        move = move + cam.CFrame.RightVector
-    end
-    if flyKeys.Space then
-        move = move + Vector3.new(0, 1, 0)
-    end
-    if flyKeys.LeftShift then
-        move = move - Vector3.new(0, 1, 0)
-    end
+    if flyKeys.W then move += cam.CFrame.LookVector end
+    if flyKeys.S then move -= cam.CFrame.LookVector end
+    if flyKeys.A then move -= cam.CFrame.RightVector end
+    if flyKeys.D then move += cam.CFrame.RightVector end
+    if flyKeys.Space then move += Vector3.new(0,1,0) end
+    if flyKeys.LeftShift then move -= Vector3.new(0,1,0) end
 
     if move.Magnitude > 0 then
-        root.CFrame = root.CFrame + (move.Unit * flySpeed * dt)
+        root.CFrame += move.Unit * flySpeed * dt
     end
 end)
 
@@ -148,7 +138,11 @@ local Window = Rayfield:CreateWindow({
     Name = "Utility Hub v5",
     LoadingTitle = "Utility Hub",
     LoadingSubtitle = "by Masashi",
-    ConfigurationSaving = {Enabled=true, FolderName="UtilityHubConfigs", FileName="Config"},
+    ConfigurationSaving = {
+        Enabled = true,
+        FolderName = "UtilityHubConfigs",
+        FileName = "Config"
+    },
     KeySystem = false
 })
 
@@ -194,7 +188,9 @@ tab:CreateToggle({
     CurrentValue = false,
     Callback = function(v)
         wallClipEnabled = v
-        applyWallClip(v)
+        if not v then
+            restoreCollision()
+        end
     end
 })
 
@@ -216,7 +212,6 @@ tab:CreateSlider({
         flySpeed = v
     end
 })
-
 
 --================ ESPタブ =================
 local espTab = Window:CreateTab("ESP", 4483362458)
