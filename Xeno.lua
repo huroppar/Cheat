@@ -27,15 +27,28 @@ local function getCharacter()
     return char, humanoid, root
 end
 
+-- 正しい壁貫通（Humanoid State使用）
 local function setWallClip(enable)
     local char = player.Character
     if not char then return end
-    for _, part in ipairs(char:GetDescendants()) do
-        if part:IsA("BasePart") then
-            part.CanCollide = not enable
-        end
+
+    local hum = char:FindFirstChildOfClass("Humanoid")
+    if not hum then return end
+
+    if enable then
+        -- 物理演算を切り離す（壁を抜ける）
+        hum:ChangeState(Enum.HumanoidStateType.Physics)
+    else
+        -- 通常状態に戻す
+        hum:ChangeState(Enum.HumanoidStateType.Running)
     end
 end
+
+-- 状態監視（軽くでOK）
+RunService.Heartbeat:Connect(function()
+    setWallClip(wallClipEnabled)
+end)
+
 
 --================ X-Ray & FullBright =================
 local LocalPlayer = Players.LocalPlayer
@@ -169,6 +182,16 @@ playerTab:CreateSlider({
         end
     end
 })
+
+
+player.CharacterAdded:Connect(function(char)
+    local hum = char:WaitForChild("Humanoid")
+
+    -- SpeedがONなら再適用
+    if speedEnabled then
+        hum.WalkSpeed = speedOn
+    end
+end)
 
 --================ Infinite Jump =================
 playerTab:CreateToggle({
