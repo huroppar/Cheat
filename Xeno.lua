@@ -203,23 +203,25 @@ playerTab:CreateToggle({
     Name = "Speed",
     CurrentValue = false,
     Flag = "SpeedToggle",
-Callback = function(val)
-    speedEnabled = val
-    local _, hum = getCharacter()
-    if hum then
-        if val then
-            -- ON時：元の速度を保存（初回のみ）
-            if not originalWalkSpeed then
-                originalWalkSpeed = hum.WalkSpeed
-            end
-        else
-            -- OFF時：元の速度に戻す
-            if originalWalkSpeed then
-                hum.WalkSpeed = originalWalkSpeed
+    Callback = function(val)
+        speedEnabled = val
+        local _, hum = getCharacter()
+        if hum then
+            if val then
+                -- ON時：元の速度を保存
+                if not originalWalkSpeed then
+                    originalWalkSpeed = hum.WalkSpeed
+                end
+            else
+                -- OFF時：ゲーム本来の速度に戻す
+                if originalWalkSpeed then
+                    hum.WalkSpeed = originalWalkSpeed
+                end
             end
         end
     end
-end
+})
+
 
 
 -- スライダー（オン）
