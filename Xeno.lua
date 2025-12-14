@@ -1,21 +1,19 @@
 --========================================================--
 --                 Utility Hub v5 FIXED                   --
---        Speed / Infinite Jump / WallClip / Fly          --
+--      Speed / Infinite Jump / WallClip / Fly (LOCAL)    --
 --========================================================--
 
--- RayFieldロード
+-- RayField
 local Rayfield = loadstring(game:HttpGet("https://sirius.menu/rayfield"))()
 
 -- Services
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
-local Lighting = game:GetService("Lighting")
-local PhysicsService = game:GetService("PhysicsService")
 
 local player = Players.LocalPlayer
 
---================ 基本設定 =================
+--================ 設定 =================
 local speedDefaultOn = 30
 local speedMin, speedMax = 0, 500
 
@@ -34,41 +32,51 @@ local function getCharacter()
     return char, hum, root
 end
 
---================ CollisionGroup（壁貫通用） =================
-pcall(function()
-    PhysicsService:CreateCollisionGroup("NoClip")
-end)
-PhysicsService:CollisionGroupSetCollidable("NoClip", "Default", false)
+--========================================================--
+--                 WallClip（安定版）                     --
+--========================================================--
+local storedCollisions = {}
 
 local function applyWallClip(enable)
     local char = player.Character
     if not char then return end
 
-    for _, part in ipairs(char:GetDescendants()) do
-        if part:IsA("BasePart") then
-            if enable then
-                PhysicsService:SetPartCollisionGroup(part, "NoClip")
-            else
-                PhysicsService:SetPartCollisionGroup(part, "Default")
+    if enable then
+        for _, part in ipairs(char:GetDescendants()) do
+            if part:IsA("BasePart") then
+                if storedCollisions[part] == nil then
+                    storedCollisions[part] = part.CanCollide
+                end
+                part.CanCollide = false
             end
         end
+    else
+        for part, old in pairs(storedCollisions) do
+            if part and part.Parent then
+                part.CanCollide = old
+            end
+        end
+        storedCollisions = {}
     end
 end
 
-RunService.Heartbeat:Connect(function()
-    applyWallClip(wallClipEnabled)
-end)
-
+-- 死亡対策
 player.CharacterAdded:Connect(function()
-    task.wait(0.1)
-    applyWallClip(wallClipEnabled)
+    task.wait(0.2)
+
     if speedEnabled then
         local _, hum = getCharacter()
         hum.WalkSpeed = speedValue
     end
+
+    if wallClipEnabled then
+        applyWallClip(true)
+    end
 end)
 
---================ Infinite Jump（完全動作） =================
+--========================================================--
+--                 Infinite Jump                          --
+--========================================================--
 UserInputService.JumpRequest:Connect(function()
     if infiniteJumpEnabled then
         local _, hum = getCharacter()
@@ -76,7 +84,9 @@ UserInputService.JumpRequest:Connect(function()
     end
 end)
 
---================ Fly =================
+--========================================================--
+--                       Fly                              --
+--========================================================--
 local flyKeys = {W=false,A=false,S=false,D=false,Space=false,LeftShift=false}
 
 UserInputService.InputBegan:Connect(function(i,g)
@@ -112,7 +122,9 @@ RunService.RenderStepped:Connect(function(dt)
     end
 end)
 
---================ GUI =================
+--========================================================--
+--                        GUI                             --
+--========================================================--
 local Window = Rayfield:CreateWindow({
     Name = "Utility Hub v5",
     LoadingTitle = "Utility Hub",
@@ -163,6 +175,7 @@ tab:CreateToggle({
     CurrentValue = false,
     Callback = function(v)
         wallClipEnabled = v
+        applyWallClip(v)
     end
 })
 
@@ -184,6 +197,7 @@ tab:CreateSlider({
         flySpeed = v
     end
 })
+
 
 --================ ESPタブ =================
 local espTab = Window:CreateTab("ESP", 4483362458)
