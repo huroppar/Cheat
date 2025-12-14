@@ -1105,19 +1105,19 @@ end)
 
 
 --=============================
--- ハンティ・ゾンビタブ
+-- ハンティ・ゾンビタブ（敵ESPなし）
 --=============================
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
-local UIS = game:GetService("UserInputService")
 local Workspace = game:GetService("Workspace")
 
 local player = Players.LocalPlayer
 
 local huntTab = Window:CreateTab("ハンティ・ゾンビ", 4483362458)
-local enemyTab = Window:CreateTab("敵処理", 4483362458)
 
+--=============================
 -- Pickupスライド
+--=============================
 local slideSpeed = 20
 local slideActive = false
 local pickupCooldown = 0.5
@@ -1139,35 +1139,36 @@ huntTab:CreateSlider({
     Increment = 1,
     CurrentValue = slideSpeed,
     Suffix = " stud/s",
-    Flag = "SlideSpeed",
-    Callback = function(val) slideSpeed = val end
+    Callback = function(v)
+        slideSpeed = v
+    end
 })
 
 huntTab:CreateToggle({
     Name = "自動スライド取得",
     CurrentValue = false,
-    Callback = function(state) slideActive = state end
+    Callback = function(v)
+        slideActive = v
+    end
 })
 
+--=============================
 -- Pipe追尾
+--=============================
 local followActive = false
-local originalCFrame = nil
+local originalCFrame
 local pipeCache = {}
 local searchCooldown = 0.5
 local lastSearch = 0
 
 local function updatePipeCache()
-    pipeCache = {}
+    table.clear(pipeCache)
     for _, obj in pairs(Workspace:GetDescendants()) do
         if obj:IsA("Model") and (obj.Name == "Pipe" or obj.Name == "SewerPipeModel") then
-            if obj.PrimaryPart then
+            local part = obj.PrimaryPart or obj:FindFirstChildWhichIsA("BasePart")
+            if part then
+                obj.PrimaryPart = part
                 table.insert(pipeCache, obj)
-            else
-                local part = obj:FindFirstChildWhichIsA("BasePart")
-                if part then
-                    obj.PrimaryPart = part
-                    table.insert(pipeCache, obj)
-                end
             end
         end
     end
@@ -1176,116 +1177,77 @@ end
 huntTab:CreateToggle({
     Name = "Pipe追尾",
     CurrentValue = false,
-    Callback = function(state)
-        followActive = state
+    Callback = function(v)
+        followActive = v
         local char = player.Character
         if char then
             local hrp = char:FindFirstChild("HumanoidRootPart")
-            if state and hrp then originalCFrame = hrp.CFrame end
-            if not state and hrp and originalCFrame then hrp.CFrame = originalCFrame end
-        end
-    end
-})
-
--- 敵ESP
-local pulling = false
-
-enemyTab:CreateToggle({
-    Name = "敵ESP",
-    CurrentValue = false,
-    Callback = function(state)
-        pulling = state
-        if not pulling then
-            local entities = Workspace:FindFirstChild("Entities")
-            if entities then
-                for _, zombie in pairs(entities:GetChildren()) do
-                    for _, e in pairs(zombie:GetChildren()) do
-                        local hrp = e:FindFirstChild("HumanoidRootPart")
-                        if hrp then
-                            local gui = hrp:FindFirstChild("ESP")
-                            if gui then gui:Destroy() end
-                        end
-                    end
+            if hrp then
+                if v then
+                    originalCFrame = hrp.CFrame
+                elseif originalCFrame then
+                    hrp.CFrame = originalCFrame
                 end
             end
         end
     end
 })
 
-local function createESP(hrp)
-    if hrp:FindFirstChild("ESP") then return end
-    local bbg = Instance.new("BillboardGui")
-    bbg.Name = "ESP"
-    bbg.Adornee = hrp
-    bbg.Size = UDim2.new(0,50,0,20)
-    bbg.AlwaysOnTop = true
-
-    local text = Instance.new("TextLabel", bbg)
-    text.Size = UDim2.new(1,0,1,0)
-    text.BackgroundTransparency = 1
-    text.TextColor3 = Color3.fromRGB(255,0,0)
-    text.TextScaled = true
-    text.Text = hrp.Parent.Name
-
-    bbg.Parent = hrp
-end
-
-
-
---========================================================--
---            🌴 Endless・Island 専用 TP ボタン            --
---========================================================--
-
+--=============================
+-- Endless Island TP
+--=============================
 huntTab:CreateButton({
     Name = "🌴 Endless Island 放置場所TP",
     Callback = function()
-        local player = Players.LocalPlayer
         local char = player.Character or player.CharacterAdded:Wait()
         local hrp = char:WaitForChild("HumanoidRootPart")
-
-        -- ここで座標指定（例: X12.4 Y-14.2 Z-31.8）
         hrp.CFrame = CFrame.new(12.4, -14.2, -31.8)
     end
 })
 
-
--- Cylinder.015追従
+--=============================
+-- Cylinder.015 追従
+--=============================
 local moveActive = false
 local targetName = "Cylinder.015"
+local updateInterval = 0.02
+local lastUpdate = 0
 
 huntTab:CreateToggle({
     Name = "バスに追従",
     CurrentValue = false,
-    Callback = function(state) moveActive = state end
+    Callback = function(v)
+        moveActive = v
+    end
 })
 
+--=============================
 -- RenderStepped
-local lastUpdate = 0
-local updateInterval = 0.02
-
+--=============================
 RunService.RenderStepped:Connect(function(dt)
     local char = player.Character
     if not char then return end
+
     local hrp = char:FindFirstChild("HumanoidRootPart")
     if not hrp then return end
 
     -- Pickupスライド
     if slideActive then
-        lastPickupSearch = lastPickupSearch + dt
+        lastPickupSearch += dt
         if lastPickupSearch >= pickupCooldown then
             lastPickupSearch = 0
             local pickups = getPickups()
-            if #pickups > 0 then
-                local target = pickups[1]
-                if target and target.Parent then
-                    hrp.CFrame = CFrame.new(target.Position + Vector3.new(0,3,0))
-                    if (hrp.Position - target.Position).Magnitude < 3 then
-                        pcall(function()
-                            firetouchinterest(hrp, target, 0)
-                            firetouchinterest(hrp, target, 1)
-                            if target and target.Parent then target:Destroy() end
-                        end)
-                    end
+            local target = pickups[1]
+            if target then
+                hrp.CFrame = CFrame.new(target.Position + Vector3.new(0,3,0))
+                if (hrp.Position - target.Position).Magnitude < 3 then
+                    pcall(function()
+                        firetouchinterest(hrp, target, 0)
+                        firetouchinterest(hrp, target, 1)
+                        if target.Parent then
+                            target:Destroy()
+                        end
+                    end)
                 end
             end
         end
@@ -1293,54 +1255,43 @@ RunService.RenderStepped:Connect(function(dt)
 
     -- Pipe追尾
     if followActive then
-        lastSearch = lastSearch + dt
+        lastSearch += dt
         if lastSearch >= searchCooldown then
             updatePipeCache()
             lastSearch = 0
         end
+
         if #pipeCache > 0 then
             table.sort(pipeCache, function(a,b)
-                return (hrp.Position - a.PrimaryPart.Position).Magnitude < (hrp.Position - b.PrimaryPart.Position).Magnitude
+                return (hrp.Position - a.PrimaryPart.Position).Magnitude <
+                       (hrp.Position - b.PrimaryPart.Position).Magnitude
             end)
+
             local target = pipeCache[1]
             if target and target.PrimaryPart then
-                local distance = (hrp.Position - target.PrimaryPart.Position).Magnitude
-                local moveTarget = target.PrimaryPart.Position
-                if distance > 50 then
-                    moveTarget = hrp.Position + (target.PrimaryPart.Position - hrp.Position).Unit * (distance - 50)
-                end
-                hrp.CFrame = hrp.CFrame:Lerp(CFrame.new(moveTarget + Vector3.new(0,3,0)), math.clamp(slideSpeed*dt,0,1))
+                local pos = target.PrimaryPart.Position + Vector3.new(0,3,0)
+                hrp.CFrame = hrp.CFrame:Lerp(
+                    CFrame.new(pos),
+                    math.clamp(slideSpeed * dt, 0, 1)
+                )
             end
         end
     end
 
-    -- Cylinder.015追従
+    -- Cylinder追従
     if moveActive then
-        lastUpdate = lastUpdate + dt
+        lastUpdate += dt
         if lastUpdate >= updateInterval then
             lastUpdate = 0
-            local targetPart = Workspace:FindFirstChild(targetName, true)
-            if targetPart then
-                local targetPos = targetPart.Position + Vector3.new(0,5,0)
-                hrp.CFrame = hrp.CFrame:Lerp(CFrame.new(targetPos), math.clamp(slideSpeed*dt,0,1))
-            end
-        end
-    end
-
-    -- 敵ESP更新
-    if pulling then
-        local entities = Workspace:FindFirstChild("Entities")
-        if entities then
-            for _, zombie in pairs(entities:GetChildren()) do
-                if zombie.Name == "Zombie" then
-                    for _, e in pairs(zombie:GetChildren()) do
-                        local hrp2 = e:FindFirstChild("HumanoidRootPart")
-                        if hrp2 then
-                            createESP(hrp2)
-                        end
-                    end
-                end
+            local part = Workspace:FindFirstChild(targetName, true)
+            if part then
+                local pos = part.Position + Vector3.new(0,5,0)
+                hrp.CFrame = hrp.CFrame:Lerp(
+                    CFrame.new(pos),
+                    math.clamp(slideSpeed * dt, 0, 1)
+                )
             end
         end
     end
 end)
+
