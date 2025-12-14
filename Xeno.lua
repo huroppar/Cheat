@@ -1,3 +1,8 @@
+--========================================================--
+--                 Utility Hub v5 FIXED                   --
+--        Speed / Infinite Jump / WallClip / Fly          --
+--========================================================--
+
 -- RayFieldロード
 local Rayfield = loadstring(game:HttpGet("https://sirius.menu/rayfield"))()
 
@@ -6,280 +11,92 @@ local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
 local Lighting = game:GetService("Lighting")
+local PhysicsService = game:GetService("PhysicsService")
 
 local player = Players.LocalPlayer
 
---================ 設定 =================
+--================ 基本設定 =================
 local speedDefaultOn = 30
 local speedMin, speedMax = 0, 500
 
+local speedEnabled = false
+local speedValue = speedDefaultOn
 local infiniteJumpEnabled = false
 local wallClipEnabled = false
-local airTPActive = false
-local airHeight = 2000
-local airTPOriginalCFrame = nil
+local flyActive = false
+local flySpeed = 50
 
 --================ Helper =================
 local function getCharacter()
     local char = player.Character or player.CharacterAdded:Wait()
-    local humanoid = char:FindFirstChildOfClass("Humanoid")
-    local root = char:FindFirstChild("HumanoidRootPart")
-    return char, humanoid, root
+    local hum = char:WaitForChild("Humanoid")
+    local root = char:WaitForChild("HumanoidRootPart")
+    return char, hum, root
 end
 
--- 正しい壁貫通（Humanoid State使用）
-local function setWallClip(enable)
+--================ CollisionGroup（壁貫通用） =================
+pcall(function()
+    PhysicsService:CreateCollisionGroup("NoClip")
+end)
+PhysicsService:CollisionGroupSetCollidable("NoClip", "Default", false)
+
+local function applyWallClip(enable)
     local char = player.Character
     if not char then return end
 
-    local hum = char:FindFirstChildOfClass("Humanoid")
-    if not hum then return end
-
-    if enable then
-        -- 物理演算を切り離す（壁を抜ける）
-        hum:ChangeState(Enum.HumanoidStateType.Physics)
-    else
-        -- 通常状態に戻す
-        hum:ChangeState(Enum.HumanoidStateType.Running)
+    for _, part in ipairs(char:GetDescendants()) do
+        if part:IsA("BasePart") then
+            if enable then
+                PhysicsService:SetPartCollisionGroup(part, "NoClip")
+            else
+                PhysicsService:SetPartCollisionGroup(part, "Default")
+            end
+        end
     end
 end
 
--- 状態監視（軽くでOK）
 RunService.Heartbeat:Connect(function()
-    setWallClip(wallClipEnabled)
+    applyWallClip(wallClipEnabled)
 end)
 
-
---================ X-Ray & FullBright =================
-local LocalPlayer = Players.LocalPlayer
-local XRayPlayersEnabled = false
-local XRayWorldEnabled = false
-local XRayTransparency = 0.6
-local originalLocalTransparency = {}
-
-local FullBrightEnabled = false
-local FB_Original = {
-    Brightness = Lighting.Brightness,
-    ClockTime = Lighting.ClockTime,
-    Ambient = Lighting.Ambient,
-    OutdoorAmbient = Lighting.OutdoorAmbient
-}
-
-local function ApplyFullBright()
-    Lighting.Brightness = 2
-    Lighting.ClockTime = 12
-    Lighting.Ambient = Color3.new(1,1,1)
-    Lighting.OutdoorAmbient = Color3.new(1,1,1)
-end
-
-local function RestoreFullBright()
-    Lighting.Brightness = FB_Original.Brightness
-    Lighting.ClockTime = FB_Original.ClockTime
-    Lighting.Ambient = FB_Original.Ambient
-    Lighting.OutdoorAmbient = FB_Original.OutdoorAmbient
-end
-
-local function SetCharacterXray(character, value)
-    if not character then return end
-    for _, obj in ipairs(character:GetDescendants()) do
-        if obj:IsA("BasePart") then
-            obj.LocalTransparencyModifier = value
-        end
-    end
-end
-
-local function SetWorldXray(value)
-    if value == 0 then
-        for part, old in pairs(originalLocalTransparency) do
-            if part and part:IsA("BasePart") then
-                part.LocalTransparencyModifier = old
-            end
-        end
-        originalLocalTransparency = {}
-        return
-    end
-
-    for _, part in ipairs(workspace:GetDescendants()) do
-        if part:IsA("BasePart") and part.CanCollide and part.Transparency < 1 then
-            if originalLocalTransparency[part] == nil then
-                originalLocalTransparency[part] = part.LocalTransparencyModifier or 0
-            end
-            part.LocalTransparencyModifier = XRayTransparency
-        end
-    end
-end
-
-task.spawn(function()
-    while true do
-        for _, plr in ipairs(Players:GetPlayers()) do
-            if plr ~= LocalPlayer then
-                SetCharacterXray(plr.Character, XRayPlayersEnabled and XRayTransparency or 0)
-            end
-        end
-        task.wait(0.25)
-    end
-end)
-
-task.spawn(function()
-    while true do
-        SetWorldXray(XRayWorldEnabled and XRayTransparency or 0)
-        task.wait(0.5)
-    end
-end)
-
-task.spawn(function()
-    while true do
-        if FullBrightEnabled then ApplyFullBright() end
-        task.wait(0.1)
-    end
-end)
-
---================ RayField GUI =================
-local Window = Rayfield:CreateWindow({
-    Name = "Utility Hub v5",
-    LoadingTitle = "Utility Hub",
-    LoadingSubtitle = "by Masashi",
-    ConfigurationSaving = {Enabled=true, FolderName="UtilityHubConfigs", FileName="Config"},
-    KeySystem = false
-})
-
-local playerTab = Window:CreateTab("プレイヤー", 4483362458)
-
---================ Speed（完全修正版） =================
-local speedEnabled = false
-local speedOn = speedDefaultOn
-local originalWalkSpeed = nil
-
-playerTab:CreateToggle({
-    Name = "Speed",
-    CurrentValue = false,
-    Callback = function(state)
-        speedEnabled = state
-        local _, hum = getCharacter()
-        if not hum then return end
-
-        if state then
-            originalWalkSpeed = hum.WalkSpeed
-            hum.WalkSpeed = speedOn
-        else
-            if originalWalkSpeed then
-                hum.WalkSpeed = originalWalkSpeed
-            end
-        end
-    end
-})
-
-playerTab:CreateSlider({
-    Name = "Speed",
-    Range = {speedMin, speedMax},
-    Increment = 1,
-    CurrentValue = speedDefaultOn,
-    Callback = function(val)
-        speedOn = val
-        if speedEnabled then
-            local _, hum = getCharacter()
-            if hum then hum.WalkSpeed = speedOn end
-        end
-    end
-})
-
-
-player.CharacterAdded:Connect(function(char)
-    local hum = char:WaitForChild("Humanoid")
-
-    -- SpeedがONなら再適用
+player.CharacterAdded:Connect(function()
+    task.wait(0.1)
+    applyWallClip(wallClipEnabled)
     if speedEnabled then
-        hum.WalkSpeed = speedOn
+        local _, hum = getCharacter()
+        hum.WalkSpeed = speedValue
     end
 end)
 
---================ Infinite Jump =================
-playerTab:CreateToggle({
-    Name = "Infinite Jump",
-    CurrentValue = false,
-    Callback = function(val)
-        infiniteJumpEnabled = val
-    end
-})
-
+--================ Infinite Jump（完全動作） =================
 UserInputService.JumpRequest:Connect(function()
     if infiniteJumpEnabled then
         local _, hum = getCharacter()
-        if hum then hum:ChangeState(Enum.HumanoidStateType.Jumping) end
+        hum:ChangeState(Enum.HumanoidStateType.Jumping)
     end
 end)
-
---================ WallClip =================
-playerTab:CreateToggle({
-    Name = "WallClip",
-    CurrentValue = false,
-    Callback = function(val)
-        wallClipEnabled = val
-    end
-})
-
-RunService.RenderStepped:Connect(function()
-    setWallClip(wallClipEnabled)
-end)
-
---================ Air TP =================
-playerTab:CreateButton({
-    Name = "Air TP",
-    Callback = function()
-        local _, _, root = getCharacter()
-        if not root then return end
-
-        if not airTPActive then
-            airTPOriginalCFrame = root.CFrame
-            root.CFrame = root.CFrame + Vector3.new(0, airHeight, 0)
-            root.Anchored = true
-            airTPActive = true
-        else
-            root.CFrame = airTPOriginalCFrame
-            root.Anchored = false
-            airTPActive = false
-        end
-    end
-})
 
 --================ Fly =================
-local flyActive = false
-local flySpeed = 50
 local flyKeys = {W=false,A=false,S=false,D=false,Space=false,LeftShift=false}
-
-playerTab:CreateToggle({
-    Name = "Fly",
-    CurrentValue = false,
-    Callback = function(v)
-        flyActive = v
-    end
-})
-
-playerTab:CreateSlider({
-    Name = "Fly速度",
-    Range = {10,200},
-    Increment = 5,
-    CurrentValue = flySpeed,
-    Callback = function(v)
-        flySpeed = v
-    end
-})
 
 UserInputService.InputBegan:Connect(function(i,g)
     if g then return end
-    if flyKeys[i.KeyCode.Name] ~= nil then flyKeys[i.KeyCode.Name] = true end
+    if flyKeys[i.KeyCode.Name] ~= nil then
+        flyKeys[i.KeyCode.Name] = true
+    end
 end)
 
 UserInputService.InputEnded:Connect(function(i,g)
     if g then return end
-    if flyKeys[i.KeyCode.Name] ~= nil then flyKeys[i.KeyCode.Name] = false end
+    if flyKeys[i.KeyCode.Name] ~= nil then
+        flyKeys[i.KeyCode.Name] = false
+    end
 end)
 
 RunService.RenderStepped:Connect(function(dt)
     if not flyActive then return end
-    local _, _, root = getCharacter()
-    if not root then return end
 
+    local _, _, root = getCharacter()
     local cam = workspace.CurrentCamera
     local move = Vector3.zero
 
@@ -295,6 +112,78 @@ RunService.RenderStepped:Connect(function(dt)
     end
 end)
 
+--================ GUI =================
+local Window = Rayfield:CreateWindow({
+    Name = "Utility Hub v5",
+    LoadingTitle = "Utility Hub",
+    LoadingSubtitle = "by Masashi",
+    ConfigurationSaving = {Enabled=true, FolderName="UtilityHubConfigs", FileName="Config"},
+    KeySystem = false
+})
+
+local tab = Window:CreateTab("Player", 4483362458)
+
+-- Speed
+tab:CreateToggle({
+    Name = "Speed",
+    CurrentValue = false,
+    Callback = function(v)
+        speedEnabled = v
+        local _, hum = getCharacter()
+        hum.WalkSpeed = v and speedValue or 16
+    end
+})
+
+tab:CreateSlider({
+    Name = "Speed Value",
+    Range = {speedMin, speedMax},
+    Increment = 1,
+    CurrentValue = speedDefaultOn,
+    Callback = function(v)
+        speedValue = v
+        if speedEnabled then
+            local _, hum = getCharacter()
+            hum.WalkSpeed = speedValue
+        end
+    end
+})
+
+-- Infinite Jump
+tab:CreateToggle({
+    Name = "Infinite Jump",
+    CurrentValue = false,
+    Callback = function(v)
+        infiniteJumpEnabled = v
+    end
+})
+
+-- WallClip
+tab:CreateToggle({
+    Name = "WallClip",
+    CurrentValue = false,
+    Callback = function(v)
+        wallClipEnabled = v
+    end
+})
+
+-- Fly
+tab:CreateToggle({
+    Name = "Fly",
+    CurrentValue = false,
+    Callback = function(v)
+        flyActive = v
+    end
+})
+
+tab:CreateSlider({
+    Name = "Fly Speed",
+    Range = {10,200},
+    Increment = 5,
+    CurrentValue = flySpeed,
+    Callback = function(v)
+        flySpeed = v
+    end
+})
 
 --================ ESPタブ =================
 local espTab = Window:CreateTab("ESP", 4483362458)
