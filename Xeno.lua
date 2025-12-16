@@ -1009,7 +1009,9 @@ end)
 -- RenderStepped カメラ制御
 --============================
 RunService.RenderStepped:Connect(function()
+    --============================
     -- Follow処理
+    --============================
     if followActive and selectedTarget and selectedTarget.Character and player.Character then
         local targetHRP = selectedTarget.Character:FindFirstChild("HumanoidRootPart")
         local myHRP = player.Character:FindFirstChild("HumanoidRootPart")
@@ -1018,25 +1020,26 @@ RunService.RenderStepped:Connect(function()
         end
     end
 
-    -- 自由カメラ処理
+    --============================
+    -- 自由カメラ
+    --============================
     if freeCamActive and selectedTarget and selectedTarget.Character then
         local head = selectedTarget.Character:FindFirstChild("Head")
-        if not head then return end
-
-        local yaw = math.rad(camYaw)
-        local pitch = math.rad(camPitch)
-        local lookDir = Vector3.new(
-            math.cos(pitch) * math.sin(yaw),
-            math.sin(pitch),
-            math.cos(pitch) * math.cos(yaw)
-        )
-        local camPos = head.Position - lookDir * zoomDist
-        camera.CFrame = CFrame.new(camPos, head.Position)
+        if head then
+            local yaw = math.rad(camYaw)
+            local pitch = math.rad(camPitch)
+            local lookDir = Vector3.new(
+                math.cos(pitch) * math.sin(yaw),
+                math.sin(pitch),
+                math.cos(pitch) * math.cos(yaw)
+            )
+            local camPos = head.Position - lookDir * zoomDist
+            camera.CFrame = CFrame.new(camPos, head.Position)
+        end
     end
-end)
 
     --============================
-    -- Tracer 描画
+    -- 🔥 Tracer 描画（ここが重要）
     --============================
     if tracerActive and selectedTarget and selectedTarget.Character and player.Character then
         local myHRP = player.Character:FindFirstChild("HumanoidRootPart")
@@ -1059,6 +1062,8 @@ end)
     else
         tracerLine.Visible = false
     end
+end)
+
 
 --========================================================--
 -- プレイヤー一覧（HPリアルタイム）
