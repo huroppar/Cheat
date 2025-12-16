@@ -935,11 +935,12 @@ UIS.InputChanged:Connect(function(input)
 end)
 
 --============================
--- プレイヤー一覧（HP）
+-- プレイヤー一覧（完全安定版）
 --============================
+
 combatTab:CreateLabel("プレイヤー一覧（HP）")
 
-local playerButtons = {}
+local playerButtons = {} -- [UserId] = {Player, Button}
 
 local function GetHP(plr)
     local hum = plr.Character and plr.Character:FindFirstChild("Humanoid")
@@ -949,57 +950,56 @@ local function GetHP(plr)
     return 0,0
 end
 
-local function CreatePlayerButton(plr)
-    local hp, maxhp = GetHP(plr)
-
-    local btn = combatTab:CreateButton({
-        Name = plr.Name.." ["..hp.."/"..maxhp.."]",
-        Callback = function()
-            selectedTarget = plr
-        end
-    })
-
-    playerButtons[plr] = btn
-end
-
-local function ClearPlayerList()
-    for plr, btn in pairs(playerButtons) do
-        pcall(function() btn:Remove() end)
-        playerButtons[plr] = nil
-    end
-end
-
-local function UpdatePlayerList()
-    local current = {}
+local function RefreshPlayerList()
+    local alive = {}
 
     for _, plr in ipairs(Players:GetPlayers()) do
         if plr ~= player then
-            current[plr] = true
-            if not playerButtons[plr] then
-                CreatePlayerButton(plr)
+            alive[plr.UserId] = plr
+
+            if not playerButtons[plr.UserId] then
+                -- 🔥 新規作成はここだけ
+                local btn = combatTab:CreateButton({
+                    Name = plr.Name,
+                    Callback = function()
+                        selectedTarget = plr
+                    end
+                })
+
+                playerButtons[plr.UserId] = {
+                    Player = plr,
+                    Button = btn
+                }
             end
         end
     end
 
-    for plr, btn in pairs(playerButtons) do
-        if not current[plr] then
-            pcall(function() btn:Remove() end)
-            playerButtons[plr] = nil
+    -- 抜けたプレイヤーを無効化（削除しない）
+    for userId, data in pairs(playerButtons) do
+        if not alive[userId] then
+            pcall(function()
+                data.Button:Set("[退出済み]")
+            end)
+            playerButtons[userId] = nil
         end
     end
 end
 
+-- 手動更新ボタン
 combatTab:CreateButton({
-    Name = "🔄 プレイヤー一覧更新",
+    Name = "🔄 プレイヤー一覧 更新",
     Callback = function()
-        ClearPlayerList()
-        UpdatePlayerList()
+        RefreshPlayerList()
     end
 })
 
-UpdatePlayerList()
-Players.PlayerAdded:Connect(UpdatePlayerList)
-Players.PlayerRemoving:Connect(UpdatePlayerList)
+-- 初回
+RefreshPlayerList()
+
+Players.PlayerAdded:Connect(RefreshPlayerList)
+Players.PlayerRemoving:Connect(RefreshPlayerList)
+
+
 
 --============================
 -- メインループ
@@ -1038,15 +1038,23 @@ RunService.RenderStepped:Connect(function()
             head.Position
         )
     end
+--============================
+-- HP更新（名前だけ変更）
+--============================
+RunService.RenderStepped:Connect(function()
+    for _, data in pairs(playerButtons) do
+        local plr = data.Player
+        local btn = data.Button
 
-    -- HP更新
-    for plr, btn in pairs(playerButtons) do
-        local hp,maxhp = GetHP(plr)
-        pcall(function()
-            btn:Set(plr.Name.." ["..hp.."/"..maxhp.."]")
-        end)
+        if plr and btn then
+            local hp, maxhp = GetHP(plr)
+            pcall(function()
+                btn:Set(plr.Name.." ["..hp.."/"..maxhp.."]")
+            end)
+        end
     end
 end)
+
 
 
 --============================
