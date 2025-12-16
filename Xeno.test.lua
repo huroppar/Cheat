@@ -934,14 +934,13 @@ UIS.InputChanged:Connect(function(input)
     end
 end)
 
---============================
--- プレイヤー一覧（RayField限界回避版）
---============================
+--========================================================--
+-- プレイヤー選択（ドロップダウン式・増殖しない）
+--========================================================--
 
-combatTab:CreateLabel("プレイヤー一覧（HP）")
+combatTab:CreateLabel("プレイヤー選択（HP付き）")
 
-local MAX_PLAYERS = 20
-local slots = {} -- {Button, Player}
+local playerMap = {} -- 表示名 → Player
 
 local function GetHP(plr)
     local hum = plr.Character and plr.Character:FindFirstChild("Humanoid")
@@ -951,46 +950,50 @@ local function GetHP(plr)
     return 0,0
 end
 
--- 🔥 ボタンは最初に固定数だけ作る
-for i = 1, MAX_PLAYERS do
-    local btn = combatTab:CreateButton({
-        Name = "---",
-        Callback = function()
-            local plr = slots[i].Player
-            if plr then
-                selectedTarget = plr
-            end
-        end
-    })
+local function BuildPlayerList()
+    local list = {}
+    playerMap = {}
 
-    slots[i] = {
-        Button = btn,
-        Player = nil
-    }
-end
-
--- プレイヤー割り当て
-local function RefreshPlayerSlots()
-    -- 全スロット初期化
-    for _, slot in ipairs(slots) do
-        slot.Player = nil
-        slot.Button:Set("---")
-    end
-
-    local index = 1
     for _, plr in ipairs(Players:GetPlayers()) do
-        if plr ~= player and index <= MAX_PLAYERS then
-            slots[index].Player = plr
-            index += 1
+        if plr ~= player then
+            local hp, maxhp = GetHP(plr)
+            local label = plr.Name .. " [" .. hp .. "/" .. maxhp .. "]"
+            table.insert(list, label)
+            playerMap[label] = plr
         end
     end
+
+    if #list == 0 then
+        table.insert(list, "プレイヤーなし")
+    end
+
+    return list
 end
 
-RefreshPlayerSlots()
-Players.PlayerAdded:Connect(RefreshPlayerSlots)
-Players.PlayerRemoving:Connect(RefreshPlayerSlots)
+local playerDropdown = combatTab:CreateDropdown({
+    Name = "ターゲット選択",
+    Options = BuildPlayerList(),
+    CurrentOption = nil,
+    Callback = function(option)
+        local plr = playerMap[option]
+        if plr then
+            selectedTarget = plr
+            RayField:Notify({
+                Title = "選択",
+                Content = plr.Name .. " をターゲットにした",
+                Duration = 2
+            })
+        end
+    end
+})
 
-
+-- 🔄 定期更新（HP反映 + 抜けた人削除）
+task.spawn(function()
+    while true do
+        task.wait(1)
+        playerDropdown:Refresh(BuildPlayerList(), true)
+    end
+end)
 
 
 
@@ -1032,16 +1035,6 @@ RunService.RenderStepped:Connect(function()
             head.Position
         )
     end
--- HP更新
-RunService.RenderStepped:Connect(function()
-    for _, slot in ipairs(slots) do
-        local plr = slot.Player
-        if plr then
-            local hp, maxhp = GetHP(plr)
-            slot.Button:Set(plr.Name.." ["..hp.."/"..maxhp.."]")
-        end
-    end
-end)
 
 
 
