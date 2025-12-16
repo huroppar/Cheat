@@ -935,12 +935,13 @@ UIS.InputChanged:Connect(function(input)
 end)
 
 --============================
--- プレイヤー一覧（完全安定版）
+-- プレイヤー一覧（RayField限界回避版）
 --============================
 
 combatTab:CreateLabel("プレイヤー一覧（HP）")
 
-local playerButtons = {} -- [UserId] = {Player, Button}
+local MAX_PLAYERS = 20
+local slots = {} -- {Button, Player}
 
 local function GetHP(plr)
     local hum = plr.Character and plr.Character:FindFirstChild("Humanoid")
@@ -950,54 +951,47 @@ local function GetHP(plr)
     return 0,0
 end
 
-local function RefreshPlayerList()
-    local alive = {}
-
-    for _, plr in ipairs(Players:GetPlayers()) do
-        if plr ~= player then
-            alive[plr.UserId] = plr
-
-            if not playerButtons[plr.UserId] then
-                -- 🔥 新規作成はここだけ
-                local btn = combatTab:CreateButton({
-                    Name = plr.Name,
-                    Callback = function()
-                        selectedTarget = plr
-                    end
-                })
-
-                playerButtons[plr.UserId] = {
-                    Player = plr,
-                    Button = btn
-                }
+-- 🔥 ボタンは最初に固定数だけ作る
+for i = 1, MAX_PLAYERS do
+    local btn = combatTab:CreateButton({
+        Name = "---",
+        Callback = function()
+            local plr = slots[i].Player
+            if plr then
+                selectedTarget = plr
             end
         end
+    })
+
+    slots[i] = {
+        Button = btn,
+        Player = nil
+    }
+end
+
+-- プレイヤー割り当て
+local function RefreshPlayerSlots()
+    -- 全スロット初期化
+    for _, slot in ipairs(slots) do
+        slot.Player = nil
+        slot.Button:Set("---")
     end
 
-    -- 抜けたプレイヤーを無効化（削除しない）
-    for userId, data in pairs(playerButtons) do
-        if not alive[userId] then
-            pcall(function()
-                data.Button:Set("[退出済み]")
-            end)
-            playerButtons[userId] = nil
+    local index = 1
+    for _, plr in ipairs(Players:GetPlayers()) do
+        if plr ~= player and index <= MAX_PLAYERS then
+            slots[index].Player = plr
+            index += 1
         end
     end
 end
 
--- 手動更新ボタン
-combatTab:CreateButton({
-    Name = "🔄 プレイヤー一覧 更新",
-    Callback = function()
-        RefreshPlayerList()
-    end
-})
+RefreshPlayerSlots()
+Players.PlayerAdded:Connect(RefreshPlayerSlots)
+Players.PlayerRemoving:Connect(RefreshPlayerSlots)
 
--- 初回
-RefreshPlayerList()
 
-Players.PlayerAdded:Connect(RefreshPlayerList)
-Players.PlayerRemoving:Connect(RefreshPlayerList)
+
 
 
 
@@ -1038,19 +1032,13 @@ RunService.RenderStepped:Connect(function()
             head.Position
         )
     end
---============================
--- HP更新（名前だけ変更）
---============================
+-- HP更新
 RunService.RenderStepped:Connect(function()
-    for _, data in pairs(playerButtons) do
-        local plr = data.Player
-        local btn = data.Button
-
-        if plr and btn then
+    for _, slot in ipairs(slots) do
+        local plr = slot.Player
+        if plr then
             local hp, maxhp = GetHP(plr)
-            pcall(function()
-                btn:Set(plr.Name.." ["..hp.."/"..maxhp.."]")
-            end)
+            slot.Button:Set(plr.Name.." ["..hp.."/"..maxhp.."]")
         end
     end
 end)
