@@ -923,16 +923,6 @@ combatTab:CreateButton({
 	end
 })
 
--- 自動更新（出入り時のみ）
-Players.PlayerAdded:Connect(function()
-	task.wait(0.5)
-	playerDropdown:Refresh(BuildPlayerList(), true)
-end)
-
-Players.PlayerRemoving:Connect(function()
-	task.wait(0.5)
-	playerDropdown:Refresh(BuildPlayerList(), true)
-end)
 
 --============================
 -- プレイヤーへTP
