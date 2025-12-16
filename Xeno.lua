@@ -859,7 +859,7 @@ combatTab:CreateButton({
     Callback = function()
         if selectedTarget and selectedTarget.Character and selectedTarget.Character:FindFirstChild("HumanoidRootPart") then
             local hrp = selectedTarget.Character.HumanoidRootPart
-            player.Character:PivotTo(hrp.CFrame * CFrame.new(0,0,-3))
+            player.Character:PivotTo(hrp.CFrame * CFrame.new(0,0,3))
         else
             RayField:Notify({
                 Title = "エラー",
@@ -989,7 +989,7 @@ RunService.RenderStepped:Connect(function()
         local targetHRP = selectedTarget.Character:FindFirstChild("HumanoidRootPart")
         local myHRP = player.Character:FindFirstChild("HumanoidRootPart")
         if targetHRP and myHRP then
-            myHRP.CFrame = targetHRP.CFrame * CFrame.new(0,0,-7)
+            myHRP.CFrame = targetHRP.CFrame * CFrame.new(0,0,7)
         end
     end
 
@@ -1082,7 +1082,7 @@ end
         local tHRP = selectedTarget.Character:FindFirstChild("HumanoidRootPart")
         local myHRP = player.Character:FindFirstChild("HumanoidRootPart")
         if tHRP and myHRP then
-            myHRP.CFrame = tHRP.CFrame * CFrame.new(0,0,-7)
+            myHRP.CFrame = tHRP.CFrame * CFrame.new(0,0,7)
         end
     end
 end)
