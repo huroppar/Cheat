@@ -24,45 +24,58 @@ local function getCharacter()
     return char, humanoid, root
 end
 
---================ 壁貫通（安定版 Noclip） =================
+--================ 壁貫通（完全復帰対応版） =================
 local noclipEnabled = false
 local noclipConnection = nil
-local RunService = game:GetService("RunService")
-local player = game:GetService("Players").LocalPlayer
 
 local function enableNoclip()
-    if noclipConnection then return end
+	if noclipConnection then return end
 
-    noclipConnection = RunService.Stepped:Connect(function()
-        if not noclipEnabled then return end
+	noclipEnabled = true
+	noclipConnection = RunService.Stepped:Connect(function()
+		if not noclipEnabled then return end
 
-        local char = player.Character
-        if not char then return end
+		local char = player.Character
+		if not char then return end
 
-        for _, part in ipairs(char:GetDescendants()) do
-            if part:IsA("BasePart") then
-                part.CanCollide = false
-            end
-        end
-    end)
+		for _, part in ipairs(char:GetDescendants()) do
+			if part:IsA("BasePart") then
+				part.CanCollide = false
+			end
+		end
+	end)
 end
 
 local function disableNoclip()
-    noclipEnabled = false
+	noclipEnabled = false
 
-    if noclipConnection then
-        noclipConnection:Disconnect()
-        noclipConnection = nil
-    end
+	if noclipConnection then
+		noclipConnection:Disconnect()
+		noclipConnection = nil
+	end
 
-    local char = player.Character
-    if not char then return end
+	local char = player.Character
+	if not char then return end
 
-    for _, part in ipairs(char:GetDescendants()) do
-        if part:IsA("BasePart") then
-            part.CanCollide = true
-        end
-    end
+	local hum = char:FindFirstChildOfClass("Humanoid")
+	local root = char:FindFirstChild("HumanoidRootPart")
+
+	-- 🔹 当たり判定を戻す
+	for _, part in ipairs(char:GetDescendants()) do
+		if part:IsA("BasePart") then
+			part.CanCollide = true
+		end
+	end
+
+	-- 🔹 物理状態を完全リセット
+	if root then
+		root.Velocity = Vector3.zero
+		root.AssemblyLinearVelocity = Vector3.zero
+	end
+
+	if hum then
+		hum:ChangeState(Enum.HumanoidStateType.GettingUp)
+	end
 end
 
 
