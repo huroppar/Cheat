@@ -850,6 +850,16 @@ local originalPos = nil
 local originalCamType = nil
 local savedHRPCFrame = nil
 local savedPlatformStand = false
+--============================
+-- Tracer（線）
+--============================
+local tracerActive = false
+
+local tracerLine = Drawing.new("Line")
+tracerLine.Visible = false
+tracerLine.Thickness = 2
+tracerLine.Transparency = 1
+tracerLine.Color = Color3.fromRGB(0,255,255) -- ネオン水色
 
 --============================
 -- ★ プレイヤーへTP
@@ -968,6 +978,21 @@ combatTab:CreateToggle({
 })
 
 --============================
+-- ★ ターゲット線（Tracer）
+--============================
+combatTab:CreateToggle({
+    Name = "ターゲット線（Tracer）",
+    CurrentValue = false,
+    Callback = function(state)
+        tracerActive = state
+        if not state then
+            tracerLine.Visible = false
+        end
+    end
+})
+
+
+--============================
 -- マウス操作
 --============================
 UIS.InputChanged:Connect(function(input)
@@ -1010,6 +1035,30 @@ RunService.RenderStepped:Connect(function()
     end
 end)
 
+    --============================
+    -- Tracer 描画
+    --============================
+    if tracerActive and selectedTarget and selectedTarget.Character and player.Character then
+        local myHRP = player.Character:FindFirstChild("HumanoidRootPart")
+        local tHRP = selectedTarget.Character:FindFirstChild("HumanoidRootPart")
+
+        if myHRP and tHRP then
+            local p1, v1 = camera:WorldToViewportPoint(myHRP.Position)
+            local p2, v2 = camera:WorldToViewportPoint(tHRP.Position)
+
+            if v1 and v2 then
+                tracerLine.From = Vector2.new(p1.X, p1.Y)
+                tracerLine.To   = Vector2.new(p2.X, p2.Y)
+                tracerLine.Visible = true
+            else
+                tracerLine.Visible = false
+            end
+        else
+            tracerLine.Visible = false
+        end
+    else
+        tracerLine.Visible = false
+    end
 
 --========================================================--
 -- プレイヤー一覧（HPリアルタイム）
