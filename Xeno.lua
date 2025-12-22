@@ -500,8 +500,7 @@ tab:CreateButton({
 
 
 --=============================
--- Fly機能（重力完全無効・PC用）
--- WASD + Space / Shift
+-- Fly機能（向き自由・重力のみ無効）
 --=============================
 local flyActive = false
 local flySpeed = 50
@@ -526,15 +525,11 @@ playerTab:CreateToggle({
 		if not hum or not root then return end
 
 		if flyActive then
-			-- 🔴 重力・慣性・物理すべて殺す
-			hum:ChangeState(Enum.HumanoidStateType.Physics)
-			hum.AutoRotate = false
+			-- 🔵 重力だけ無効化（向きはそのまま）
 			root.AssemblyLinearVelocity = Vector3.zero
 			root.AssemblyAngularVelocity = Vector3.zero
 		else
-			-- 🟢 通常状態へ完全復帰
-			hum:ChangeState(Enum.HumanoidStateType.GettingUp)
-			hum.AutoRotate = true
+			-- 🔵 通常に戻す
 			root.AssemblyLinearVelocity = Vector3.zero
 			root.AssemblyAngularVelocity = Vector3.zero
 		end
@@ -572,21 +567,20 @@ UserInputService.InputEnded:Connect(function(input, gpe)
 	end
 end)
 
--- Fly制御（重力完全無効）
+-- Fly制御
 RunService.RenderStepped:Connect(function(dt)
 	if not flyActive then return end
 
 	local _, hum, root = getCharacter()
 	if not hum or not root then return end
 
-	-- 🔒 落下・慣性を毎フレーム強制停止
-	root.AssemblyLinearVelocity = Vector3.zero
-	root.AssemblyAngularVelocity = Vector3.zero
+	-- 🔒 落下防止（重力キャンセル）
+	root.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
 
 	local cam = workspace.CurrentCamera
 	local move = Vector3.zero
 
-	-- 前後左右
+	-- 前後左右（＝向きは普通に変わる）
 	if flyKeys.W then move += cam.CFrame.LookVector end
 	if flyKeys.S then move -= cam.CFrame.LookVector end
 	if flyKeys.A then move -= cam.CFrame.RightVector end
@@ -596,7 +590,6 @@ RunService.RenderStepped:Connect(function(dt)
 	if flyKeys.Space then move += Vector3.new(0, 1, 0) end
 	if flyKeys.LeftShift then move -= Vector3.new(0, 1, 0) end
 
-	-- 移動
 	if move.Magnitude > 0 then
 		root.CFrame = root.CFrame + (move.Unit * flySpeed * dt)
 	end
