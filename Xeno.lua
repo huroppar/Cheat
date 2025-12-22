@@ -523,7 +523,7 @@ playerTab:CreateToggle({
 -- Fly速度スライダー
 playerTab:CreateSlider({
     Name = "Fly速度",
-    Range = {10,200},
+    Range = {10,2000},
     Increment = 5,
     CurrentValue = flySpeed,
     Flag = "FlySpeedSlider",
@@ -1156,7 +1156,7 @@ local EnemyTab = Window:CreateTab("敵処理", 4483362458)
 -- 距離スライダー
 local DistanceSlider = EnemyTab:CreateSlider({
     Name = "敵の前方距離",
-    Range = {1, 50},
+    Range = {1, 80},
     Increment = 1,
     Suffix = " studs",
     CurrentValue = FollowDistance,
