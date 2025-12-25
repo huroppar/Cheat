@@ -1320,17 +1320,6 @@ autoAimTab:CreateSlider({
 	end
 })
 
--- エイム部位
-autoAimTab:CreateDropdown({
-	Name = "狙う部位",
-	Options = {"HumanoidRootPart", "Head"},
-	CurrentOption = AIM_PART,
-	Flag = "AutoAimPart",
-	Callback = function(v)
-		AIM_PART = v
-	end
-})
-
 
 
 
