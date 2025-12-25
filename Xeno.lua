@@ -1161,6 +1161,186 @@ end
 end)
 
 
+
+
+
+--========================================================--
+--                🎯 Auto Aim Tab (Tab2)                 --
+--========================================================--
+
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local UIS = game:GetService("UserInputService")
+
+local localPlayer = Players.LocalPlayer
+local camera = workspace.CurrentCamera
+
+--====================
+-- 状態
+--====================
+local autoAimEnabled = false
+local lockedPart = nil
+
+--====================
+-- 初期設定
+--====================
+local FOV_RADIUS = 160
+local AIM_PART = "HumanoidRootPart"
+local AIM_STRENGTH = 0.35
+local showFOV = true
+
+--====================
+-- FOV表示
+--====================
+local fov = Drawing.new("Circle")
+fov.Radius = FOV_RADIUS
+fov.Thickness = 2
+fov.NumSides = 64
+fov.Filled = false
+fov.Color = Color3.fromRGB(255,255,255)
+fov.Visible = false
+
+--====================
+-- ShiftLock判定
+--====================
+local function isShiftLock()
+	return UIS.MouseBehavior == Enum.MouseBehavior.LockCenter
+end
+
+--====================
+-- 一番近いプレイヤー取得
+--====================
+local function getClosestPlayer()
+	local closestPart = nil
+	local shortest = math.huge
+
+	local center = Vector2.new(
+		camera.ViewportSize.X / 2,
+		camera.ViewportSize.Y / 2
+	)
+
+	for _, plr in ipairs(Players:GetPlayers()) do
+		if plr ~= localPlayer and plr.Character then
+			local hum = plr.Character:FindFirstChild("Humanoid")
+			local part = plr.Character:FindFirstChild(AIM_PART)
+
+			if hum and hum.Health > 0 and part then
+				local pos, onScreen = camera:WorldToViewportPoint(part.Position)
+				if onScreen then
+					local dist = (Vector2.new(pos.X, pos.Y) - center).Magnitude
+					if dist < FOV_RADIUS and dist < shortest then
+						shortest = dist
+						closestPart = part
+					end
+				end
+			end
+		end
+	end
+
+	return closestPart
+end
+
+--====================
+-- メインループ
+--====================
+RunService.RenderStepped:Connect(function()
+	if not autoAimEnabled then
+		lockedPart = nil
+		fov.Visible = false
+		return
+	end
+
+	local center = Vector2.new(
+		camera.ViewportSize.X / 2,
+		camera.ViewportSize.Y / 2
+	)
+
+	fov.Position = center
+	fov.Radius = FOV_RADIUS
+	fov.Visible = showFOV
+
+	if not isShiftLock() then
+		lockedPart = nil
+		return
+	end
+
+	if not lockedPart or not lockedPart.Parent then
+		lockedPart = getClosestPlayer()
+	end
+
+	if lockedPart then
+		local camCF = camera.CFrame
+		local targetCF = CFrame.new(camCF.Position, lockedPart.Position)
+		camera.CFrame = camCF:Lerp(targetCF, AIM_STRENGTH)
+	end
+end)
+
+--========================================================--
+--                    🧩 GUI (Tab2)                      --
+--========================================================--
+
+local autoAimTab = Window:MakeTab({
+	Name = "戦闘タブ(BloxFruit用)",
+	Icon = "rbxassetid://4483362458",
+	PremiumOnly = false
+})
+
+-- ON / OFF
+autoAimTab:AddToggle({
+	Name = "Auto Aim ON / OFF",
+	Default = false,
+	Callback = function(v)
+		autoAimEnabled = v
+		print("[AutoAim]", v and "ON" or "OFF")
+	end
+})
+
+-- FOV表示
+autoAimTab:AddToggle({
+	Name = "FOV 表示",
+	Default = true,
+	Callback = function(v)
+		showFOV = v
+	end
+})
+
+-- FOVサイズ
+autoAimTab:AddSlider({
+	Name = "FOV 半径",
+	Min = 50,
+	Max = 400,
+	Default = FOV_RADIUS,
+	Increment = 5,
+	Callback = function(v)
+		FOV_RADIUS = v
+	end
+})
+
+-- 吸い付き強度
+autoAimTab:AddSlider({
+	Name = "吸い付き強度",
+	Min = 0.1,
+	Max = 1,
+	Default = AIM_STRENGTH,
+	Increment = 0.05,
+	Callback = function(v)
+		AIM_STRENGTH = v
+	end
+})
+
+-- エイム部位
+autoAimTab:AddDropdown({
+	Name = "狙う部位",
+	Default = "HumanoidRootPart",
+	Options = {"HumanoidRootPart", "Head"},
+	Callback = function(v)
+		AIM_PART = v
+	end
+})
+
+
+
+
 --============================
 -- 設定値
 --============================
