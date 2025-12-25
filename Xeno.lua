@@ -1279,16 +1279,13 @@ end)
 --                    🧩 GUI (Tab2)                      --
 --========================================================--
 
-local autoAimTab = Window:MakeTab({
-	Name = "戦闘タブ(BloxFruit用)",
-	Icon = "rbxassetid://4483362458",
-	PremiumOnly = false
-})
+local autoAimTab = Window:CreateTab("戦闘(BloxFruit用)", 4483362458)
 
 -- ON / OFF
-autoAimTab:AddToggle({
+autoAimTab:CreateToggle({
 	Name = "Auto Aim ON / OFF",
-	Default = false,
+	CurrentValue = false,
+	Flag = "AutoAimToggle",
 	Callback = function(v)
 		autoAimEnabled = v
 		print("[AutoAim]", v and "ON" or "OFF")
@@ -1296,43 +1293,47 @@ autoAimTab:AddToggle({
 })
 
 -- FOV表示
-autoAimTab:AddToggle({
+autoAimTab:CreateToggle({
 	Name = "FOV 表示",
-	Default = true,
+	CurrentValue = true,
+	Flag = "AutoAimFOV",
 	Callback = function(v)
 		showFOV = v
 	end
 })
 
 -- FOVサイズ
-autoAimTab:AddSlider({
+autoAimTab:CreateSlider({
 	Name = "FOV 半径",
-	Min = 50,
-	Max = 400,
-	Default = FOV_RADIUS,
+	Range = {50, 400},
 	Increment = 5,
+	Suffix = "px",
+	CurrentValue = FOV_RADIUS,
+	Flag = "AutoAimFOVRadius",
 	Callback = function(v)
 		FOV_RADIUS = v
 	end
 })
 
 -- 吸い付き強度
-autoAimTab:AddSlider({
+autoAimTab:CreateSlider({
 	Name = "吸い付き強度",
-	Min = 0.1,
-	Max = 1,
-	Default = AIM_STRENGTH,
+	Range = {0.1, 1},
 	Increment = 0.05,
+	Suffix = "",
+	CurrentValue = AIM_STRENGTH,
+	Flag = "AutoAimStrength",
 	Callback = function(v)
 		AIM_STRENGTH = v
 	end
 })
 
 -- エイム部位
-autoAimTab:AddDropdown({
+autoAimTab:CreateDropdown({
 	Name = "狙う部位",
-	Default = "HumanoidRootPart",
 	Options = {"HumanoidRootPart", "Head"},
+	CurrentOption = AIM_PART,
+	Flag = "AutoAimPart",
 	Callback = function(v)
 		AIM_PART = v
 	end
