@@ -1176,14 +1176,10 @@ local localPlayer = Players.LocalPlayer
 local camera = workspace.CurrentCamera
 
 --====================
--- 状態
+-- 設定
 --====================
 local autoAimEnabled = false
 local lockedPart = nil
-
---====================
--- 初期設定
---====================
 local FOV_RADIUS = 160
 local AIM_PART = "HumanoidRootPart"
 local AIM_STRENGTH = 0.35
@@ -1197,7 +1193,7 @@ fov.Radius = FOV_RADIUS
 fov.Thickness = 2
 fov.NumSides = 64
 fov.Filled = false
-fov.Color = Color3.fromRGB(255,255,255)
+fov.Color = Color3.fromRGB(255, 255, 255)
 fov.Visible = false
 
 --====================
@@ -1213,17 +1209,12 @@ end
 local function getClosestPlayer()
 	local closestPart = nil
 	local shortest = math.huge
-
-	local center = Vector2.new(
-		camera.ViewportSize.X / 2,
-		camera.ViewportSize.Y / 2
-	)
+	local center = Vector2.new(camera.ViewportSize.X / 2, camera.ViewportSize.Y / 2)
 
 	for _, plr in ipairs(Players:GetPlayers()) do
 		if plr ~= localPlayer and plr.Character then
 			local hum = plr.Character:FindFirstChild("Humanoid")
 			local part = plr.Character:FindFirstChild(AIM_PART)
-
 			if hum and hum.Health > 0 and part then
 				local pos, onScreen = camera:WorldToViewportPoint(part.Position)
 				if onScreen then
@@ -1244,30 +1235,31 @@ end
 -- メインループ
 --====================
 RunService.RenderStepped:Connect(function()
+	-- GUIオフなら処理しない
 	if not autoAimEnabled then
 		lockedPart = nil
 		fov.Visible = false
 		return
 	end
 
-	local center = Vector2.new(
-		camera.ViewportSize.X / 2,
-		camera.ViewportSize.Y / 2
-	)
-
+	-- FOV表示
+	local center = Vector2.new(camera.ViewportSize.X / 2, camera.ViewportSize.Y / 2)
 	fov.Position = center
 	fov.Radius = FOV_RADIUS
 	fov.Visible = showFOV
 
+	-- ShiftLockしてないならターゲット解除
 	if not isShiftLock() then
 		lockedPart = nil
 		return
 	end
 
+	-- ShiftLock中のみターゲットを取得
 	if not lockedPart or not lockedPart.Parent then
 		lockedPart = getClosestPlayer()
 	end
 
+	-- ターゲットがあれば吸い付き
 	if lockedPart then
 		local camCF = camera.CFrame
 		local targetCF = CFrame.new(camCF.Position, lockedPart.Position)
