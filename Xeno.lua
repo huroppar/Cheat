@@ -9,6 +9,10 @@ local player = Players.LocalPlayer
 --================ 設定 =================
 local speedDefaultOn, speedDefaultOff = 30, 30
 local speedMin, speedMax = 0, 500
+local jumpEnabled = false
+local jumpPowerValue = 50      -- スライダー初期値
+local jumpMin, jumpMax = 0, 700
+local originalJumpPower = nil
 local infiniteJumpEnabled = false
 local wallClipEnabled = false
 local airTPActive = false
@@ -280,6 +284,48 @@ playerTab:CreateSlider({
     Flag = "SpeedOnSlider",
     Callback = function(val)
         speedOn = val
+    end
+})
+
+
+
+playerTab:CreateToggle({
+    Name = "Jump Power",
+    CurrentValue = false,
+    Flag = "JumpPowerToggle",
+    Callback = function(val)
+        jumpEnabled = val
+        local _, hum = getCharacter()
+        if hum then
+            if val then
+                -- 🔹 ON時：現在の値を保存
+                if not originalJumpPower then
+                    originalJumpPower = hum.JumpPower
+                end
+                hum.JumpPower = jumpPowerValue
+            else
+                -- 🔹 OFF時：元に戻す
+                if originalJumpPower then
+                    hum.JumpPower = originalJumpPower
+                end
+            end
+        end
+    end
+})
+
+playerTab:CreateSlider({
+    Name = "Jump Power Value",
+    Range = {jumpMin, jumpMax},
+    Increment = 5,
+    Suffix = "Power",
+    CurrentValue = jumpPowerValue,
+    Flag = "JumpPowerSlider",
+    Callback = function(val)
+        jumpPowerValue = val
+        local _, hum = getCharacter()
+        if hum and jumpEnabled then
+            hum.JumpPower = jumpPowerValue
+        end
     end
 })
 
@@ -595,6 +641,20 @@ RunService.RenderStepped:Connect(function(dt)
 	end
 end)
 
+
+player.CharacterAdded:Connect(function()
+    task.wait(0.2)
+    local _, hum = getCharacter()
+    if not hum then return end
+
+    if jumpEnabled then
+        hum.JumpPower = jumpPowerValue
+    else
+        if originalJumpPower then
+            hum.JumpPower = originalJumpPower
+        end
+    end
+end)
 
 
 --================ ESPタブ =================
