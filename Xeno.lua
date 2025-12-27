@@ -1387,7 +1387,7 @@ autoAimTab:CreateSlider({
 -- 設定値
 --============================
 local FollowDistance = 4   -- プレイヤー前方の距離
-local AttractionRadius = 20 -- 半径20スタッド以内だけ吸引（初期値）
+local AttractionRadius = 1 -- 半径20スタッド以内だけ吸引（初期値）
 
 --============================
 -- RayField UI
