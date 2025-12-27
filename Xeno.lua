@@ -249,7 +249,7 @@ local playerTab = Window:CreateTab("プレイヤー", 4483362458)
 -- スピードオンオフ
 local speedEnabled = false
 playerTab:CreateToggle({
-    Name = "Speed",
+    Name = "スピード",
     CurrentValue = false,
     Flag = "SpeedToggle",
     Callback = function(val)
@@ -276,7 +276,7 @@ playerTab:CreateToggle({
 -- スライダー（オン）
 local speedOn = speedDefaultOn
 playerTab:CreateSlider({
-    Name = "Speed On",
+    Name = "スピード調節",
     Range = {speedMin, speedMax},
     Increment = 1,
     Suffix = "WalkSpeed",
@@ -290,7 +290,7 @@ playerTab:CreateSlider({
 
 
 playerTab:CreateToggle({
-    Name = "Jump Power",
+    Name = "跳躍力",
     CurrentValue = false,
     Flag = "JumpPowerToggle",
     Callback = function(val)
@@ -314,7 +314,7 @@ playerTab:CreateToggle({
 })
 
 playerTab:CreateSlider({
-    Name = "Jump Power Value",
+    Name = "跳躍力調節",
     Range = {jumpMin, jumpMax},
     Increment = 5,
     Suffix = "Power",
@@ -333,7 +333,7 @@ playerTab:CreateSlider({
 
 -- 無限ジャンプ
 playerTab:CreateToggle({
-    Name = "Infinite Jump",
+    Name = "無限ジャンプ",
     CurrentValue = false,
     Flag = "InfiniteJump",
     Callback = function(val)
@@ -344,7 +344,7 @@ playerTab:CreateToggle({
 
 -- 壁貫通（安定版）
 playerTab:CreateToggle({
-    Name = "WallClip",
+    Name = "壁貫通",
     CurrentValue = false,
     Flag = "WallClip",
     Callback = function(val)
@@ -360,7 +360,7 @@ playerTab:CreateToggle({
 
 -- 空中TP（ボタン常時表示）
 local airTPBtn = playerTab:CreateButton({
-    Name = "Air TP",
+    Name = "空中TP",
     Callback = function()
         local _, hum, root = getCharacter()
         if not root or not hum then return end
@@ -497,7 +497,7 @@ local tab = Window:CreateTab("Teleport", 4483362458)
 
 -- 位置記録ボタン
 tab:CreateButton({
-    Name = "位置記録（上書き）",
+    Name = "位置記録を記録",
     Callback = function()
         local char = player.Character
         local hrp = char and char:FindFirstChild("HumanoidRootPart")
@@ -835,9 +835,9 @@ espTab:CreateToggle({
 })
 
 -- トグル作成
-espTab:CreateToggle({Name="Player ESP", CurrentValue=false, Callback=function(val) showPlayerESP=val end})
-espTab:CreateToggle({Name="Enemy/Bot ESP", CurrentValue=false, Callback=function(val) showEnemyESP=val end})
-espTab:CreateToggle({Name="Item ESP", CurrentValue=false, Callback=function(val) showItemESP=val end})
+espTab:CreateToggle({Name="プレイヤーハイライト", CurrentValue=false, Callback=function(val) showPlayerESP=val end})
+espTab:CreateToggle({Name="敵ハイライト", CurrentValue=false, Callback=function(val) showEnemyESP=val end})
+espTab:CreateToggle({Name="アイテムハイライト", CurrentValue=false, Callback=function(val) showItemESP=val end})
 
 -- ハイライト作成関数
 local function createHighlight(obj, color)
@@ -963,7 +963,7 @@ combatTab:CreateButton({
 -- ★ 張り付きトグル
 --============================
 combatTab:CreateToggle({
-    Name = "張り付き（Follow）",
+    Name = "張り付き",
     CurrentValue = false,
     Callback = function(state)
         if not selectedTarget then
@@ -1015,7 +1015,7 @@ _G.SetTarget = function(tar)
 end
 
 combatTab:CreateToggle({
-    Name = "視点のみTP",
+    Name = "視点TP(向き固定)",
     CurrentValue = false,
     Callback = function(state)
         if not selectedTarget then
@@ -1060,7 +1060,7 @@ combatTab:CreateToggle({
 -- ★ ターゲット線（Tracer）
 --============================
 combatTab:CreateToggle({
-    Name = "ターゲット線（Tracer）",
+    Name = "ターゲット線",
     CurrentValue = false,
     Callback = function(state)
         tracerActive = state
@@ -1148,7 +1148,7 @@ end)
 -- プレイヤー一覧（HPリアルタイム）
 --========================================================--
 
-combatTab:CreateLabel("プレイヤー一覧（HPリアルタイム表示）")
+combatTab:CreateLabel("プレイヤー一覧")
 
 local playerButtons = {}
 
@@ -1335,7 +1335,7 @@ local autoAimTab = Window:CreateTab("戦闘(BloxFruit用)", 4483362458)
 
 -- ON / OFF
 autoAimTab:CreateToggle({
-	Name = "Auto Aim ON / OFF",
+	Name = "オートエイム",
 	CurrentValue = false,
 	Flag = "AutoAimToggle",
 	Callback = function(v)
@@ -1346,7 +1346,7 @@ autoAimTab:CreateToggle({
 
 -- FOV表示
 autoAimTab:CreateToggle({
-	Name = "FOV 表示",
+	Name = "FOV",
 	CurrentValue = true,
 	Flag = "AutoAimFOV",
 	Callback = function(v)
@@ -1356,7 +1356,7 @@ autoAimTab:CreateToggle({
 
 -- FOVサイズ
 autoAimTab:CreateSlider({
-	Name = "FOV 半径",
+	Name = "FOV大きさ",
 	Range = {50, 400},
 	Increment = 5,
 	Suffix = "px",
@@ -1490,7 +1490,7 @@ huntTab:CreateSlider({
 })
 
 huntTab:CreateToggle({
-    Name = "自動スライド取得",
+    Name = "スライド取得",
     CurrentValue = false,
     Callback = function(v)
         slideActive = v
