@@ -1372,16 +1372,19 @@ local function getRoot()
     return char:FindFirstChild("HumanoidRootPart")
 end
 
--- Fruit全取得（複数対応）
+--================ Fruit検索（完全一致） =================
 local function getAllFruits()
     local fruits = {}
+
     for _, obj in ipairs(workspace:GetDescendants()) do
-        if obj:IsA("BasePart") and string.find(obj.Name, "Fruit") then
+        if obj:IsA("BasePart") and obj.Name == "Fruit" then
             table.insert(fruits, obj)
         end
     end
+
     return fruits
 end
+
 
 -- 一番近いFruit
 local function getNearestFruit(root)
