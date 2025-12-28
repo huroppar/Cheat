@@ -364,32 +364,46 @@ local airTPBtn = playerTab:CreateButton({
         local char, hum, root = getCharacter()
         if not char or not hum or not root then return end
 
+        -- BodyVelocity保存用
+        airTPForce = airTPForce or nil
+
         if not airTPActive then
             -- 元位置保存
             airTPOriginalCFrame = root.CFrame
 
-            -- 物理を一瞬リセット
+            -- 上空へTP
             hum:ChangeState(Enum.HumanoidStateType.Physics)
             RunService.Stepped:Wait()
-
-            -- 上空へ確定TP
             root.CFrame = airTPOriginalCFrame + Vector3.new(0, airHeight, 0)
 
-            -- 状態戻す
-            hum:ChangeState(Enum.HumanoidStateType.Freefall)
+            -- 落下防止（浮遊）
+            airTPForce = Instance.new("BodyVelocity")
+            airTPForce.MaxForce = Vector3.new(0, math.huge, 0)
+            airTPForce.Velocity = Vector3.new(0, 0, 0)
+            airTPForce.Parent = root
 
+            hum:ChangeState(Enum.HumanoidStateType.Freefall)
             airTPActive = true
         else
+            -- 浮遊解除
+            if airTPForce then
+                airTPForce:Destroy()
+                airTPForce = nil
+            end
+
+            -- 元の場所へ戻す
             if airTPOriginalCFrame then
                 hum:ChangeState(Enum.HumanoidStateType.Physics)
                 RunService.Stepped:Wait()
                 root.CFrame = airTPOriginalCFrame
                 hum:ChangeState(Enum.HumanoidStateType.GettingUp)
             end
+
             airTPActive = false
         end
     end
 })
+
 
 
 
