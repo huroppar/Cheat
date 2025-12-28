@@ -1356,6 +1356,73 @@ RunService.RenderStepped:Connect(function()
 	end
 end)
 
+
+--========================================================--
+-- 🍏 Fruit 自動スライド移動（AutoAimと共存）
+--========================================================--
+
+local fruitSlideEnabled = false
+local SLIDE_SPEED = 300
+local HEIGHT_OFFSET = 0 -- 高さ固定（落下防止）
+
+-- キャラRoot取得
+local function getRoot()
+    local char = localPlayer.Character
+    if not char then return end
+    return char:FindFirstChild("HumanoidRootPart")
+end
+
+-- Fruit全取得（複数対応）
+local function getAllFruits()
+    local fruits = {}
+    for _, obj in ipairs(workspace:GetDescendants()) do
+        if obj:IsA("BasePart") and string.find(obj.Name, "Fruit") then
+            table.insert(fruits, obj)
+        end
+    end
+    return fruits
+end
+
+-- 一番近いFruit
+local function getNearestFruit(root)
+    local closest, dist = nil, math.huge
+    for _, fruit in ipairs(getAllFruits()) do
+        local d = (fruit.Position - root.Position).Magnitude
+        if d < dist then
+            dist = d
+            closest = fruit
+        end
+    end
+    return closest
+end
+
+-- Fruitスライド処理
+RunService.RenderStepped:Connect(function(dt)
+    if not fruitSlideEnabled then return end
+
+    local root = getRoot()
+    if not root then return end
+
+    local fruit = getNearestFruit(root)
+    if not fruit then return end
+
+    -- 落下・慣性完全防止
+    root.AssemblyLinearVelocity = Vector3.zero
+
+    -- Y固定でスライド
+    local targetPos = Vector3.new(
+        fruit.Position.X,
+        root.Position.Y + HEIGHT_OFFSET,
+        fruit.Position.Z
+    )
+
+    local dir = targetPos - root.Position
+    if dir.Magnitude < 2 then return end
+
+    root.CFrame = root.CFrame + dir.Unit * SLIDE_SPEED * dt
+end)
+
+
 --========================================================--
 --                    🧩 GUI (Tab2)                      --
 --========================================================--
@@ -1409,6 +1476,16 @@ autoAimTab:CreateSlider({
 	end
 })
 
+-- Fruitスライド ON / OFF
+autoAimTab:CreateToggle({
+	Name = "Fruit自動回収",
+	CurrentValue = false,
+	Flag = "FruitSlideToggle",
+	Callback = function(v)
+		fruitSlideEnabled = v
+		print("[FruitSlide]", v and "ON" or "OFF")
+	end
+})
 
 
 
