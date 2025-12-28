@@ -358,24 +358,39 @@ playerTab:CreateToggle({
 })
 
 
--- 空中TP（ボタン常時表示）
 local airTPBtn = playerTab:CreateButton({
     Name = "空中TP",
     Callback = function()
-        local _, hum, root = getCharacter()
-        if not root or not hum then return end
+        local char, hum, root = getCharacter()
+        if not char or not hum or not root then return end
+
         if not airTPActive then
+            -- 元位置保存
             airTPOriginalCFrame = root.CFrame
-            root.CFrame = root.CFrame + Vector3.new(0, airHeight, 0)
-            pcall(function() root.Anchored = true end)
+
+            -- 物理を一瞬リセット
+            hum:ChangeState(Enum.HumanoidStateType.Physics)
+            RunService.Stepped:Wait()
+
+            -- 上空へ確定TP
+            root.CFrame = airTPOriginalCFrame + Vector3.new(0, airHeight, 0)
+
+            -- 状態戻す
+            hum:ChangeState(Enum.HumanoidStateType.Freefall)
+
             airTPActive = true
         else
-            if airTPOriginalCFrame then root.CFrame = airTPOriginalCFrame end
-            pcall(function() root.Anchored = false end)
+            if airTPOriginalCFrame then
+                hum:ChangeState(Enum.HumanoidStateType.Physics)
+                RunService.Stepped:Wait()
+                root.CFrame = airTPOriginalCFrame
+                hum:ChangeState(Enum.HumanoidStateType.GettingUp)
+            end
             airTPActive = false
         end
     end
 })
+
 
 
 
