@@ -13,7 +13,7 @@ local player = Players.LocalPlayer
 --==================================================
 Players.LocalPlayer.OnTeleport:Connect(function(state)
     if state == Enum.TeleportState.Started then
-        loadstring(game:HttpGet("https://raw.githubusercontent.com/<ユーザー名>/<リポジトリ名>/main/autoScript.lua"))()
+        loadstring(game:HttpGet("https://raw.githubusercontent.com/huroppar/Cheat/refs/heads/main/autoScript.lua"))()
     end
 end)
 
