@@ -1426,6 +1426,39 @@ RunService.RenderStepped:Connect(function(dt)
 end)
 
 
+
+
+-- 新しいON/OFF変数
+local fruitTPEnabled = false
+local fruitCheckInterval = 0.2
+
+-- Fruit瞬間TPループ
+task.spawn(function()
+    while true do
+        task.wait(fruitCheckInterval)
+        if not fruitTPEnabled then continue end
+
+        local root = localPlayer.Character and localPlayer.Character:FindFirstChild("HumanoidRootPart")
+        if not root then continue end
+
+        -- 一番近いFruitを取得
+        local fruit
+        for _, v in ipairs(workspace:GetDescendants()) do
+            if v.Name == "Fruit" and v:IsA("BasePart") then
+                fruit = v
+                break
+            end
+        end
+        if not fruit then continue end
+
+        local originalCFrame = root.CFrame
+        root.CFrame = fruit.CFrame
+        task.wait(0.05)
+        root.CFrame = originalCFrame
+    end
+end)
+
+
 --========================================================--
 --                    🧩 GUI (Tab2)                      --
 --========================================================--
@@ -1490,7 +1523,15 @@ autoAimTab:CreateToggle({
 	end
 })
 
-
+autoAimTab:CreateToggle({
+    Name = "Fruit瞬間回収",
+    CurrentValue = false,
+    Flag = "FruitTPToggle",
+    Callback = function(v)
+        fruitTPEnabled = v
+        print("[FruitTP]", v and "ON" or "OFF")
+    end
+})
 
 --============================
 -- 設定値
