@@ -235,7 +235,7 @@ end
 
 --================ RayField GUI =================
 local Window = Rayfield:CreateWindow({
-    Name = "Utility Hub v5",
+    Name = "Furo Hub",
     LoadingTitle = "Utility Hub",
     LoadingSubtitle = "by Masashi",
     ConfigurationSaving = {Enabled=true, FolderName="UtilityHubConfigs", FileName="Config"},
