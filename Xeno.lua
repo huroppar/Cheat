@@ -236,8 +236,8 @@ end
 --================ RayField GUI =================
 local Window = Rayfield:CreateWindow({
     Name = "Furo Hub",
-    LoadingTitle = "Utility Hub",
-    LoadingSubtitle = "by Masashi",
+    LoadingTitle = "Loading now",
+    LoadingSubtitle = "Editting by Furopper",
     ConfigurationSaving = {Enabled=true, FolderName="UtilityHubConfigs", FileName="Config"},
     Discord={Enabled=false},
     KeySystem=false
