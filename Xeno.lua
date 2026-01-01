@@ -1505,11 +1505,6 @@ end)
 
 
 
--- RayField 折りたたみリスト例
-
-local Window = RayField:CreateWindow({
-	Name = "Fruit Manager",
-})
 
 local fruitTab = Window:CreateTab("フルーツ一覧")
 
