@@ -1018,72 +1018,86 @@ RunService.RenderStepped:Connect(function()
 end)
 
 
---========================================================--
--- プレイヤー一覧（HPリアルタイム）
---========================================================--
-
-combatTab:CreateLabel("プレイヤー一覧")
-
-local playerButtons = {}
-
-local function GetHP(plr)
-    if plr.Character and plr.Character:FindFirstChild("Humanoid") then
-        return math.floor(plr.Character.Humanoid.Health), math.floor(plr.Character.Humanoid.MaxHealth)
-    end
-    return 0,0
-end
-
-local function CreatePlayerButton(plr)
-    local hp, maxhp = GetHP(plr)
-    local btn = combatTab:CreateButton({
-        Name = plr.Name.." ["..hp.."/"..maxhp.."]",
-        Callback = function()
-            selectedTarget = plr
-            RayField:Notify({
-                Title = "選択",
-                Content = plr.Name .. " をターゲットにしたよ！",
-                Duration = 3
-            })
-        end
-    })
-    playerButtons[plr] = btn
-end
-
-local function UpdatePlayerList()
-    local current = {}
-
-    for _, p in ipairs(Players:GetPlayers()) do
-        if p ~= player then
-            current[p] = true
-            if not playerButtons[p] then
-                CreatePlayerButton(p)
+--============================
+-- プレイヤー一覧 DropDown
+--============================
+local playerDropdownOptions = {}
+local playerDropdown = combatTab:CreateDropdown({
+    Name = "プレイヤー一覧",
+    Options = playerDropdownOptions,
+    CurrentOption = {},
+    MultipleOptions = false,
+    Flag = "PlayerDropdown",
+    Callback = function(option)
+        local plrName = option[1]
+        if not plrName then return end
+        for _, p in ipairs(Players:GetPlayers()) do
+            if p.Name == plrName then
+                selectedTarget = p
+                RayField:Notify({
+                    Title = "選択",
+                    Content = p.Name .. " をターゲットにしたよ！",
+                    Duration = 2
+                })
+                break
             end
         end
     end
+})
 
-    for plr, btn in pairs(playerButtons) do
-        if not current[plr] then
-            pcall(function() btn:Remove() end)
-            playerButtons[plr] = nil
+--============================
+-- 更新ボタン
+--============================
+combatTab:CreateButton({
+    Name = "プレイヤー一覧更新",
+    Callback = function()
+        UpdateDropdown()
+    end
+})
+
+--============================
+-- Dropdown 更新関数
+--============================
+local function UpdateDropdown()
+    local options = {}
+    for _, p in ipairs(Players:GetPlayers()) do
+        if p ~= player then
+            local hp, maxhp = GetHP(p)
+            table.insert(options, p.Name.." ["..hp.."/"..maxhp.."]")
         end
     end
+    playerDropdownOptions = options
+    playerDropdown:Refresh(playerDropdownOptions)
 end
 
-UpdatePlayerList()
+--============================
+-- 常時HP更新
+--============================
+RunService.Heartbeat:Connect(function()
+    -- HP 更新
+    local updated = false
+    for i, option in ipairs(playerDropdownOptions) do
+        local name = option:match("^(.-) %[") -- 名前だけ取得
+        local p = Players:FindFirstChild(name)
+        if p and p.Character then
+            local hp, maxhp = GetHP(p)
+            local newText = name.." ["..hp.."/"..maxhp.."]"
+            if playerDropdownOptions[i] ~= newText then
+                playerDropdownOptions[i] = newText
+                updated = true
+            end
+        end
+    end
+    if updated then
+        playerDropdown:Refresh(playerDropdownOptions)
+    end
+end)
+
+-- 初期更新
+UpdateDropdown()
+
 Players.PlayerAdded:Connect(UpdatePlayerList)
 Players.PlayerRemoving:Connect(UpdatePlayerList)
-
--- HP更新 + 張り付き
-RunService.Heartbeat:Connect(function()
-for plr, btn in pairs(playerButtons) do
-    if btn and plr.Character then  -- btn が存在するかチェック
-        local hp,maxhp = GetHP(plr)
-        pcall(function()
-            btn:Set(plr.Name.." ["..hp.."/"..maxhp.."]")
-        end)
-    end
-end
-
 
     if followActive and selectedTarget and selectedTarget.Character and player.Character then
         local tHRP = selectedTarget.Character:FindFirstChild("HumanoidRootPart")
