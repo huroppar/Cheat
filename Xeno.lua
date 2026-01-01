@@ -800,19 +800,27 @@ local selectedTarget = nil
 local followActive = false
 local freeCamActive = false
 local originalPos = nil
-local originalCamType = nil
-local savedHRPCFrame = nil
 local savedPlatformStand = false
+
 --============================
 -- Tracer（線）
 --============================
 local tracerActive = false
-
 local tracerLine = Drawing.new("Line")
 tracerLine.Visible = false
 tracerLine.Thickness = 2
 tracerLine.Transparency = 1
 tracerLine.Color = Color3.fromRGB(0,255,255) -- ネオン水色
+
+--============================
+-- HP取得関数
+--============================
+local function GetHP(plr)
+    if plr.Character and plr.Character:FindFirstChild("Humanoid") then
+        return math.floor(plr.Character.Humanoid.Health), math.floor(plr.Character.Humanoid.MaxHealth)
+    end
+    return 0,0
+end
 
 --============================
 -- ★ プレイヤーへTP
@@ -883,9 +891,9 @@ local safePos = CFrame.new(0,1500,0)
 local originalHRP = nil
 
 _G.SetTarget = function(tar)
-	if typeof(tar) == "Instance" and tar:FindFirstChild("Humanoid") then
-		selectedTarget = tar
-	end
+    if typeof(tar) == "Instance" and tar:FindFirstChild("Humanoid") then
+        selectedTarget = tar
+    end
 end
 
 combatTab:CreateToggle({
@@ -902,7 +910,6 @@ combatTab:CreateToggle({
         end
 
         freeCamActive = state
-
         local char = player.Character
         if not char then return end
         local hrp = char:FindFirstChild("HumanoidRootPart")
@@ -910,7 +917,6 @@ combatTab:CreateToggle({
         if not hrp or not hum then return end
 
         if state then
-            -- カメラ制御開始
             originalHRP = hrp.CFrame
             savedPlatformStand = hum.PlatformStand
 
@@ -920,7 +926,6 @@ combatTab:CreateToggle({
 
             camYaw, camPitch = 0,0
         else
-            -- カメラ解除
             camera.CameraType = Enum.CameraType.Custom
             if originalHRP then
                 hrp.CFrame = originalHRP
@@ -944,7 +949,6 @@ combatTab:CreateToggle({
     end
 })
 
-
 --============================
 -- マウス操作
 --============================
@@ -959,23 +963,19 @@ UIS.InputChanged:Connect(function(input)
 end)
 
 --============================
--- RenderStepped カメラ制御
+-- RenderStepped カメラ + 張り付き + Tracer
 --============================
 RunService.RenderStepped:Connect(function()
-    --============================
-    -- Follow処理
-    --============================
+    -- 張り付き
     if followActive and selectedTarget and selectedTarget.Character and player.Character then
-        local targetHRP = selectedTarget.Character:FindFirstChild("HumanoidRootPart")
+        local tHRP = selectedTarget.Character:FindFirstChild("HumanoidRootPart")
         local myHRP = player.Character:FindFirstChild("HumanoidRootPart")
-        if targetHRP and myHRP then
-            myHRP.CFrame = targetHRP.CFrame * CFrame.new(0,0,7)
+        if tHRP and myHRP then
+            myHRP.CFrame = tHRP.CFrame * CFrame.new(0,0,7)
         end
     end
 
-    --============================
     -- 自由カメラ
-    --============================
     if freeCamActive and selectedTarget and selectedTarget.Character then
         local head = selectedTarget.Character:FindFirstChild("Head")
         if head then
@@ -991,20 +991,16 @@ RunService.RenderStepped:Connect(function()
         end
     end
 
-    --============================
-    -- 🔥 Tracer 描画（ここが重要）
-    --============================
+    -- Tracer 描画
     if tracerActive and selectedTarget and selectedTarget.Character and player.Character then
         local myHRP = player.Character:FindFirstChild("HumanoidRootPart")
         local tHRP = selectedTarget.Character:FindFirstChild("HumanoidRootPart")
-
         if myHRP and tHRP then
-            local p1, v1 = camera:WorldToViewportPoint(myHRP.Position)
-            local p2, v2 = camera:WorldToViewportPoint(tHRP.Position)
-
+            local p1,v1 = camera:WorldToViewportPoint(myHRP.Position)
+            local p2,v2 = camera:WorldToViewportPoint(tHRP.Position)
             if v1 and v2 then
-                tracerLine.From = Vector2.new(p1.X, p1.Y)
-                tracerLine.To   = Vector2.new(p2.X, p2.Y)
+                tracerLine.From = Vector2.new(p1.X,p1.Y)
+                tracerLine.To = Vector2.new(p2.X,p2.Y)
                 tracerLine.Visible = true
             else
                 tracerLine.Visible = false
@@ -1016,7 +1012,6 @@ RunService.RenderStepped:Connect(function()
         tracerLine.Visible = false
     end
 end)
-
 
 --============================
 -- プレイヤー一覧 DropDown
@@ -1046,23 +1041,13 @@ local playerDropdown = combatTab:CreateDropdown({
 })
 
 --============================
--- 更新ボタン
---============================
-combatTab:CreateButton({
-    Name = "プレイヤー一覧更新",
-    Callback = function()
-        UpdateDropdown()
-    end
-})
-
---============================
 -- Dropdown 更新関数
 --============================
 local function UpdateDropdown()
     local options = {}
     for _, p in ipairs(Players:GetPlayers()) do
         if p ~= player then
-            local hp, maxhp = GetHP(p)
+            local hp,maxhp = GetHP(p)
             table.insert(options, p.Name.." ["..hp.."/"..maxhp.."]")
         end
     end
@@ -1070,17 +1055,28 @@ local function UpdateDropdown()
     playerDropdown:Refresh(playerDropdownOptions)
 end
 
+local function UpdatePlayerList()
+    UpdateDropdown()
+end
+
+--============================
+-- 更新ボタン
+--============================
+combatTab:CreateButton({
+    Name = "プレイヤー一覧更新",
+    Callback = UpdateDropdown
+})
+
 --============================
 -- 常時HP更新
 --============================
 RunService.Heartbeat:Connect(function()
-    -- HP 更新
     local updated = false
     for i, option in ipairs(playerDropdownOptions) do
-        local name = option:match("^(.-) %[") -- 名前だけ取得
+        local name = option:match("^(.-) %[")
         local p = Players:FindFirstChild(name)
         if p and p.Character then
-            local hp, maxhp = GetHP(p)
+            local hp,maxhp = GetHP(p)
             local newText = name.." ["..hp.."/"..maxhp.."]"
             if playerDropdownOptions[i] ~= newText then
                 playerDropdownOptions[i] = newText
@@ -1095,18 +1091,9 @@ end)
 
 -- 初期更新
 UpdateDropdown()
-
 Players.PlayerAdded:Connect(UpdatePlayerList)
 Players.PlayerRemoving:Connect(UpdatePlayerList)
 
-    if followActive and selectedTarget and selectedTarget.Character and player.Character then
-        local tHRP = selectedTarget.Character:FindFirstChild("HumanoidRootPart")
-        local myHRP = player.Character:FindFirstChild("HumanoidRootPart")
-        if tHRP and myHRP then
-            myHRP.CFrame = tHRP.CFrame * CFrame.new(0,0,7)
-        end
-    end
-end)
 
 
 --========================================================--
