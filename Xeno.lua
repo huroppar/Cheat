@@ -1533,6 +1533,38 @@ autoAimTab:CreateToggle({
     end
 })
 
+
+
+local fruitTab = Window:CreateTab("フルーツ一覧", 4483362458)
+
+local fruitLabels = {} -- 既存ラベルを保持
+
+task.spawn(function()
+    while true do
+        task.wait(1) -- 1秒ごと更新
+
+        -- 古いラベル削除
+        for _, lbl in ipairs(fruitLabels) do
+            lbl:Destroy()
+        end
+        fruitLabels = {}
+
+        -- 全フルーツチェック
+        for _, obj in ipairs(workspace:GetDescendants()) do
+            if string.lower(obj.Name) == "fruit" then
+                local lbl = fruitTab:CreateLabel({
+                    Name = obj:GetFullName(), -- ラベル名はフルーツのフルパス
+                    Text = obj:GetFullName()
+                })
+                table.insert(fruitLabels, lbl)
+            end
+        end
+    end
+end)
+
+
+
+
 --============================
 -- 設定値
 --============================
