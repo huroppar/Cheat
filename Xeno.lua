@@ -686,7 +686,6 @@ player.CharacterAdded:Connect(function()
 end)
 
 
---================ ESPタブ =================
 local espTab = Window:CreateTab("ESP", 4483362458)
 
 local Players = game:GetService("Players")
@@ -696,8 +695,7 @@ local camera = workspace.CurrentCamera
 
 local showPlayerESP, showEnemyESP, showItemESP = false, false, false
 local showPlayerHitbox, showEnemyHitbox = false, false
-local showNameESP = false
-local showLineESP = false -- 線ESPのオンオフ用
+local showNameESP, showLineESP = false, false
 
 local highlights = {}
 local hitboxBoxes = {}
@@ -746,8 +744,13 @@ end
 
 -- ================= 線作成 =================
 local function createLine(hrp, color)
-    local attachment0 = Instance.new("Attachment", workspace.Terrain)
-    attachment0.Position = Vector3.new(0,0,0) -- 初期位置は0, 後で更新
+    local part = Instance.new("Part")
+    part.Transparency = 1
+    part.Anchored = true
+    part.CanCollide = false
+    part.Parent = workspace
+
+    local attachment0 = Instance.new("Attachment", part)
     local attachment1 = Instance.new("Attachment", hrp)
     attachment1.Position = Vector3.new(0,0,0)
 
@@ -758,49 +761,9 @@ local function createLine(hrp, color)
     beam.Color = ColorSequence.new(color)
     beam.Width0 = 0.05
     beam.Width1 = 0.05
-    beam.Parent = workspace.Terrain
+    beam.Parent = part
 
-    return {beam=beam, a0=attachment0, a1=attachment1}
-end
-
--- ================= ESP更新ループ =================
-RunService.RenderStepped:Connect(function()
-    for _, pl in pairs(Players:GetPlayers()) do
-        if pl.Character and pl.Character:FindFirstChild("HumanoidRootPart") then
-            local hrp = pl.Character.HumanoidRootPart
-
-            -- Hitbox
-            if showPlayerHitbox then
-                if not hitboxBoxes[hrp] then hitboxBoxes[hrp] = createHitboxBox(hrp) end
-            else
-                if hitboxBoxes[hrp] then hitboxBoxes[hrp]:Destroy(); hitboxBoxes[hrp]=nil end
-            end
-
-            -- 名前ESP
-            if showNameESP then
-                if not nameLabels[pl] then nameLabels[pl] = createNameLabel(pl) end
-            else
-                if nameLabels[pl] then nameLabels[pl]:Destroy(); nameLabels[pl]=nil end
-            end
-
-           -- 線
-if showLineESP then
-    if not lineObjects[pl] then
-        local color = (pl.Team == player.Team) and Color3.new(0,1,0) or Color3.new(1,0,0)
-        lineObjects[pl] = createLine(hrp, color)
-    end
-    -- 線更新：画面下中央から
-    local screenCenter = Vector3.new(camera.CFrame.Position.X, camera.CFrame.Position.Y - 5, camera.CFrame.Position.Z)
-    lineObjects[pl].a0.Position = screenCenter
-    lineObjects[pl].a1.Position = hrp.Position
-else
-    -- 線を消す
-    if lineObjects[pl] then
-        lineObjects[pl].beam:Destroy()
-        lineObjects[pl].a0:Destroy()
-        lineObjects[pl].a1:Destroy()
-        lineObjects[pl] = nil
-    end
+    return {beam=beam, a0=attachment0, a1=attachment1, part=part}
 end
 
 -- ================= ハイライト作成 =================
@@ -814,24 +777,118 @@ local function createHighlight(obj, color)
     return hl
 end
 
-
 -- ================= X-Ray / FullBright =================
+local function ToggleXRayPlayers(val)
+    for _, pl in pairs(Players:GetPlayers()) do
+        if pl.Character then
+            for _, part in pairs(pl.Character:GetDescendants()) do
+                if part:IsA("BasePart") then
+                    part.LocalTransparencyModifier = val and XRayTransparency or 0
+                end
+            end
+        end
+    end
+end
+
+local function ToggleXRayWorld(val)
+    for _, obj in pairs(workspace:GetDescendants()) do
+        if obj:IsA("BasePart") and not Players:FindFirstChild(obj.Name) then
+            obj.LocalTransparencyModifier = val and XRayTransparency or 0
+        end
+    end
+end
+
+local FullBrightEnabled = false
+local Lighting = game:GetService("Lighting")
+local oldBrightness = Lighting.Brightness
+local oldClockTime = Lighting.ClockTime
+local oldFogEnd = Lighting.FogEnd
+
+local function ToggleFullBright(val)
+    if val then
+        FullBrightEnabled = true
+        Lighting.Brightness = 2
+        Lighting.ClockTime = 14
+        Lighting.FogEnd = 100000
+    else
+        FullBrightEnabled = false
+        Lighting.Brightness = oldBrightness
+        Lighting.ClockTime = oldClockTime
+        Lighting.FogEnd = oldFogEnd
+    end
+end
+
+-- ================= ESP更新ループ =================
+RunService.RenderStepped:Connect(function()
+    for _, pl in pairs(Players:GetPlayers()) do
+        if pl.Character and pl.Character:FindFirstChild("HumanoidRootPart") then
+            local hrp = pl.Character.HumanoidRootPart
+
+            -- Hitbox
+            if showPlayerHitbox and pl.Team == player.Team then
+                if not hitboxBoxes[hrp] then hitboxBoxes[hrp] = createHitboxBox(hrp) end
+            else
+                if hitboxBoxes[hrp] then hitboxBoxes[hrp]:Destroy(); hitboxBoxes[hrp]=nil end
+            end
+
+            if showEnemyHitbox and pl.Team ~= player.Team then
+                if not hitboxBoxes[hrp] then hitboxBoxes[hrp] = createHitboxBox(hrp) end
+            else
+                if hitboxBoxes[hrp] then hitboxBoxes[hrp]:Destroy(); hitboxBoxes[hrp]=nil end
+            end
+
+            -- 名前ESP
+            if showNameESP then
+                if not nameLabels[pl] then nameLabels[pl] = createNameLabel(pl) end
+            else
+                if nameLabels[pl] then nameLabels[pl]:Destroy(); nameLabels[pl]=nil end
+            end
+
+            -- ハイライト
+            if showPlayerESP and pl.Team == player.Team then
+                if not highlights[pl] then highlights[pl] = createHighlight(pl.Character, Color3.new(0,1,0)) end
+            else
+                if highlights[pl] then highlights[pl]:Destroy(); highlights[pl]=nil end
+            end
+
+            if showEnemyESP and pl.Team ~= player.Team then
+                if not highlights[pl] then highlights[pl] = createHighlight(pl.Character, Color3.new(1,0,0)) end
+            else
+                if highlights[pl] then highlights[pl]:Destroy(); highlights[pl]=nil end
+            end
+
+            -- 線ESP
+            if showLineESP then
+                if not lineObjects[pl] then
+                    local color = (pl.Team == player.Team) and Color3.new(0,1,0) or Color3.new(1,0,0)
+                    lineObjects[pl] = createLine(hrp, color)
+                end
+                lineObjects[pl].a0.Position = camera.CFrame.Position
+                lineObjects[pl].a1.Position = hrp.Position
+            else
+                if lineObjects[pl] then
+                    lineObjects[pl].beam:Destroy()
+                    lineObjects[pl].a0:Destroy()
+                    lineObjects[pl].a1:Destroy()
+                    lineObjects[pl].part:Destroy()
+                    lineObjects[pl] = nil
+                end
+            end
+        end
+    end
+end)
+
+-- ================= GUI =================
 espTab:CreateToggle({
     Name = "X-Ray: プレイヤー透過",
     CurrentValue = false,
-    Callback = function(val)
-        ToggleXRayPlayers()
-        RayField:Notify({Title="X-Ray", Content=val and "プレイヤー透過 ON" or "プレイヤー透過 OFF", Duration=2})
-    end
+    Callback = function(val) ToggleXRayPlayers(val) end
 })
 
 espTab:CreateToggle({
     Name = "X-Ray: ワールド透過",
     CurrentValue = false,
-    Callback = function(val)
-        ToggleXRayWorld()
-        RayField:Notify({Title="X-Ray", Content=val and "ワールド透過 ON" or "ワールド透過 OFF", Duration=2})
-    end
+    Callback = function(val) ToggleXRayWorld(val) end
 })
 
 espTab:CreateSlider({
@@ -847,25 +904,19 @@ espTab:CreateSlider({
 })
 
 espTab:CreateToggle({
-    Name = "FullBright（常時明るく）",
+    Name = "FullBright",
     CurrentValue = false,
-    Callback = function(val)
-        ToggleFullBright()
-        RayField:Notify({Title="FullBright", Content=val and "ON" or "OFF", Duration=2})
-    end
+    Callback = function(val) ToggleFullBright(val) end
 })
 
-
-
--- ================= ESP トグル =================
 espTab:CreateToggle({
-    Name = "Player Hitbox ESP（枠線）",
+    Name = "Player Hitbox ESP",
     CurrentValue = false,
     Callback = function(val) showPlayerHitbox = val end
 })
 
 espTab:CreateToggle({
-    Name = "Enemy Hitbox ESP（枠線）",
+    Name = "Enemy Hitbox ESP",
     CurrentValue = false,
     Callback = function(val) showEnemyHitbox = val end
 })
@@ -888,21 +939,11 @@ espTab:CreateToggle({
     Callback = function(val) showNameESP = val end
 })
 
-
-
 espTab:CreateToggle({
     Name = "線ESP",
     CurrentValue = false,
-    Callback = function(val)
-        showLineESP = val
-        RayField:Notify({
-            Title="線ESP",
-            Content = val and "ON" or "OFF",
-            Duration = 1
-        })
-    end
+    Callback = function(val) showLineESP = val end
 })
-
 
 
 
