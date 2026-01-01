@@ -695,6 +695,10 @@ local RunService = game:GetService("RunService")
 local Lighting = game:GetService("Lighting")
 local Camera = workspace.CurrentCamera
 local LocalPlayer = Players.LocalPlayer
+local function isCharacterPart(part)
+    local model = part:FindFirstAncestorOfClass("Model")
+    return model and Players:GetPlayerFromCharacter(model)
+end
 
 --================ 状態 =================
 local ESP = {
@@ -868,32 +872,8 @@ RunService.RenderStepped:Connect(function()
                 data.Label.TextColor3 =
                     plr.Team == LocalPlayer.Team and Color3.fromRGB(0,255,0) or Color3.fromRGB(255,0,0)
             end
-
-if ESP.NameESP and NameGuis[plr] and plr.Character
-and plr.Character:FindFirstChild("HumanoidRootPart") then
-
-    local label = NameGuis[plr].label
-
-    -- レベル取得
-    local level = getLevel(plr)
-
-    -- 距離
-    local dist = math.floor(
-        (plr.Character.HumanoidRootPart.Position
-        - LocalPlayer.Character.HumanoidRootPart.Position).Magnitude
-    )
-
-    label.Text = string.format(
-        "[Lv.%s] %s [%dm]",
-        level,
-        plr.Name,
-        dist
-    )
-end
-
-
 					
-            -- 線ESP
+			-- 線ESP
             if ESP.LineESP then
                 createLine(plr)
                 local pos, onscreen = Camera:WorldToViewportPoint(plr.Character.HumanoidRootPart.Position)
