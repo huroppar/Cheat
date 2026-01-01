@@ -724,7 +724,7 @@ local function getLevel(plr)
     local stats = plr:FindFirstChild("leaderstats")
     if not stats then return "?" end
 
-    for _,v in ipairs(stats:GetChildren()) do
+for _,p in ipairs(plr.Character:GetDescendants()) do
         if v:IsA("IntValue") or v:IsA("NumberValue") then
             if string.find(v.Name:lower(), "level")
             or string.find(v.Name:lower(), "lv") then
@@ -850,11 +850,20 @@ RunService.RenderStepped:Connect(function()
         Lighting.FogEnd = 1e6
     end
 
+
+
+
+			if not LocalPlayer.Character or not LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
+    return
+end
+
+
+			
     for _,plr in ipairs(Players:GetPlayers()) do
         if plr ~= LocalPlayer and plr.Character and plr.Character:FindFirstChild("HumanoidRootPart") then
 
             -- ハイライト
-            if plr.Team == LocalPlayer.Team then
+           local sameTeam = (plr.Team ~= nil and LocalPlayer.Team ~= nil and plr.Team == LocalPlayer.Team)
                 if ESP.PlayerHL then setHighlight(plr, Color3.fromRGB(0,255,0))
                 else removeHighlight(plr) end
             else
@@ -868,11 +877,22 @@ RunService.RenderStepped:Connect(function()
                 local data = NameGuis[plr]
                 local lvl = getLevel(plr)
                 local dist = getDistance(plr)
-                data.Label.Text = string.format("Lv.%s  %s  [%dstuds]", lvl, plr.Name, dist)
-                data.Label.TextColor3 =
+                data.label.Text = string.format("Lv.%s  %s  [%dstuds]", lvl, plr.Name, dist)
+                data.label.TextColor3 =
                     plr.Team == LocalPlayer.Team and Color3.fromRGB(0,255,0) or Color3.fromRGB(255,0,0)
             end
+		
 					
+					
+					local function removeAllNames()
+					for _,data in pairs(NameGuis) do
+        if data.gui then
+            data.gui:Destroy()
+        end
+    end
+    table.clear(NameGuis)
+end
+			
 			-- 線ESP
             if ESP.LineESP then
                 createLine(plr)
