@@ -717,15 +717,21 @@ local Lines = {}
 
 --================ ユーティリティ =================
 local function getLevel(plr)
-    local ls = plr:FindFirstChild("leaderstats")
-    if not ls then return "?" end
-    for _,v in ipairs(ls:GetChildren()) do
-        if v:IsA("IntValue") and (v.Name:lower():find("lv") or v.Name:lower():find("level")) then
-            return v.Value
+    local stats = plr:FindFirstChild("leaderstats")
+    if not stats then return "?" end
+
+    for _,v in ipairs(stats:GetChildren()) do
+        if v:IsA("IntValue") or v:IsA("NumberValue") then
+            if string.find(v.Name:lower(), "level")
+            or string.find(v.Name:lower(), "lv") then
+                return v.Value
+            end
         end
     end
+
     return "?"
 end
+
 
 local function getDistance(plr)
     if not plr.Character or not plr.Character:FindFirstChild("HumanoidRootPart") then
@@ -764,8 +770,9 @@ local function createName(plr)
     if not plr.Character or not plr.Character:FindFirstChild("HumanoidRootPart") then return end
 
     local gui = Instance.new("BillboardGui")
-    gui.Size = UDim2.new(0,260,0,30)
+    gui.Size = UDim2.new(0,220,0,30)
     gui.AlwaysOnTop = true
+    gui.StudsOffset = Vector3.new(0,3,0)
     gui.Adornee = plr.Character.HumanoidRootPart
     gui.Parent = plr.Character
 
@@ -775,17 +782,16 @@ local function createName(plr)
     txt.TextScaled = true
     txt.TextStrokeTransparency = 0
     txt.Font = Enum.Font.GothamBold
+    txt.TextColor3 = Color3.new(1,1,1)
     txt.Parent = gui
 
-    NameGuis[plr] = {Gui = gui, Label = txt}
+    -- ★ TextLabel も一緒に保存する
+    NameGuis[plr] = {
+        gui = gui,
+        label = txt
+    }
 end
 
-local function removeAllNames()
-    for _,v in pairs(NameGuis) do
-        v.Gui:Destroy()
-    end
-    table.clear(NameGuis)
-end
 
 --================ 線ESP（Drawing版・確実） =================
 local function createLine(plr)
@@ -816,13 +822,13 @@ local function applyXRay()
             end
         end
     end
-    for _,obj in ipairs(workspace:GetChildren()) do
-        if obj:IsA("BasePart") then
-            obj.LocalTransparencyModifier =
-                ESP.XRayWorld and XRAY_WORLD_ALPHA or 0
-        end
+for _,obj in ipairs(workspace:GetDescendants()) do
+    if obj:IsA("BasePart") and not isCharacterPart(obj) then
+        obj.LocalTransparencyModifier =
+            ESP.XRayWorld and XRAY_WORLD_ALPHA or 0
     end
 end
+
 
 --================ FullBright =================
 local old = {
@@ -863,6 +869,30 @@ RunService.RenderStepped:Connect(function()
                     plr.Team == LocalPlayer.Team and Color3.fromRGB(0,255,0) or Color3.fromRGB(255,0,0)
             end
 
+if ESP.NameESP and NameGuis[plr] and plr.Character
+and plr.Character:FindFirstChild("HumanoidRootPart") then
+
+    local label = NameGuis[plr].label
+
+    -- レベル取得
+    local level = getLevel(plr)
+
+    -- 距離
+    local dist = math.floor(
+        (plr.Character.HumanoidRootPart.Position
+        - LocalPlayer.Character.HumanoidRootPart.Position).Magnitude
+    )
+
+    label.Text = string.format(
+        "[Lv.%s] %s [%dm]",
+        level,
+        plr.Name,
+        dist
+    )
+end
+
+
+					
             -- 線ESP
             if ESP.LineESP then
                 createLine(plr)
