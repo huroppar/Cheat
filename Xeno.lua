@@ -40,13 +40,7 @@ local freezeEnabled = false
 local freezeConn = nil
 local freezeCFrame = nil
 
--- Fly
-local flyEnabled = false
-local flySpeed = 50
-local flyKeys = {
-    W=false,A=false,S=false,D=false,
-    Space=false,LeftShift=false
-}
+
 
 -- 空中TP
 local airTPActive = false
@@ -295,11 +289,37 @@ playerTab:CreateToggle({
 --================================
 -- Fly
 --================================
+local flyEnabled = false
+local flySpeed = 50
+
+local flyKeys = {
+    W=false,A=false,S=false,D=false,
+    Space=false,LeftShift=false
+}
+
+local flyBV
+
+--================ Fly Toggle ================
 playerTab:CreateToggle({
     Name = "Fly",
     CurrentValue = false,
     Callback = function(v)
         flyEnabled = v
+
+        local _, _, hrp = getCharacter()
+        if not hrp then return end
+
+        if v then
+            flyBV = Instance.new("BodyVelocity")
+            flyBV.MaxForce = Vector3.new(1e9, 1e9, 1e9)
+            flyBV.Velocity = Vector3.zero
+            flyBV.Parent = hrp
+        else
+            if flyBV then
+                flyBV:Destroy()
+                flyBV = nil
+            end
+        end
     end
 })
 
@@ -313,6 +333,7 @@ playerTab:CreateSlider({
     end
 })
 
+--================ Input ================
 UserInputService.InputBegan:Connect(function(i,g)
     if g then return end
     if flyKeys[i.KeyCode.Name] ~= nil then
@@ -327,14 +348,17 @@ UserInputService.InputEnded:Connect(function(i,g)
     end
 end)
 
-RunService.RenderStepped:Connect(function(dt)
-    if not flyEnabled then return end
+--================ Fly Loop ================
+RunService.RenderStepped:Connect(function()
+    if not flyEnabled or not flyBV then return end
+
     local _, _, hrp = getCharacter()
     if not hrp then return end
 
     local cam = workspace.CurrentCamera
     local move = Vector3.zero
 
+    -- 見てる方向そのまま
     if flyKeys.W then move += cam.CFrame.LookVector end
     if flyKeys.S then move -= cam.CFrame.LookVector end
     if flyKeys.A then move -= cam.CFrame.RightVector end
@@ -343,9 +367,12 @@ RunService.RenderStepped:Connect(function(dt)
     if flyKeys.LeftShift then move -= Vector3.yAxis end
 
     if move.Magnitude > 0 then
-        hrp.CFrame += move.Unit * flySpeed * dt
+        flyBV.Velocity = move.Unit * flySpeed
+    else
+        flyBV.Velocity = Vector3.zero -- ← これが「落ちない」核心
     end
 end)
+
 
 --================================
 -- スピード反映
