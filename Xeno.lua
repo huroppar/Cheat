@@ -1095,8 +1095,91 @@ end
 end)
 
 
+--========================================================--
+--                     🔥 World Of Stand                    --
+--========================================================--
 
+--================= サービス =================
+local Players = game:GetService("Players")
+local LocalPlayer = Players.LocalPlayer
+local Workspace = game:GetService("Workspace")
 
+--================= チェスト管理 =================
+local currentChest = 0
+local maxChest = 54
+
+local function findChestByNumber(number)
+    for _, obj in ipairs(Workspace:GetChildren()) do
+        if obj:IsA("Model") and obj.Name == tostring(number) then
+            return obj
+        end
+    end
+    return nil
+end
+
+local function teleportToChest(chest)
+    if chest and chest.PrimaryPart then
+        LocalPlayer.Character:SetPrimaryPartCFrame(
+            CFrame.new(chest.PrimaryPart.Position + Vector3.new(0,7,0))
+        )
+        print("テレポート: " .. chest.Name)
+        return tonumber(chest.Name)
+    else
+        print("チェストが見つかりませんでした")
+        return nil
+    end
+end
+
+--================= GUI =================
+-- Window は既存RayfieldのWindowを想定
+-- ここで新しいタブを作成
+local StandTab = Window:CreateTab("スタンドの世界")
+
+-- 現在のチェスト番号表示
+local chestLabel = StandTab:CreateLabel("現在のチェスト: 0")
+
+--================= 順番にTPボタン =================
+StandTab:AddButton({
+    Name = "次のチェストにTP",
+    Callback = function()
+        currentChest = currentChest + 1
+        if currentChest > maxChest then
+            currentChest = 1
+        end
+        local chest = findChestByNumber(currentChest)
+        local teleportedNumber = teleportToChest(chest)
+        if teleportedNumber then
+            chestLabel:Set("現在のチェスト: " .. teleportedNumber)
+        end
+    end
+})
+
+--================= 番号指定TP =================
+local chestInput = StandTab:AddTextbox({
+    Name = "チェスト番号入力",
+    Default = "",
+    TextDisappear = true,
+    Callback = function(value)
+        -- 入力された値はここで取得
+    end
+})
+
+StandTab:AddButton({
+    Name = "指定番号にTP",
+    Callback = function()
+        local number = tonumber(chestInput.Value)
+        if number and number >= 1 and number <= maxChest then
+            currentChest = number
+            local chest = findChestByNumber(number)
+            local teleportedNumber = teleportToChest(chest)
+            if teleportedNumber then
+                chestLabel:Set("現在のチェスト: " .. teleportedNumber)
+            end
+        else
+            print("1〜" .. maxChest .. "の番号を入力してください")
+        end
+    end
+})
 
 
 
