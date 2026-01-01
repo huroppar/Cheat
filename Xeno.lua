@@ -270,7 +270,6 @@ playerTab:CreateButton({
 })
 
 
-
 --================================
 -- 位置固定
 --================================
@@ -362,277 +361,327 @@ RunService.RenderStepped:Connect(function()
 end)
 
 
+
 --================================
 -- ESP TAB
 --================================
 local espTab = Window:CreateTab("ESP", 4483362458)
 
 --================================
--- Services（ESP専用）
+-- Services（ESP専用で再定義）
 --================================
-local Camera = workspace.CurrentCamera
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
 local Lighting = game:GetService("Lighting")
+local Camera = workspace.CurrentCamera
+
+local LocalPlayer = Players.LocalPlayer
 
 --================================
--- ESP 状態
+-- 設定フラグ
 --================================
-local ESP = {
-    PlayerHL = false,
-    EnemyHL = false,
-    NameESP = false,
-    LineESP = false,
-    FullBright = false,
-
-    XRayPlayer = false,
-    XRayWorld = false,
-
-    ItemHL = false,
-    ChestHL = false,
-
-    HitboxPlayer = false,
-    HitboxEnemy = false,
-}
-
-local XRAY_PLAYER_ALPHA = 0.5
-local XRAY_WORLD_ALPHA  = 0.5
-local HITBOX_SIZE = Vector3.new(6,6,6)
+local showAllyHighlight = false
+local showEnemyHighlight = false
+local showNameESP = false
+local showLineESP = false
+local fullBrightEnabled = false
+local worldXray = false
+local playerXray = false
+local itemHighlight = false
+local chestHighlight = false
+local hitboxEnabled = false
+local worldXrayAlpha = 0.6
+local playerXrayAlpha = 0.6
 
 --================================
--- 管理
+-- 管理テーブル
 --================================
-local Highlights = {}
-local NameGuis = {}
-local Lines = {}
-local Hitboxes = {}
+local highlights = {}
+local drawings = {}
+local hitboxes = {}
+local lineDrawings = {}
+local chestHighlights = {}
 
 --================================
--- Utility
+-- ユーティリティ
 --================================
-local function getLevel(plr)
-    local stats = plr:FindFirstChild("leaderstats")
-    if not stats then return "?" end
-    for _,v in ipairs(stats:GetChildren()) do
-        if (v:IsA("IntValue") or v:IsA("NumberValue"))
-        and v.Name:lower():find("lv") then
-            return v.Value
-        end
+local function isEnemy(player)
+    -- チーム判定（無いゲームでも動く）
+    if not LocalPlayer.Team or not player.Team then
+        return player ~= LocalPlayer
     end
-    return "?"
-end
-
-local function getDistance(plr)
-    local _,_,root = getCharacter()
-    if not root then return "?" end
-    if not plr.Character or not plr.Character:FindFirstChild("HumanoidRootPart") then
-        return "?"
-    end
-    return math.floor((root.Position - plr.Character.HumanoidRootPart.Position).Magnitude)
+    return player.Team ~= LocalPlayer.Team
 end
 
 --================================
--- Highlight
+-- ハイライト生成
 --================================
-local function setHighlight(key, adornee, color)
-    if Highlights[key] then return end
+local function createHighlight(char, color)
+    if highlights[char] then return end
     local hl = Instance.new("Highlight")
-    hl.Adornee = adornee
     hl.FillColor = color
-    hl.FillTransparency = 0.35
-    hl.OutlineTransparency = 1
-    hl.Parent = adornee
-    Highlights[key] = hl
+    hl.OutlineColor = Color3.new(1,1,1)
+    hl.FillTransparency = 0.5
+    hl.Parent = char
+    highlights[char] = hl
 end
 
-local function removeHighlight(key)
-    if Highlights[key] then
-        Highlights[key]:Destroy()
-        Highlights[key] = nil
+local function removeHighlight(char)
+    if highlights[char] then
+        highlights[char]:Destroy()
+        highlights[char] = nil
     end
 end
 
 --================================
--- Name ESP
+-- Name ESP & Line ESP
 --================================
-local function createName(plr)
-    if NameGuis[plr] then return end
-    if not plr.Character or not plr.Character:FindFirstChild("HumanoidRootPart") then return end
+RunService.RenderStepped:Connect(function()
+    for _, plr in ipairs(Players:GetPlayers()) do
+        if plr ~= LocalPlayer and plr.Character and plr.Character:FindFirstChild("HumanoidRootPart") then
+            local hrp = plr.Character.HumanoidRootPart
+            local pos, onScreen = Camera:WorldToViewportPoint(hrp.Position)
 
-    local gui = Instance.new("BillboardGui")
-    gui.Size = UDim2.new(0,220,0,28)
-    gui.AlwaysOnTop = true
-    gui.StudsOffset = Vector3.new(0,3,0)
-    gui.Adornee = plr.Character.HumanoidRootPart
-    gui.Parent = plr.Character
-
-    local txt = Instance.new("TextLabel")
-    txt.Size = UDim2.new(1,0,1,0)
-    txt.BackgroundTransparency = 1
-    txt.TextScaled = true
-    txt.Font = Enum.Font.GothamBold
-    txt.TextStrokeTransparency = 0
-    txt.Parent = gui
-
-    NameGuis[plr] = {gui=gui,label=txt}
-end
-
-local function removeAllNames()
-    for _,v in pairs(NameGuis) do
-        if v.gui then v.gui:Destroy() end
-    end
-    table.clear(NameGuis)
-end
-
---================================
--- Line ESP
---================================
-local function createLine(plr)
-    if Lines[plr] then return end
-    local l = Drawing.new("Line")
-    l.Thickness = 1.5
-    l.Transparency = 1
-    Lines[plr] = l
-end
-
-local function removeLine(plr)
-    if Lines[plr] then
-        Lines[plr]:Remove()
-        Lines[plr] = nil
-    end
-end
-
---================================
--- Hitbox
---================================
-local function applyHitbox(plr, isEnemy)
-    if Hitboxes[plr] then return end
-    local root = plr.Character and plr.Character:FindFirstChild("HumanoidRootPart")
-    if not root then return end
-
-    local box = Instance.new("BoxHandleAdornment")
-    box.Adornee = root
-    box.Size = HITBOX_SIZE
-    box.AlwaysOnTop = true
-    box.ZIndex = 5
-    box.Transparency = 0.5
-    box.Color3 = isEnemy and Color3.fromRGB(255,0,0) or Color3.fromRGB(255,255,255)
-    box.Parent = root
-
-    Hitboxes[plr] = box
-end
-
-local function removeHitbox(plr)
-    if Hitboxes[plr] then
-        Hitboxes[plr]:Destroy()
-        Hitboxes[plr] = nil
-    end
-end
-
---================================
--- X-Ray
---================================
-local function applyXRay()
-    for _,obj in ipairs(workspace:GetDescendants()) do
-        if obj:IsA("BasePart") then
-            if obj:IsDescendantOf(LocalPlayer.Character) then
-                obj.LocalTransparencyModifier = ESP.XRayPlayer and XRAY_PLAYER_ALPHA or 0
-            elseif not Players:GetPlayerFromCharacter(obj:FindFirstAncestorOfClass("Model")) then
-                obj.LocalTransparencyModifier = ESP.XRayWorld and XRAY_WORLD_ALPHA or 0
+            -- Name ESP
+            if showNameESP and onScreen then
+                if not drawings[plr] then
+                    drawings[plr] = Drawing.new("Text")
+                    drawings[plr].Center = true
+                    drawings[plr].Outline = true
+                    drawings[plr].Size = 16
+                end
+                local dist = math.floor((Camera.CFrame.Position - hrp.Position).Magnitude)
+                drawings[plr].Visible = true
+                drawings[plr].Text =
+                    plr.Name ..
+                    " | Lv:" .. (plr:FindFirstChild("leaderstats") and plr.leaderstats:FindFirstChild("Level") and plr.leaderstats.Level.Value or "?") ..
+                    " | " .. dist .. "m"
+                drawings[plr].Position = Vector2.new(pos.X, pos.Y - 25)
+                drawings[plr].Color = isEnemy(plr) and Color3.new(1,0,0) or Color3.new(0,1,0)
+            elseif drawings[plr] then
+                drawings[plr].Visible = false
             end
-        end
+
+if showLineESP and onScreen then
+    if not lineDrawings[plr] then
+        local line = Drawing.new("Line")
+        line.Thickness = 1.5
+        lineDrawings[plr] = line
     end
+
+    local line = lineDrawings[plr]
+    line.Visible = true
+    line.From = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y)
+    line.To = Vector2.new(pos.X, pos.Y)
+    line.Color = Color3.new(1, 0, 0)
+elseif lineDrawings[plr] then
+    lineDrawings[plr].Visible = false
 end
+
 
 --================================
 -- FullBright
 --================================
-local oldLight = {
-    Brightness = Lighting.Brightness,
-    ClockTime  = Lighting.ClockTime,
-    FogEnd     = Lighting.FogEnd
-}
-
---================================
--- Main Loop
---================================
-RunService.RenderStepped:Connect(function()
-    if ESP.FullBright then
-        Lighting.Brightness = 3
-        Lighting.ClockTime = 14
-        Lighting.FogEnd = 1e6
-    end
-
-    for _,plr in ipairs(Players:GetPlayers()) do
-        if plr ~= LocalPlayer and plr.Character and plr.Character:FindFirstChild("HumanoidRootPart") then
-            local sameTeam = plr.Team and LocalPlayer.Team and plr.Team == LocalPlayer.Team
-
-            -- Highlight
-            if sameTeam then
-                ESP.PlayerHL and setHighlight(plr, plr.Character, Color3.fromRGB(0,255,0)) or removeHighlight(plr)
-            else
-                ESP.EnemyHL and setHighlight(plr, plr.Character, Color3.fromRGB(255,0,0)) or removeHighlight(plr)
-            end
-
-            -- Name
-            if ESP.NameESP then
-                createName(plr)
-                NameGuis[plr].label.Text =
-                    string.format("Lv.%s %s [%dm]", getLevel(plr), plr.Name, getDistance(plr))
-                NameGuis[plr].label.TextColor3 =
-                    sameTeam and Color3.fromRGB(0,255,0) or Color3.fromRGB(255,0,0)
-            end
-
-            -- Line
-            if ESP.LineESP then
-                createLine(plr)
-                local pos, on = Camera:WorldToViewportPoint(plr.Character.HumanoidRootPart.Position)
-                Lines[plr].Visible = on
-                if on then
-                    Lines[plr].From = Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y)
-                    Lines[plr].To = Vector2.new(pos.X, pos.Y)
-                    Lines[plr].Color =
-                        sameTeam and Color3.fromRGB(0,255,0) or Color3.fromRGB(255,0,0)
-                end
-            else
-                removeLine(plr)
-            end
-
-            -- Hitbox
-            if sameTeam then
-                ESP.HitboxPlayer and applyHitbox(plr,false) or removeHitbox(plr)
-            else
-                ESP.HitboxEnemy and applyHitbox(plr,true) or removeHitbox(plr)
-            end
-        end
-    end
-
-    if not ESP.NameESP then removeAllNames() end
-end)
-
---================================
--- GUI
---================================
-espTab:CreateToggle({Name="X-Ray プレイヤー",Callback=function(v) ESP.XRayPlayer=v applyXRay() end})
-espTab:CreateToggle({Name="X-Ray ワールド",Callback=function(v) ESP.XRayWorld=v applyXRay() end})
 espTab:CreateToggle({
-    Name="FullBright",
-    Callback=function(v)
-        ESP.FullBright=v
-        if not v then
-            Lighting.Brightness = oldLight.Brightness
-            Lighting.ClockTime = oldLight.ClockTime
-            Lighting.FogEnd = oldLight.FogEnd
+    Name = "FullBright",
+    CurrentValue = false,
+    Callback = function(v)
+        fullBrightEnabled = v
+        if v then
+            Lighting.Brightness = 5
+            Lighting.ClockTime = 12
+            Lighting.FogEnd = 1e9
         end
     end
 })
-espTab:CreateToggle({Name="プレイヤーHitBox",Callback=function(v) ESP.HitboxPlayer=v end})
-espTab:CreateToggle({Name="敵HitBox",Callback=function(v) ESP.HitboxEnemy=v end})
+
+--================================
+-- プレイヤー Highlight
+--================================
+espTab:CreateToggle({
+    Name = "味方ハイライト",
+    CurrentValue = false,
+    Callback = function(v)
+        showAllyHighlight = v
+    end
+})
+
+espTab:CreateToggle({
+    Name = "敵ハイライト",
+    CurrentValue = false,
+    Callback = function(v)
+        showEnemyHighlight = v
+    end
+})
+
+RunService.Stepped:Connect(function()
+    for _, plr in ipairs(Players:GetPlayers()) do
+        if plr.Character then
+            if plr ~= LocalPlayer then
+                if isEnemy(plr) and showEnemyHighlight then
+                    createHighlight(plr.Character, Color3.new(1,0,0))
+                elseif not isEnemy(plr) and showAllyHighlight then
+                    createHighlight(plr.Character, Color3.new(0,1,0))
+                else
+                    removeHighlight(plr.Character)
+                end
+            end
+        end
+    end
+end)
+
+--================================
+-- Name / Line ESP Toggles
+--================================
+espTab:CreateToggle({ Name="名前ESP", CurrentValue=false, Callback=function(v) showNameESP=v end })
+espTab:CreateToggle({ Name="線ESP", CurrentValue=false, Callback=function(v) showLineESP=v end })
+
+--================================
+-- X-Ray
+--================================
+espTab:CreateToggle({
+    Name = "ワールドX-Ray",
+    CurrentValue = false,
+    Callback = function(v)
+        worldXray = v
+        for _, p in ipairs(workspace:GetDescendants()) do
+            if p:IsA("BasePart") then
+                p.LocalTransparencyModifier = v and worldXrayAlpha or 0
+            end
+        end
+    end
+})
+
+espTab:CreateSlider({
+    Name = "ワールドX-Ray透明度",
+    Range = {0, 0.95},
+    Increment = 0.05,
+    Suffix = "Alpha",
+    CurrentValue = 0.6,
+    Callback = function(v)
+        worldXrayAlpha = v
+        if worldXray then
+            for _, p in ipairs(workspace:GetDescendants()) do
+                if p:IsA("BasePart") then
+                    p.LocalTransparencyModifier = v
+                end
+            end
+        end
+    end
+})
+
+espTab:CreateToggle({
+    Name = "プレイヤーX-Ray",
+    CurrentValue = false,
+    Callback = function(v)
+        playerXray = v
+        for _, plr in ipairs(Players:GetPlayers()) do
+            if plr.Character then
+                for _, p in ipairs(plr.Character:GetDescendants()) do
+                    if p:IsA("BasePart") then
+                        p.LocalTransparencyModifier = v and playerXrayAlpha or 0
+                    end
+                end
+            end
+        end
+    end
+})
+
+espTab:CreateSlider({
+    Name = "プレイヤーX-Ray透明度",
+    Range = {0, 0.95},
+    Increment = 0.05,
+    Suffix = "Alpha",
+    CurrentValue = 0.6,
+    Callback = function(v)
+        playerXrayAlpha = v
+        if playerXray then
+            for _, plr in ipairs(Players:GetPlayers()) do
+                if plr.Character then
+                    for _, p in ipairs(plr.Character:GetDescendants()) do
+                        if p:IsA("BasePart") then
+                            p.LocalTransparencyModifier = v
+                        end
+                    end
+                end
+            end
+        end
+    end
+})
+
+--================================
+-- アイテム / チェスト
+--================================
+local function highlightByName(keyword, color)
+    for _, obj in ipairs(workspace:GetDescendants()) do
+        if obj:IsA("Model") and string.find(obj.Name:lower(), keyword) then
+            createHighlight(obj, color)
+        end
+    end
+end
+
+espTab:CreateToggle({
+    Name = "アイテムハイライト",
+    CurrentValue = false,
+    Callback = function(v)
+        itemHighlight = v
+        if v then
+            highlightByName("item", Color3.fromRGB(0,255,255))
+        end
+    end
+})
+
+espTab:CreateToggle({
+    Name = "チェストハイライト",
+    CurrentValue = false,
+    Callback = function(v)
+        chestHighlight = v
+
+        if v then
+            for _, obj in ipairs(workspace:GetDescendants()) do
+                if obj:IsA("Model") and string.find(obj.Name:lower(), "chest") then
+                    if not chestHighlights[obj] then
+                        local hl = Instance.new("Highlight")
+                        hl.FillColor = Color3.fromRGB(255, 215, 0)
+                        hl.FillTransparency = 0.4
+                        hl.Parent = obj
+                        chestHighlights[obj] = hl
+                    end
+                end
+            end
+        else
+            for _, hl in pairs(chestHighlights) do
+                if hl then hl:Destroy() end
+            end
+            chestHighlights = {}
+        end
+    end
+})
 
 
-espTab:CreateToggle({Name="味方ハイライト",Callback=function(v) ESP.PlayerHL=v end})
-espTab:CreateToggle({Name="敵ハイライト",Callback=function(v) ESP.EnemyHL=v end})
-espTab:CreateToggle({Name="名前ESP",Callback=function(v) ESP.NameESP=v end})
-espTab:CreateToggle({Name="線ESP",Callback=function(v) ESP.LineESP=v end})
-
+--================================
+-- HitBox
+--================================
+espTab:CreateToggle({
+    Name = "HitBox表示",
+    CurrentValue = false,
+    Callback = function(v)
+        hitboxEnabled = v
+        for _, plr in ipairs(Players:GetPlayers()) do
+            if plr.Character and plr.Character:FindFirstChild("HumanoidRootPart") then
+                local hrp = plr.Character.HumanoidRootPart
+                if v then
+                    hrp.Size = Vector3.new(8,8,8)
+                    hrp.Transparency = 0.5
+                    hrp.Color = isEnemy(plr) and Color3.new(1,0,0) or Color3.new(1,1,1)
+                else
+                    hrp.Size = Vector3.new(2,2,1)
+                    hrp.Transparency = 1
+                end
+            end
+        end
+    end
+})
 
 
 --========================================================--
