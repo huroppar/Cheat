@@ -780,6 +780,19 @@ espTab:CreateToggle({
 })
 
 
+local ESP_UPDATE_INTERVAL = 1
+local lastESPUpdate = 0
+
+local function espNeedsUpdate()
+    return showNameESP
+        or showLineESP
+        or showEnemyHighlight
+        or showAllyHighlight
+        or chestHighlight
+        or itemHighlight
+end
+
+
 --========================================================--
 --                     🔥 Combat Tab                      --
 --========================================================--
