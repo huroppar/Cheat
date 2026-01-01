@@ -780,17 +780,45 @@ espTab:CreateToggle({
 })
 
 
-local ESP_UPDATE_INTERVAL = 1
-local lastESPUpdate = 0
+RunService.Heartbeat:Connect(function()
+    if not espNeedsUpdate() then return end
 
-local function espNeedsUpdate()
-    return showNameESP
-        or showLineESP
-        or showEnemyHighlight
-        or showAllyHighlight
-        or chestHighlight
-        or itemHighlight
-end
+    if os.clock() - lastESPUpdate < ESP_UPDATE_INTERVAL then
+        return
+    end
+    lastESPUpdate = os.clock()
+
+    -- ===== プレイヤーESP更新 =====
+    if showEnemyHighlight or showAllyHighlight then
+        for _, plr in ipairs(Players:GetPlayers()) do
+            if plr ~= LocalPlayer and plr.Character then
+                if isEnemy(plr) and showEnemyHighlight then
+                    createHighlight(plr.Character, Color3.new(1,0,0))
+                elseif not isEnemy(plr) and showAllyHighlight then
+                    createHighlight(plr.Character, Color3.new(0,1,0))
+                else
+                    removeHighlight(plr.Character)
+                end
+            end
+        end
+    end
+
+    -- ===== チェスト =====
+    if chestHighlight then
+        for _, obj in ipairs(workspace:GetDescendants()) do
+            if obj:IsA("Model") and obj.Name:lower():find("chest") then
+                if not chestHighlights[obj] then
+                    local hl = Instance.new("Highlight")
+                    hl.FillColor = Color3.fromRGB(255,215,0)
+                    hl.FillTransparency = 0.4
+                    hl.Parent = obj
+                    chestHighlights[obj] = hl
+                end
+            end
+        end
+    end
+end)
+
 
 
 --========================================================--
