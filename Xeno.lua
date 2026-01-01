@@ -1480,7 +1480,7 @@ autoAimTab:CreateSlider({
 	end
 })
 
-fruitTab:CreateToggle({
+autoAimTab:CreateToggle({
     Name = "Fruit自動回収",
     CurrentValue = false,
     Flag = "FruitSlideToggle",
@@ -1489,7 +1489,7 @@ fruitTab:CreateToggle({
     end
 })
 
-fruitTab:CreateToggle({
+autoAimTab:CreateToggle({
     Name = "Fruit瞬間回収",
     CurrentValue = false,
     Flag = "FruitTPToggle",
