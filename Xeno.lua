@@ -1139,13 +1139,12 @@ local StandTab = Window:CreateTab("スタンドの世界")
 local chestLabel = StandTab:CreateLabel("現在のチェスト: 0")
 
 --================= 順番にTPボタン =================
-StandTab:AddButton({
+-- 順番にTPボタン
+StandTab:CreateButton({
     Name = "次のチェストにTP",
     Callback = function()
         currentChest = currentChest + 1
-        if currentChest > maxChest then
-            currentChest = 1
-        end
+        if currentChest > maxChest then currentChest = 1 end
         local chest = findChestByNumber(currentChest)
         local teleportedNumber = teleportToChest(chest)
         if teleportedNumber then
@@ -1154,17 +1153,20 @@ StandTab:AddButton({
     end
 })
 
---================= 番号指定TP =================
-local chestInput = StandTab:AddTextbox({
+
+
+local chestInput = StandTab:CreateTextbox({
     Name = "チェスト番号入力",
     Default = "",
     TextDisappear = true,
     Callback = function(value)
-        -- 入力された値はここで取得
+        -- 入力値はここで取得可能
     end
 })
 
-StandTab:AddButton({
+
+-- 番号指定TPボタン
+StandTab:CreateButton({
     Name = "指定番号にTP",
     Callback = function()
         local number = tonumber(chestInput.Value)
@@ -1180,6 +1182,7 @@ StandTab:AddButton({
         end
     end
 })
+
 
 
 
