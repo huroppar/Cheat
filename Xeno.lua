@@ -1253,84 +1253,285 @@ end)
 
 
 
--- RayField 折りたたみリスト例
+--========================================================--
+--                🎯 Auto Aim Tab (Tab2)                 --
+--========================================================--
 
-local Window = RayField:CreateWindow({
-	Name = "Fruit Manager",
-})
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local UIS = game:GetService("UserInputService")
 
-local fruitTab = Window:CreateTab("フルーツ一覧")
+local localPlayer = Players.LocalPlayer
+local camera = workspace.CurrentCamera
 
--- 折りたたみ用のテーブル
-local foldableLists = {}
+--====================
+-- 設定
+--====================
+local autoAimEnabled = false
+local lockedPart = nil
+local FOV_RADIUS = 160
+local AIM_PART = "HumanoidRootPart"
+local AIM_STRENGTH = 0.35
+local showFOV = true
 
--- セクション作成関数
-local function CreateFoldable(title)
-	local fold = fruitTab:CreateToggle({
-		Name = title,
-		CurrentValue = false,
-		Callback = function() end -- 折りたたみのON/OFFだけ管理
-	})
-	foldableLists[title] = {Toggle = fold, Items = {}}
-	return foldableLists[title]
+--====================
+-- FOV表示
+--====================
+local fov = Drawing.new("Circle")
+fov.Radius = FOV_RADIUS
+fov.Thickness = 2
+fov.NumSides = 64
+fov.Filled = false
+fov.Color = Color3.fromRGB(255, 255, 255)
+fov.Visible = false
+
+--====================
+-- ShiftLock判定
+--====================
+local function isShiftLock()
+	return UIS.MouseBehavior == Enum.MouseBehavior.LockCenter
 end
 
--- ラベル更新関数
-local function UpdateFruitList()
-	-- 古いラベル削除
-	for _, list in pairs(foldableLists) do
-		for _, lbl in ipairs(list.Items) do
-			lbl:Remove() -- RayFieldのラベル削除
-		end
-		list.Items = {}
-	end
+--====================
+-- 一番近いプレイヤー取得
+--====================
+local function getClosestPlayer()
+	local closestPart = nil
+	local shortest = math.huge
+	local center = Vector2.new(camera.ViewportSize.X / 2, camera.ViewportSize.Y / 2)
 
-	-- 自然湧きフルーツ
-	local naturalList = foldableLists["自然湧きフルーツ"] or CreateFoldable("自然湧きフルーツ")
-	for _, obj in ipairs(workspace:GetDescendants()) do
-		if string.lower(obj.Name) == "fruit" and obj.Parent == workspace then
-			local lbl = fruitTab:CreateLabel("  "..obj.Name.." ("..obj:GetFullName()..")")
-			table.insert(naturalList.Items, lbl)
-		end
-	end
-
-	-- プレイヤー所持フルーツ
-	local playerList = foldableLists["プレイヤー所持実"] or CreateFoldable("プレイヤー所持実")
-	for _, plr in ipairs(game.Players:GetPlayers()) do
-		if plr.Backpack then
-			for _, item in ipairs(plr.Backpack:GetChildren()) do
-				if string.lower(item.Name) == "fruit" then
-					local lbl = fruitTab:CreateLabel("  "..plr.Name..": "..item.Name)
-					table.insert(playerList.Items, lbl)
+	for _, plr in ipairs(Players:GetPlayers()) do
+		if plr ~= localPlayer and plr.Character then
+			local hum = plr.Character:FindFirstChild("Humanoid")
+			local part = plr.Character:FindFirstChild(AIM_PART)
+			if hum and hum.Health > 0 and part then
+				local pos, onScreen = camera:WorldToViewportPoint(part.Position)
+				if onScreen then
+					local dist = (Vector2.new(pos.X, pos.Y) - center).Magnitude
+					if dist < FOV_RADIUS and dist < shortest then
+						shortest = dist
+						closestPart = part
+					end
 				end
 			end
 		end
-		if plr.Character then
-			for _, item in ipairs(plr.Character:GetChildren()) do
-				if string.lower(item.Name) == "fruit" then
-					local lbl = fruitTab:CreateLabel("  "..plr.Name..": "..item.Name)
-					table.insert(playerList.Items, lbl)
-				end
-			end
-		end
 	end
+
+	return closestPart
 end
 
--- 更新ボタン
-fruitTab:CreateButton({
-	Name = "更新",
-	Callback = UpdateFruitList
-})
+--====================
+-- メインループ
+--====================
+RunService.RenderStepped:Connect(function()
+	-- GUIオフなら処理しない
+	if not autoAimEnabled then
+		lockedPart = nil
+		fov.Visible = false
+		return
+	end
 
--- 自動更新
-task.spawn(function()
-	while true do
-		task.wait(1)
-		UpdateFruitList()
+	-- FOV表示
+	local center = Vector2.new(camera.ViewportSize.X / 2, camera.ViewportSize.Y / 2)
+	fov.Position = center
+	fov.Radius = FOV_RADIUS
+	fov.Visible = showFOV
+
+	-- ShiftLockしてないならターゲット解除
+	if not isShiftLock() then
+		lockedPart = nil
+		return
+	end
+
+	-- ShiftLock中のみターゲットを取得
+	if not lockedPart or not lockedPart.Parent then
+		lockedPart = getClosestPlayer()
+	end
+
+	-- ターゲットがあれば吸い付き
+	if lockedPart then
+		local camCF = camera.CFrame
+		local targetCF = CFrame.new(camCF.Position, lockedPart.Position)
+		camera.CFrame = camCF:Lerp(targetCF, AIM_STRENGTH)
 	end
 end)
 
 
+--========================================================--
+-- 🍏 Fruit 自動スライド移動（AutoAimと共存）
+--========================================================--
+
+local fruitSlideEnabled = false
+local SLIDE_SPEED = 300
+local HEIGHT_OFFSET = 0 -- 高さ固定（落下防止）
+
+-- キャラRoot取得
+local function getRoot()
+    local char = localPlayer.Character
+    if not char then return end
+    return char:FindFirstChild("HumanoidRootPart")
+end
+
+--================ Fruit検索（完全一致） =================
+local function getAllFruits()
+    local fruits = {}
+
+    for _, obj in ipairs(workspace:GetDescendants()) do
+        if obj:IsA("BasePart") and obj.Name == "Fruit" then
+            table.insert(fruits, obj)
+        end
+    end
+
+    return fruits
+end
+
+
+-- 一番近いFruit
+local function getNearestFruit(root)
+    local closest, dist = nil, math.huge
+    for _, fruit in ipairs(getAllFruits()) do
+        local d = (fruit.Position - root.Position).Magnitude
+        if d < dist then
+            dist = d
+            closest = fruit
+        end
+    end
+    return closest
+end
+
+-- Fruitスライド処理
+RunService.RenderStepped:Connect(function(dt)
+    if not fruitSlideEnabled then return end
+
+    local root = getRoot()
+    if not root then return end
+
+    local fruit = getNearestFruit(root)
+    if not fruit then return end
+
+    -- 落下・慣性完全防止
+    root.AssemblyLinearVelocity = Vector3.zero
+
+    -- Y固定でスライド
+    local targetPos = Vector3.new(
+        fruit.Position.X,
+        root.Position.Y + HEIGHT_OFFSET,
+        fruit.Position.Z
+    )
+
+    local dir = targetPos - root.Position
+    if dir.Magnitude < 2 then return end
+
+    root.CFrame = root.CFrame + dir.Unit * SLIDE_SPEED * dt
+end)
+
+
+
+
+-- 新しいON/OFF変数
+local fruitTPEnabled = false
+local fruitCheckInterval = 0.2
+
+-- Fruit瞬間TPループ
+task.spawn(function()
+    while true do
+        task.wait(fruitCheckInterval)
+        if not fruitTPEnabled then continue end
+
+        local root = localPlayer.Character and localPlayer.Character:FindFirstChild("HumanoidRootPart")
+        if not root then continue end
+
+        -- 一番近いFruitを取得
+        local fruit
+        for _, v in ipairs(workspace:GetDescendants()) do
+            if v.Name == "Fruit" and v:IsA("BasePart") then
+                fruit = v
+                break
+            end
+        end
+        if not fruit then continue end
+
+        local originalCFrame = root.CFrame
+        root.CFrame = fruit.CFrame
+        task.wait(0.05)
+        root.CFrame = originalCFrame
+    end
+end)
+
+
+--========================================================--
+--                    🧩 GUI (Tab2)                      --
+--========================================================--
+
+local autoAimTab = Window:CreateTab("戦闘(BloxFruit用)", 4483362458)
+
+-- ON / OFF
+autoAimTab:CreateToggle({
+	Name = "オートエイム",
+	CurrentValue = false,
+	Flag = "AutoAimToggle",
+	Callback = function(v)
+		autoAimEnabled = v
+		print("[AutoAim]", v and "ON" or "OFF")
+	end
+})
+
+-- FOV表示
+autoAimTab:CreateToggle({
+	Name = "FOV",
+	CurrentValue = true,
+	Flag = "AutoAimFOV",
+	Callback = function(v)
+		showFOV = v
+	end
+})
+
+-- FOVサイズ
+autoAimTab:CreateSlider({
+	Name = "FOV大きさ",
+	Range = {50, 400},
+	Increment = 5,
+	Suffix = "px",
+	CurrentValue = FOV_RADIUS,
+	Flag = "AutoAimFOVRadius",
+	Callback = function(v)
+		FOV_RADIUS = v
+	end
+})
+
+-- 吸い付き強度
+autoAimTab:CreateSlider({
+	Name = "吸い付き強度",
+	Range = {0.1, 1},
+	Increment = 0.05,
+	Suffix = "",
+	CurrentValue = AIM_STRENGTH,
+	Flag = "AutoAimStrength",
+	Callback = function(v)
+		AIM_STRENGTH = v
+	end
+})
+
+-- Fruitスライド ON / OFF
+autoAimTab:CreateToggle({
+	Name = "Fruit自動回収",
+	CurrentValue = false,
+	Flag = "FruitSlideToggle",
+	Callback = function(v)
+		fruitSlideEnabled = v
+		print("[FruitSlide]", v and "ON" or "OFF")
+	end
+})
+
+autoAimTab:CreateToggle({
+    Name = "Fruit瞬間回収",
+    CurrentValue = false,
+    Flag = "FruitTPToggle",
+    Callback = function(v)
+        fruitTPEnabled = v
+        print("[FruitTP]", v and "ON" or "OFF")
+    end
+})
 
 --============================
 -- 設定値
