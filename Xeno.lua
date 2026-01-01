@@ -1549,10 +1549,7 @@ local function updateFruitLabels()
     -- フルーツチェック
     for _, obj in ipairs(workspace:GetDescendants()) do
         if string.lower(obj.Name) == "fruit" then
-            local lbl = fruitTab:CreateLabel({
-                Name = obj:GetFullName(),
-                Text = obj:GetFullName()
-            })
+           local lbl = fruitTab:CreateLabel(obj:GetFullName()) -- 文字列だけ渡す
             table.insert(fruitLabels, lbl)
         end
     end
