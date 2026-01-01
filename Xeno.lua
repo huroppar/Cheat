@@ -1105,6 +1105,7 @@ local LocalPlayer = Players.LocalPlayer
 local Workspace = game:GetService("Workspace")
 
 --================= GUI =================
+--================= GUI =================
 local StandTab = Window:CreateTab("スタンドの世界")
 
 -- チェスト管理
@@ -1121,6 +1122,8 @@ end
 local chestLabel = StandTab:CreateLabel("現在のチェスト: 0")
 
 --================= Dropdown でチェスト選択 =================
+local isDropdownInitialized = false -- 初期読み込みフラグ
+
 local chestDropdown = StandTab:CreateDropdown({
     Name = "開くチェストを選択",
     Options = availableChests,
@@ -1128,6 +1131,7 @@ local chestDropdown = StandTab:CreateDropdown({
     MultipleOptions = false,
     Flag = "ChestDropdown",
     Callback = function(option)
+        if not isDropdownInitialized then return end -- 初回無視
         local number = tonumber(option[1])
         if not number then return end
 
@@ -1144,6 +1148,8 @@ local chestDropdown = StandTab:CreateDropdown({
         end
     end,
 })
+
+isDropdownInitialized = true -- 初期化完了
 
 --================= Input で番号指定TP =================
 local chestInput = StandTab:CreateInput({
@@ -1207,7 +1213,6 @@ RunService.RenderStepped:Connect(function()
         chestDropdown:Refresh(availableChests)
     end
 end)
-
 
 
 
