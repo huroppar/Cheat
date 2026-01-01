@@ -1505,6 +1505,84 @@ end)
 
 
 
+-- RayField 折りたたみリスト例
+
+local Window = RayField:CreateWindow({
+	Name = "Fruit Manager",
+})
+
+local fruitTab = Window:CreateTab("フルーツ一覧")
+
+-- 折りたたみ用のテーブル
+local foldableLists = {}
+
+-- セクション作成関数
+local function CreateFoldable(title)
+	local fold = fruitTab:CreateToggle({
+		Name = title,
+		CurrentValue = false,
+		Callback = function() end -- 折りたたみのON/OFFだけ管理
+	})
+	foldableLists[title] = {Toggle = fold, Items = {}}
+	return foldableLists[title]
+end
+
+-- ラベル更新関数
+local function UpdateFruitList()
+	-- 古いラベル削除
+	for _, list in pairs(foldableLists) do
+		for _, lbl in ipairs(list.Items) do
+			lbl:Remove() -- RayFieldのラベル削除
+		end
+		list.Items = {}
+	end
+
+	-- 自然湧きフルーツ
+	local naturalList = foldableLists["自然湧きフルーツ"] or CreateFoldable("自然湧きフルーツ")
+	for _, obj in ipairs(workspace:GetDescendants()) do
+		if string.lower(obj.Name) == "fruit" and obj.Parent == workspace then
+			local lbl = fruitTab:CreateLabel("  "..obj.Name.." ("..obj:GetFullName()..")")
+			table.insert(naturalList.Items, lbl)
+		end
+	end
+
+	-- プレイヤー所持フルーツ
+	local playerList = foldableLists["プレイヤー所持実"] or CreateFoldable("プレイヤー所持実")
+	for _, plr in ipairs(game.Players:GetPlayers()) do
+		if plr.Backpack then
+			for _, item in ipairs(plr.Backpack:GetChildren()) do
+				if string.lower(item.Name) == "fruit" then
+					local lbl = fruitTab:CreateLabel("  "..plr.Name..": "..item.Name)
+					table.insert(playerList.Items, lbl)
+				end
+			end
+		end
+		if plr.Character then
+			for _, item in ipairs(plr.Character:GetChildren()) do
+				if string.lower(item.Name) == "fruit" then
+					local lbl = fruitTab:CreateLabel("  "..plr.Name..": "..item.Name)
+					table.insert(playerList.Items, lbl)
+				end
+			end
+		end
+	end
+end
+
+-- 更新ボタン
+fruitTab:CreateButton({
+	Name = "更新",
+	Callback = UpdateFruitList
+})
+
+-- 自動更新
+task.spawn(function()
+	while true do
+		task.wait(1)
+		UpdateFruitList()
+	end
+end)
+
+
 
 --============================
 -- 設定値
