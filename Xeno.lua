@@ -697,6 +697,7 @@ local camera = workspace.CurrentCamera
 local showPlayerESP, showEnemyESP, showItemESP = false, false, false
 local showPlayerHitbox, showEnemyHitbox = false, false
 local showNameESP = false
+local showLineESP = false -- 線ESPのオンオフ用
 
 local highlights = {}
 local hitboxBoxes = {}
