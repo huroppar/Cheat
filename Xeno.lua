@@ -1152,17 +1152,22 @@ StandTab:CreateButton({
 })
 
 --================= チェスト番号入力 =================
-local chestNumberInput = "" -- 入力値保持用
+-- 入力用変数
+local chestNumberInput = ""
 
-local chestInput = StandTab:CreateTextbox({
-    Name = "チェスト番号入力",
-    Default = "",
-    TextDisappear = false, -- Enterで消えない
-    Callback = function(value)
-        chestNumberInput = value -- 入力を変数に保存
+-- 仮にGUIで入力欄を作るならLabel + TextButtonで自作
+local inputLabel = StandTab:CreateLabel("チェスト番号入力: " .. chestNumberInput)
+
+-- 数字入力用ボタン例
+StandTab:CreateButton({
+    Name = "数字入力 (例: 1)",
+    Callback = function()
+        chestNumberInput = "1" -- 実際にはユーザーが数字入力するUIに置き換え
+        inputLabel:Set("チェスト番号入力: " .. chestNumberInput)
     end
 })
 
+-- 番号指定TPボタン
 StandTab:CreateButton({
     Name = "指定番号にTP",
     Callback = function()
@@ -1184,6 +1189,7 @@ StandTab:CreateButton({
         end
     end
 })
+
 
 
 
