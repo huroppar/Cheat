@@ -1361,98 +1361,66 @@ end)
 -- 🍏 Fruit 自動スライド移動（AutoAimと共存）
 --========================================================--
 
+--==============================
+-- 回収・TP用の関数
+--==============================
 local fruitSlideEnabled = false
+local fruitTPEnabled = false
 local SLIDE_SPEED = 300
-local HEIGHT_OFFSET = 0 -- 高さ固定（落下防止）
+local HEIGHT_OFFSET = 0
 
 -- キャラRoot取得
 local function getRoot()
-    local char = localPlayer.Character
+    local char = game.Players.LocalPlayer.Character
     if not char then return end
     return char:FindFirstChild("HumanoidRootPart")
 end
 
---================ Fruit検索（完全一致） =================
-local function getAllFruits()
-    local fruits = {}
-
-    for _, obj in ipairs(workspace:GetDescendants()) do
-        if obj:IsA("BasePart") and obj.Name == "Fruit" then
-            table.insert(fruits, obj)
-        end
-    end
-
-    return fruits
-end
-
-
--- 一番近いFruit
+-- 一番近い自然フルーツ取得
 local function getNearestFruit(root)
     local closest, dist = nil, math.huge
-    for _, fruit in ipairs(getAllFruits()) do
-        local d = (fruit.Position - root.Position).Magnitude
-        if d < dist then
-            dist = d
-            closest = fruit
+    for _, obj in ipairs(workspace:GetDescendants()) do
+        if obj:IsA("BasePart") and string.lower(obj.Name) == "fruit" and obj.Parent == workspace then
+            local d = (obj.Position - root.Position).Magnitude
+            if d < dist then
+                dist = d
+                closest = obj
+            end
         end
     end
     return closest
 end
 
--- Fruitスライド処理
-RunService.RenderStepped:Connect(function(dt)
+-- スライド処理
+game:GetService("RunService").RenderStepped:Connect(function(dt)
     if not fruitSlideEnabled then return end
-
     local root = getRoot()
     if not root then return end
 
     local fruit = getNearestFruit(root)
     if not fruit then return end
 
-    -- 落下・慣性完全防止
     root.AssemblyLinearVelocity = Vector3.zero
-
-    -- Y固定でスライド
-    local targetPos = Vector3.new(
-        fruit.Position.X,
-        root.Position.Y + HEIGHT_OFFSET,
-        fruit.Position.Z
-    )
-
+    local targetPos = Vector3.new(fruit.Position.X, root.Position.Y + HEIGHT_OFFSET, fruit.Position.Z)
     local dir = targetPos - root.Position
     if dir.Magnitude < 2 then return end
 
     root.CFrame = root.CFrame + dir.Unit * SLIDE_SPEED * dt
 end)
 
-
-
-
--- 新しいON/OFF変数
-local fruitTPEnabled = false
-local fruitCheckInterval = 0.2
-
--- Fruit瞬間TPループ
+-- 瞬間TPループ
 task.spawn(function()
     while true do
-        task.wait(fruitCheckInterval)
+        task.wait(0.2)
         if not fruitTPEnabled then continue end
-
-        local root = localPlayer.Character and localPlayer.Character:FindFirstChild("HumanoidRootPart")
+        local root = getRoot()
         if not root then continue end
 
-        -- 一番近いFruitを取得
-        local fruit
-        for _, v in ipairs(workspace:GetDescendants()) do
-            if v.Name == "Fruit" and v:IsA("BasePart") then
-                fruit = v
-                break
-            end
-        end
+        local fruit = getNearestFruit(root)
         if not fruit then continue end
 
         local originalCFrame = root.CFrame
-        root.CFrame = fruit.CFrame
+        root.CFrame = CFrame.new(fruit.Position + Vector3.new(0,3,0))
         task.wait(0.05)
         root.CFrame = originalCFrame
     end
@@ -1512,24 +1480,21 @@ autoAimTab:CreateSlider({
 	end
 })
 
--- Fruitスライド ON / OFF
-autoAimTab:CreateToggle({
-	Name = "Fruit自動回収",
-	CurrentValue = false,
-	Flag = "FruitSlideToggle",
-	Callback = function(v)
-		fruitSlideEnabled = v
-		print("[FruitSlide]", v and "ON" or "OFF")
-	end
+fruitTab:CreateToggle({
+    Name = "Fruit自動回収",
+    CurrentValue = false,
+    Flag = "FruitSlideToggle",
+    Callback = function(v)
+        fruitSlideEnabled = v
+    end
 })
 
-autoAimTab:CreateToggle({
+fruitTab:CreateToggle({
     Name = "Fruit瞬間回収",
     CurrentValue = false,
     Flag = "FruitTPToggle",
     Callback = function(v)
         fruitTPEnabled = v
-        print("[FruitTP]", v and "ON" or "OFF")
     end
 })
 
