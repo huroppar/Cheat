@@ -1358,54 +1358,47 @@ end)
 
 
 --========================================================--
--- 🍏 Fruit 自動スライド移動（AutoAimと共存）
+-- 🍏 Fruit 自動回収（スライド＆TP、複数対応）
 --========================================================--
 
 local fruitSlideEnabled = false
+local fruitTPEnabled = false
 local SLIDE_SPEED = 300
-local HEIGHT_OFFSET = 0 -- 高さ固定（落下防止）
+local HEIGHT_OFFSET = 0
+local fruitCheckInterval = 0.2
 
 -- キャラRoot取得
 local function getRoot()
-    local char = localPlayer.Character
-    if not char then return end
+    local char = localPlayer.Character or localPlayer.CharacterAdded:Wait()
     return char:FindFirstChild("HumanoidRootPart")
 end
 
---================ Fruit検索（自然なやつだけ） =================
+-- 自然なフルーツ取得
 local function getAllFruits()
     local fruits = {}
-
     for _, obj in ipairs(workspace:GetDescendants()) do
-        if obj:IsA("BasePart") and obj.Name == "Fruit" then
-            -- 親が workspace 直下なら自然なフルーツと判断
-            if obj.Parent == workspace then
-                table.insert(fruits, obj)
-            end
+        if obj:IsA("BasePart") and obj.Name == "Fruit" and obj.Parent == workspace then
+            table.insert(fruits, obj)
         end
     end
-
     return fruits
 end
 
-
-
--- 一番近いFruit
+-- 距離順にソートして最も近いフルーツ取得
 local function getNearestFruit(root)
-    local closest, dist = nil, math.huge
-    for _, fruit in ipairs(getAllFruits()) do
-        local d = (fruit.Position - root.Position).Magnitude
-        if d < dist then
-            dist = d
-            closest = fruit
-        end
-    end
-    return closest
+    local fruits = getAllFruits()
+    table.sort(fruits, function(a,b)
+        return (a.Position - root.Position).Magnitude < (b.Position - root.Position).Magnitude
+    end)
+    return fruits[1] -- 最も近いフルーツ
 end
 
--- Fruitスライド処理
+--====================
+-- スライド処理
+--====================
 RunService.RenderStepped:Connect(function(dt)
     if not fruitSlideEnabled then return end
+    if fruitTPEnabled then return end -- TP中はスライド停止
 
     local root = getRoot()
     if not root then return end
@@ -1413,55 +1406,44 @@ RunService.RenderStepped:Connect(function(dt)
     local fruit = getNearestFruit(root)
     if not fruit then return end
 
-    -- 落下・慣性完全防止
+    -- 慣性完全防止
     root.AssemblyLinearVelocity = Vector3.zero
 
     -- Y固定でスライド
-    local targetPos = Vector3.new(
-        fruit.Position.X,
-        root.Position.Y + HEIGHT_OFFSET,
-        fruit.Position.Z
-    )
-
+    local targetPos = Vector3.new(fruit.Position.X, root.Position.Y + HEIGHT_OFFSET, fruit.Position.Z)
     local dir = targetPos - root.Position
     if dir.Magnitude < 2 then return end
 
     root.CFrame = root.CFrame + dir.Unit * SLIDE_SPEED * dt
 end)
 
-
-
-
--- 新しいON/OFF変数
-local fruitTPEnabled = false
-local fruitCheckInterval = 0.2
-
--- Fruit瞬間TPループ
+--====================
+-- 瞬間TP処理（複数対応）
+--====================
 task.spawn(function()
     while true do
         task.wait(fruitCheckInterval)
         if not fruitTPEnabled then continue end
 
-        local root = localPlayer.Character and localPlayer.Character:FindFirstChild("HumanoidRootPart")
+        local root = getRoot()
         if not root then continue end
 
--- 一番近い自然なフルーツだけ取得
-local fruit
-for _, v in ipairs(workspace:GetDescendants()) do
-    if v:IsA("BasePart") and v.Name == "Fruit" and v.Parent == workspace then
-        fruit = v
-        break
-    end
-end
+        -- 距離順に全フルーツ取得
+        local fruits = getAllFruits()
+        table.sort(fruits, function(a,b)
+            return (a.Position - root.Position).Magnitude < (b.Position - root.Position).Magnitude
+        end)
 
-        if not fruit then continue end
-
-        local originalCFrame = root.CFrame
-        root.CFrame = fruit.CFrame
-        task.wait(0.05)
-        root.CFrame = originalCFrame
+        for _, fruit in ipairs(fruits) do
+            if not fruit.Parent then continue end -- 既に取られた可能性
+            local originalCFrame = root.CFrame
+            root.CFrame = CFrame.new(fruit.Position + Vector3.new(0, 3, 0)) -- 少し上にTP
+            task.wait(0.05)
+            root.CFrame = originalCFrame
+        end
     end
 end)
+
 
 
 --========================================================--
