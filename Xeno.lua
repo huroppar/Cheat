@@ -56,8 +56,8 @@ local platforms = {}
 --================================
 local Window = Rayfield:CreateWindow({
     Name = "Furo Hub",
-    LoadingTitle = "Loading",
-    LoadingSubtitle = "by Furopper",
+    LoadingTitle = "読み込み中.....",
+    LoadingSubtitle = "Editting by Furopper",
     ConfigurationSaving = {
         Enabled = true,
         FolderName = "FuroHub",
@@ -1132,14 +1132,12 @@ end
 
 --================= GUI =================
 -- Window は既存RayfieldのWindowを想定
--- ここで新しいタブを作成
 local StandTab = Window:CreateTab("スタンドの世界")
 
 -- 現在のチェスト番号表示
 local chestLabel = StandTab:CreateLabel("現在のチェスト: 0")
 
 --================= 順番にTPボタン =================
--- 順番にTPボタン
 StandTab:CreateButton({
     Name = "次のチェストにTP",
     Callback = function()
@@ -1153,36 +1151,40 @@ StandTab:CreateButton({
     end
 })
 
-
+--================= チェスト番号入力 =================
+local chestNumberInput = "" -- 入力値を保持する変数
 
 local chestInput = StandTab:CreateTextbox({
     Name = "チェスト番号入力",
     Default = "",
-    TextDisappear = true,
+    TextDisappear = false, -- Enter押しても文字が消えない
     Callback = function(value)
-        -- 入力値はここで取得可能
+        chestNumberInput = value -- ここで入力値を保存
     end
 })
 
-
--- 番号指定TPボタン
+--================= 番号指定TPボタン =================
 StandTab:CreateButton({
     Name = "指定番号にTP",
     Callback = function()
-        local number = tonumber(chestInput.Value)
-        if number and number >= 1 and number <= maxChest then
-            currentChest = number
-            local chest = findChestByNumber(number)
-            local teleportedNumber = teleportToChest(chest)
-            if teleportedNumber then
-                chestLabel:Set("現在のチェスト: " .. teleportedNumber)
-            end
-        else
+        local number = tonumber(chestNumberInput)
+        if not number then
+            print("番号を正しく入力してください")
+            return
+        end
+        if number < 1 or number > maxChest then
             print("1〜" .. maxChest .. "の番号を入力してください")
+            return
+        end
+
+        currentChest = number
+        local chest = findChestByNumber(number)
+        local teleportedNumber = teleportToChest(chest)
+        if teleportedNumber then
+            chestLabel:Set("現在のチェスト: " .. teleportedNumber)
         end
     end
 })
-
 
 
 
