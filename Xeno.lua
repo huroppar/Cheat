@@ -1372,18 +1372,22 @@ local function getRoot()
     return char:FindFirstChild("HumanoidRootPart")
 end
 
---================ Fruit検索（完全一致） =================
+--================ Fruit検索（自然なやつだけ） =================
 local function getAllFruits()
     local fruits = {}
 
     for _, obj in ipairs(workspace:GetDescendants()) do
         if obj:IsA("BasePart") and obj.Name == "Fruit" then
-            table.insert(fruits, obj)
+            -- 親が workspace 直下なら自然なフルーツと判断
+            if obj.Parent == workspace then
+                table.insert(fruits, obj)
+            end
         end
     end
 
     return fruits
 end
+
 
 
 -- 一番近いFruit
@@ -1441,14 +1445,15 @@ task.spawn(function()
         local root = localPlayer.Character and localPlayer.Character:FindFirstChild("HumanoidRootPart")
         if not root then continue end
 
-        -- 一番近いFruitを取得
-        local fruit
-        for _, v in ipairs(workspace:GetDescendants()) do
-            if v.Name == "Fruit" and v:IsA("BasePart") then
-                fruit = v
-                break
-            end
-        end
+-- 一番近い自然なフルーツだけ取得
+local fruit
+for _, v in ipairs(workspace:GetDescendants()) do
+    if v:IsA("BasePart") and v.Name == "Fruit" and v.Parent == workspace then
+        fruit = v
+        break
+    end
+end
+
         if not fruit then continue end
 
         local originalCFrame = root.CFrame
