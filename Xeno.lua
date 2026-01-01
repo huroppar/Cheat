@@ -370,12 +370,9 @@ local espTab = Window:CreateTab("ESP", 4483362458)
 --================================
 -- Services（ESP専用で再定義）
 --================================
-local Players = game:GetService("Players")
-local RunService = game:GetService("RunService")
 local Lighting = game:GetService("Lighting")
 local Camera = workspace.CurrentCamera
 
-local LocalPlayer = Players.LocalPlayer
 
 --================================
 -- 設定フラグ
@@ -478,22 +475,33 @@ elseif lineDrawings[plr] then
     lineDrawings[plr].Visible = false
 end
 
-
+    end
+end)
 --================================
 -- FullBright
 --================================
+local originalLighting = {
+    Brightness = Lighting.Brightness,
+    ClockTime = Lighting.ClockTime,
+    FogEnd = Lighting.FogEnd
+}
+
 espTab:CreateToggle({
     Name = "FullBright",
     CurrentValue = false,
     Callback = function(v)
-        fullBrightEnabled = v
         if v then
             Lighting.Brightness = 5
             Lighting.ClockTime = 12
             Lighting.FogEnd = 1e9
+        else
+            Lighting.Brightness = originalLighting.Brightness
+            Lighting.ClockTime = originalLighting.ClockTime
+            Lighting.FogEnd = originalLighting.FogEnd
         end
     end
 })
+
 
 --================================
 -- プレイヤー Highlight
@@ -675,7 +683,10 @@ espTab:CreateToggle({
                     hrp.Transparency = 0.5
                     hrp.Color = isEnemy(plr) and Color3.new(1,0,0) or Color3.new(1,1,1)
                 else
-                    hrp.Size = Vector3.new(2,2,1)
+                    originalSize[plr] = hrp.Size
+-- OFF時
+hrp.Size = originalSize[plr]
+
                     hrp.Transparency = 1
                 end
             end
