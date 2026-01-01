@@ -724,17 +724,16 @@ local function getLevel(plr)
     local stats = plr:FindFirstChild("leaderstats")
     if not stats then return "?" end
 
-for _,p in ipairs(plr.Character:GetDescendants()) do
-        if v:IsA("IntValue") or v:IsA("NumberValue") then
-            if string.find(v.Name:lower(), "level")
-            or string.find(v.Name:lower(), "lv") then
-                return v.Value
-            end
+    for _,v in ipairs(stats:GetChildren()) do
+        if (v:IsA("IntValue") or v:IsA("NumberValue"))
+        and (v.Name:lower():find("level") or v.Name:lower():find("lv")) then
+            return v.Value
         end
     end
 
     return "?"
 end
+
 
 
 local function getDistance(plr)
@@ -826,7 +825,7 @@ local function applyXRay()
             end
         end
     end
-for _,obj in ipairs(workspace:GetDescendants()) do
+for _,p in ipairs(plr.Character:GetDescendants()) do
     if obj:IsA("BasePart") and not isCharacterPart(obj) then
         obj.LocalTransparencyModifier =
             ESP.XRayWorld and XRAY_WORLD_ALPHA or 0
@@ -842,7 +841,14 @@ local old = {
 }
 
 --================ メイン更新（軽量） =================
-RunService.RenderStepped:Connect(function()
+
+	if not LocalPlayer.Character
+or not LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
+    return
+end
+
+	
+	RunService.RenderStepped:Connect(function()
     -- FullBright維持
     if ESP.FullBright then
         Lighting.Brightness = 3
@@ -853,23 +859,27 @@ RunService.RenderStepped:Connect(function()
 
 
 
-			if not LocalPlayer.Character or not LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
-    return
-end
-
-
 			
     for _,plr in ipairs(Players:GetPlayers()) do
         if plr ~= LocalPlayer and plr.Character and plr.Character:FindFirstChild("HumanoidRootPart") then
 
             -- ハイライト
-           local sameTeam = (plr.Team ~= nil and LocalPlayer.Team ~= nil and plr.Team == LocalPlayer.Team)
-                if ESP.PlayerHL then setHighlight(plr, Color3.fromRGB(0,255,0))
-                else removeHighlight(plr) end
-            else
-                if ESP.EnemyHL then setHighlight(plr, Color3.fromRGB(255,0,0))
-                else removeHighlight(plr) end
-            end
+         local sameTeam = (plr.Team and LocalPlayer.Team and plr.Team == LocalPlayer.Team)
+
+if sameTeam then
+    if ESP.PlayerHL then
+        setHighlight(plr, Color3.fromRGB(0,255,0))
+    else
+        removeHighlight(plr)
+    end
+else
+    if ESP.EnemyHL then
+        setHighlight(plr, Color3.fromRGB(255,0,0))
+    else
+        removeHighlight(plr)
+    end
+end
+
 
             -- 名前更新
             if ESP.NameESP then
@@ -884,14 +894,15 @@ end
 		
 					
 					
-					local function removeAllNames()
-					for _,data in pairs(NameGuis) do
+local function removeAllNames()
+    for _,data in pairs(NameGuis) do
         if data.gui then
             data.gui:Destroy()
         end
     end
     table.clear(NameGuis)
 end
+
 			
 			-- 線ESP
             if ESP.LineESP then
