@@ -1151,19 +1151,29 @@ StandTab:CreateButton({
     end
 })
 
---================= チェスト番号入力 =================
--- 入力用変数
-local chestNumberInput = ""
+-- チェスト番号保持
+local currentInput = 1
 
--- 仮にGUIで入力欄を作るならLabel + TextButtonで自作
-local inputLabel = StandTab:CreateLabel("チェスト番号入力: " .. chestNumberInput)
+-- 表示ラベル
+local inputLabel = StandTab:CreateLabel("チェスト番号入力: " .. currentInput)
 
--- 数字入力用ボタン例
+-- 「-」ボタン
 StandTab:CreateButton({
-    Name = "数字入力 (例: 1)",
+    Name = "前の番号",
     Callback = function()
-        chestNumberInput = "1" -- 実際にはユーザーが数字入力するUIに置き換え
-        inputLabel:Set("チェスト番号入力: " .. chestNumberInput)
+        currentInput = currentInput - 1
+        if currentInput < 1 then currentInput = 1 end
+        inputLabel:Set("チェスト番号入力: " .. currentInput)
+    end
+})
+
+-- 「+」ボタン
+StandTab:CreateButton({
+    Name = "次の番号",
+    Callback = function()
+        currentInput = currentInput + 1
+        if currentInput > maxChest then currentInput = maxChest end
+        inputLabel:Set("チェスト番号入力: " .. currentInput)
     end
 })
 
@@ -1171,18 +1181,7 @@ StandTab:CreateButton({
 StandTab:CreateButton({
     Name = "指定番号にTP",
     Callback = function()
-        local number = tonumber(chestNumberInput)
-        if not number then
-            print("番号を正しく入力してください")
-            return
-        end
-        if number < 1 or number > maxChest then
-            print("1〜" .. maxChest .. "の番号を入力してください")
-            return
-        end
-
-        currentChest = number
-        local chest = findChestByNumber(number)
+        local chest = findChestByNumber(currentInput)
         local teleportedNumber = teleportToChest(chest)
         if teleportedNumber then
             chestLabel:Set("現在のチェスト: " .. teleportedNumber)
