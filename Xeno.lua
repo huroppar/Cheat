@@ -1104,38 +1104,72 @@ local Players = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer
 local Workspace = game:GetService("Workspace")
 
---================= チェスト管理 =================
+--================= GUI =================
+local StandTab = Window:CreateTab("スタンドの世界")
+
+-- チェスト管理
 local currentChest = 0
 local maxChest = 54
 
-local function findChestByNumber(number)
-    for _, obj in ipairs(Workspace:GetChildren()) do
-        if obj:IsA("Model") and obj.Name == tostring(number) then
-            return obj
-        end
-    end
-    return nil
+-- 全チェスト番号リスト
+local availableChests = {}
+for i = 1, maxChest do
+    table.insert(availableChests, tostring(i))
 end
 
-local function teleportToChest(chest)
-    if chest and chest.PrimaryPart then
-        LocalPlayer.Character:SetPrimaryPartCFrame(
-            CFrame.new(chest.PrimaryPart.Position + Vector3.new(0,7,0))
-        )
-        print("テレポート: " .. chest.Name)
-        return tonumber(chest.Name)
-    else
-        print("チェストが見つかりませんでした")
-        return nil
-    end
-end
-
---================= GUI =================
--- Window は既存RayfieldのWindowを想定
-local StandTab = Window:CreateTab("スタンドの世界")
-
--- 現在のチェスト番号表示
+-- 現在のチェスト表示ラベル
 local chestLabel = StandTab:CreateLabel("現在のチェスト: 0")
+
+--================= Dropdown でチェスト選択 =================
+local chestDropdown = StandTab:CreateDropdown({
+    Name = "開くチェストを選択",
+    Options = availableChests,
+    CurrentOption = {availableChests[1]},
+    MultipleOptions = false,
+    Flag = "ChestDropdown",
+    Callback = function(option)
+        local number = tonumber(option[1])
+        if not number then return end
+
+        local chest = Workspace:FindFirstChild(tostring(number))
+        if chest and chest.PrimaryPart then
+            LocalPlayer.Character:SetPrimaryPartCFrame(
+                CFrame.new(chest.PrimaryPart.Position + Vector3.new(0,7,0))
+            )
+            currentChest = number
+            chestLabel:Set("現在のチェスト: " .. number)
+            print("テレポート: " .. number)
+        else
+            print("チェストが見つかりませんでした")
+        end
+    end,
+})
+
+--================= Input で番号指定TP =================
+local chestInput = StandTab:CreateInput({
+    Name = "チェスト番号入力",
+    PlaceholderText = "1〜" .. maxChest,
+    RemoveTextAfterFocusLost = false,
+    Callback = function(text)
+        local number = tonumber(text)
+        if not number or number < 1 or number > maxChest then
+            print("1〜" .. maxChest .. "の番号を入力してください")
+            return
+        end
+
+        local chest = Workspace:FindFirstChild(tostring(number))
+        if chest and chest.PrimaryPart then
+            LocalPlayer.Character:SetPrimaryPartCFrame(
+                CFrame.new(chest.PrimaryPart.Position + Vector3.new(0,7,0))
+            )
+            currentChest = number
+            chestLabel:Set("現在のチェスト: " .. number)
+            print("テレポート: " .. number)
+        else
+            print("チェストが見つかりませんでした")
+        end
+    end,
+})
 
 --================= 順番にTPボタン =================
 StandTab:CreateButton({
@@ -1143,52 +1177,36 @@ StandTab:CreateButton({
     Callback = function()
         currentChest = currentChest + 1
         if currentChest > maxChest then currentChest = 1 end
-        local chest = findChestByNumber(currentChest)
-        local teleportedNumber = teleportToChest(chest)
-        if teleportedNumber then
-            chestLabel:Set("現在のチェスト: " .. teleportedNumber)
+
+        local chest = Workspace:FindFirstChild(tostring(currentChest))
+        if chest and chest.PrimaryPart then
+            LocalPlayer.Character:SetPrimaryPartCFrame(
+                CFrame.new(chest.PrimaryPart.Position + Vector3.new(0,7,0))
+            )
+            chestLabel:Set("現在のチェスト: " .. currentChest)
+            print("テレポート: " .. currentChest)
+        else
+            print("チェストが見つかりませんでした")
         end
     end
 })
 
--- チェスト番号保持
-local currentInput = 1
+--================= 定期的にチェストリストを更新 =================
+local RunService = game:GetService("RunService")
 
--- 表示ラベル
-local inputLabel = StandTab:CreateLabel("チェスト番号入力: " .. currentInput)
-
--- 「-」ボタン
-StandTab:CreateButton({
-    Name = "前の番号",
-    Callback = function()
-        currentInput = currentInput - 1
-        if currentInput < 1 then currentInput = 1 end
-        inputLabel:Set("チェスト番号入力: " .. currentInput)
-    end
-})
-
--- 「+」ボタン
-StandTab:CreateButton({
-    Name = "次の番号",
-    Callback = function()
-        currentInput = currentInput + 1
-        if currentInput > maxChest then currentInput = maxChest end
-        inputLabel:Set("チェスト番号入力: " .. currentInput)
-    end
-})
-
--- 番号指定TPボタン
-StandTab:CreateButton({
-    Name = "指定番号にTP",
-    Callback = function()
-        local chest = findChestByNumber(currentInput)
-        local teleportedNumber = teleportToChest(chest)
-        if teleportedNumber then
-            chestLabel:Set("現在のチェスト: " .. teleportedNumber)
+RunService.RenderStepped:Connect(function()
+    local changed = false
+    for i = #availableChests, 1, -1 do
+        local chestName = availableChests[i]
+        if not Workspace:FindFirstChild(chestName) then
+            table.remove(availableChests, i)
+            changed = true
         end
     end
-})
-
+    if changed then
+        chestDropdown:Refresh(availableChests)
+    end
+end)
 
 
 
