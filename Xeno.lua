@@ -871,7 +871,7 @@ espTab:CreateSlider({
 
 
 --========================================================--
---                     🔥 Combat Tab 完全版（整理版・安全版）     --
+--                     🔥 Combat Tab 完全版（滑らか張り付き対応）     --
 --========================================================--
 
 local Players = game:GetService("Players")
@@ -886,7 +886,7 @@ local combatTab = Window:CreateTab("戦闘", 4483362458)
 --============================--
 -- 定数
 --============================--
-local SAFE_Y = -200000 -- 無敵ゾーン
+local SAFE_Y = -20000 -- 無敵ゾーン
 
 --============================--
 -- 状態変数
@@ -894,7 +894,7 @@ local SAFE_Y = -200000 -- 無敵ゾーン
 local selectedTarget = nil
 
 local followActive = false
-local followMode = nil -- "v2", "under"
+local followMode = nil -- "normal", "v2", "under"
 local originalPos_Follow = nil
 
 local freeCamActive = false
@@ -995,6 +995,7 @@ combatTab:CreateButton({
     end
 })
 
+combatTab:CreateToggle({Name="普通の張り付き", Callback=function(v) if v then EnableFollow("normal") else DisableFollow() end end})
 combatTab:CreateToggle({Name="張り付き v2（距離制御）", Callback=function(v) if v then EnableFollow("v2") else DisableFollow() end end})
 combatTab:CreateToggle({Name="下向き張り付き", Callback=function(v) if v then EnableFollow("under") else DisableFollow() end end})
 combatTab:CreateToggle({Name="視点TP(向き固定)", Callback=function(v) if v then EnableFreeCam() else DisableFreeCam() end end})
@@ -1055,18 +1056,28 @@ RunService.RenderStepped:Connect(function(dt)
     local targetHRP = GetHRP(selectedTarget.Character)
     if not myHRP or not targetHRP then return end
 
+    local hum = GetHumanoid(player.Character)
+
     --==== Follow ====
     if followActive then
-        local hum = GetHumanoid(player.Character)
-        if followMode=="v2" then
+        if followMode=="normal" then
+            -- 普通張り付き：ターゲットの少し後ろに固定
+            local offset = CFrame.new(0,0,7)
+            myHRP.CFrame = targetHRP.CFrame * offset
+
+        elseif followMode=="v2" then
+            -- V2距離制御：200スタッド以内で滑らか追従
             local dVec = targetHRP.Position - myHRP.Position
             local dist = dVec.Magnitude
+            local speed = 300
             if dist > 200 then
-                myHRP.CFrame = myHRP.CFrame + dVec.Unit * 300 * dt
+                myHRP.CFrame = myHRP.CFrame:Lerp(CFrame.new(myHRP.Position + dVec.Unit * speed * dt), 0.2)
             else
-                myHRP.CFrame = targetHRP.CFrame * CFrame.new(0,0,7)
+                myHRP.CFrame = myHRP.CFrame:Lerp(targetHRP.CFrame * CFrame.new(0,0,7), 0.2)
             end
+
         elseif followMode=="under" then
+            -- 下向き張り付き：仰向け固定で12スタッド下
             myHRP.CFrame = targetHRP.CFrame * CFrame.new(0,-12,0) * CFrame.Angles(math.rad(90),0,0)
             if hum then hum.PlatformStand = true end
         end
@@ -1117,7 +1128,6 @@ RunService.Heartbeat:Connect(function()
         end
     end
 end)
-
 
 
 --========================================================--
