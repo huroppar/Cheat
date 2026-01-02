@@ -869,9 +869,8 @@ espTab:CreateSlider({
 })
 
 
-
 --========================================================--
---                     🔥 Combat Tab 完全版（CreateInput版）           --
+--                     🔥 Combat Tab 完全版（改良版）        --
 --========================================================--
 
 local Players = game:GetService("Players")
@@ -901,11 +900,16 @@ tracerLine.Thickness = 2
 tracerLine.Transparency = 1
 tracerLine.Color = Color3.fromRGB(0,255,255)
 
--- Invisible関連
+-- Invisible
 local invisible = false
 local parts = {}
 local invisibleKey = Enum.KeyCode.G
 local keybindEnabled = true
+
+-- Noclip
+local noclipConn = nil
+local noclipEnabled = false
+local originalCanCollide = {}
 
 --============================--
 -- Utility
@@ -977,6 +981,54 @@ local function DisableFollow()
         hrp.CFrame = originalPos_Follow
         if hum then hum.PlatformStand = false end
     end
+    -- 下向き用の壁貫通解除・重力回復
+    if noclipEnabled then
+        disableNoclip()
+    end
+    if hum then
+        hum.PlatformStand = false
+        hum:SetStateEnabled(Enum.HumanoidStateType.FallingDown,true)
+        hum:SetStateEnabled(Enum.HumanoidStateType.Freefall,true)
+        hum:SetStateEnabled(Enum.HumanoidStateType.Jumping,true)
+    end
+end
+
+--============================--
+-- Noclip（壁貫通）
+--============================--
+local function enableNoclip()
+    if noclipConn then return end
+    local char = player.Character
+    if not char then return end
+    for _,p in ipairs(char:GetDescendants()) do
+        if p:IsA("BasePart") then
+            originalCanCollide[p] = p.CanCollide
+        end
+    end
+    noclipConn = RunService.Stepped:Connect(function()
+        local char = player.Character
+        if not char then return end
+        for _,p in ipairs(char:GetDescendants()) do
+            if p:IsA("BasePart") then
+                p.CanCollide = false
+            end
+        end
+    end)
+end
+
+local function disableNoclip()
+    if noclipConn then
+        noclipConn:Disconnect()
+        noclipConn = nil
+    end
+    local char = player.Character
+    if not char then return end
+    for p,canCollide in pairs(originalCanCollide) do
+        if p and p.Parent then
+            p.CanCollide = canCollide
+        end
+    end
+    originalCanCollide = {}
 end
 
 --============================--
@@ -1015,7 +1067,6 @@ combatTab:CreateToggle({
     end
 })
 
--- CreateInput 方式でキー設定
 combatTab:CreateInput({
     Name = "Invisible キー設定",
     PlaceholderText = "例: G",
@@ -1028,6 +1079,15 @@ combatTab:CreateInput({
         else
             RayField:Notify({Title="エラー", Content="無効なキー名です", Duration=3})
         end
+    end
+})
+
+combatTab:CreateToggle({
+    Name = "壁貫通",
+    CurrentValue = false,
+    Callback = function(v)
+        noclipEnabled = v
+        if v then enableNoclip() else disableNoclip() end
     end
 })
 
@@ -1100,18 +1160,36 @@ RunService.RenderStepped:Connect(function(dt)
         local targetHRP = GetHRP(selectedTarget.Character)
         if targetHRP then
             if followMode=="normal" then
-                myHRP.CFrame = myHRP.CFrame:Lerp(targetHRP.CFrame * CFrame.new(0,0,7), 0.2)
+                -- 瞬間TP
+                myHRP.CFrame = targetHRP.CFrame * CFrame.new(0,0,7)
             elseif followMode=="v2" then
                 local dVec = targetHRP.Position - myHRP.Position
                 local dist = dVec.Magnitude
                 local speed = 300
-                local goalCF = (dist > 200) and CFrame.new(myHRP.Position + dVec.Unit * speed * dt) or targetHRP.CFrame * CFrame.new(0,0,7)
-                myHRP.CFrame = myHRP.CFrame:Lerp(goalCF, 0.2)
+                if dist > 200 then
+                    -- 200スタッド以上なら高速スライドで接近
+                    myHRP.CFrame = myHRP.CFrame:Lerp(CFrame.new(myHRP.Position + dVec.Unit * speed * dt), 1)
+                else
+                    -- 200スタッド以内で張り付き開始（ターゲット後ろ7スタッド）
+                    myHRP.CFrame = myHRP.CFrame:Lerp(targetHRP.CFrame * CFrame.new(0,0,7), 0.2)
+                end
             elseif followMode=="under" then
-                myHRP.CFrame = myHRP.CFrame:Lerp(targetHRP.CFrame * CFrame.new(0,-12,0) * CFrame.Angles(math.rad(90),0,0), 0.2)
-                if hum then hum.PlatformStand = true end
+                -- 下向き：壁貫通+重力無効+PlatformStand
+                if not noclipEnabled then enableNoclip() end
+                if hum then
+                    hum.PlatformStand = true
+                    hum:ChangeState(Enum.HumanoidStateType.Physics)
+                    hum.UseJumpPower = false
+                    hum.Jump = false
+                end
+                local goalCF = targetHRP.CFrame * CFrame.new(0,-12,0) * CFrame.Angles(math.rad(90),0,0)
+                myHRP.CFrame = myHRP.CFrame:Lerp(goalCF, 0.3)
             end
         end
+    else
+        -- 下向き中止時は壁貫通解除
+        if noclipEnabled then disableNoclip() end
+        if hum then hum.PlatformStand = false end
     end
 
     --==== Tracer ====
@@ -1162,6 +1240,7 @@ RunService.Heartbeat:Connect(function()
         end
     end
 end)
+
 
 
 --========================================================--
