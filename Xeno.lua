@@ -954,7 +954,7 @@ local followDistance = 200      -- 張り付き開始距離
 local slideSpeed = 300          -- 1秒あたり移動スタッド量（スライド速度）
 
 combatTab:CreateToggle({
-    Name = "張り付きv2",
+    Name = "張り付きv2(BloxFruit使用可)",
     CurrentValue = false,
     Callback = function(state)
         if not selectedTarget then
