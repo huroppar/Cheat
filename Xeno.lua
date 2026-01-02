@@ -1032,7 +1032,7 @@ local attachActive = false
 local originalCF = nil
 local originalHumPlatform = nil
 
-playerTab:CreateToggle({
+combatTab:CreateToggle({
     Name = "下向き張り付き(スタンドの世界推奨)",
     CurrentValue = false,
     Callback = function(v)
