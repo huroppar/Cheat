@@ -871,7 +871,7 @@ espTab:CreateSlider({
 
 
 --========================================================--
---                     🔥 Combat Tab 完全版（統合版）           --
+--                     🔥 Combat Tab 完全版（CreateKeybind版）           --
 --========================================================--
 
 local Players = game:GetService("Players")
@@ -1015,14 +1015,14 @@ combatTab:CreateToggle({
     end
 })
 
-combatTab:CreateKeyPicker({
+-- RayField 用 CreateKeybind 方式
+combatTab:CreateKeybind({
     Name = "Invisible キー設定",
-    Default = "G",
+    Default = Enum.KeyCode.G,
+    Hold = false, -- 押したらトグル
     Callback = function(key)
-        local success, kc = pcall(function() return Enum.KeyCode[key:upper()] end)
-        if success and kc then
-            invisibleKey = kc
-        end
+        invisibleKey = key
+        RayField:Notify({Title="設定完了", Content="Invisibleキーを "..tostring(key).." に設定しました", Duration=3})
     end
 })
 
@@ -1152,6 +1152,7 @@ RunService.Heartbeat:Connect(function()
         end
     end
 end)
+
 
 --========================================================--
 --                 🔥 World Of Stand                     --
