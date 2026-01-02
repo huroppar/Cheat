@@ -871,7 +871,7 @@ espTab:CreateSlider({
 
 
 --========================================================--
--- 🔥 Combat Tab（張り付き×視点TP 完全対応版・重力OFF版）
+-- 🔥 Combat Tab（視点TP＋張り付き 完全対応・下向き滑らか）
 --========================================================--
 
 --================ Services =================
@@ -883,9 +883,10 @@ local player = Players.LocalPlayer
 local camera = workspace.CurrentCamera
 
 --================ Constants =================
-local SAFE_Y = -200000 -- 本体を置く位置
+local SAFE_Y = -200000 -- 無敵ゾーン
 local AUTO_DIST = 200
 local AUTO_SPEED = 300
+local UNDER_LERP_SPEED = 10 -- 下向き張り付き補間速度
 
 --================ Tab =================
 local combatTab = Window:CreateTab("戦闘", 4483362458)
@@ -914,6 +915,7 @@ local State = {
     },
 
     Tracer = false,
+    UnderCFrame = nil, -- 下向き補間用
 }
 
 --========================================================--
@@ -942,17 +944,16 @@ local function DisableFollow()
         State.Follow.SavedBeforeFollow = nil
     end
     State.Follow.Mode = nil
+    State.UnderCFrame = nil
 end
 
 local function EnableFollow(mode)
-    -- 張り付き同士は同時不可
     if State.Follow.Mode then DisableFollow() end
 
     local char = GetChar()
     local hrp = GetHRP(char)
     if not hrp then return end
 
-    -- FreeCam中なら視点TP位置優先で保存はしない
     if not State.FreeCam.Active then
         State.Follow.SavedBeforeFollow = hrp.CFrame
     end
@@ -972,14 +973,10 @@ local function EnableFreeCam()
     State.FreeCam.SavedBeforeFreeCam = hrp.CFrame
     State.FreeCam.SavedPlatformStand = hum.PlatformStand
 
-    -- 重力無効
     hum.PlatformStand = true
-    hrp.Anchored = false -- 張り付き動作を阻害しない
-
-    -- 本体をSAFE_Yに置く
+    camera.CameraType = Enum.CameraType.Scriptable
     hrp.CFrame = CFrame.new(hrp.Position.X, SAFE_Y, hrp.Position.Z)
 
-    camera.CameraType = Enum.CameraType.Scriptable
     State.FreeCam.Yaw = 0
     State.FreeCam.Pitch = 0
     State.FreeCam.Active = true
@@ -989,13 +986,11 @@ local function DisableFreeCam()
     local char = GetChar()
     local hrp = GetHRP(char)
     local hum = GetHumanoid(char)
-    if not hrp or not hum then return end
 
     camera.CameraType = Enum.CameraType.Custom
-    hum.PlatformStand = State.FreeCam.SavedPlatformStand
+    if hum then hum.PlatformStand = State.FreeCam.SavedPlatformStand end
 
-    -- 張り付きOFFなら本体をFreeCamON前の位置に戻す
-    if not State.Follow.Mode and State.FreeCam.SavedBeforeFreeCam then
+    if not State.Follow.Mode and hrp and State.FreeCam.SavedBeforeFreeCam then
         hrp.CFrame = State.FreeCam.SavedBeforeFreeCam
     end
 
@@ -1070,15 +1065,19 @@ RunService.RenderStepped:Connect(function(dt)
             hrp.CFrame = tHRP.CFrame * CFrame.new(0,0,7)
         end
     elseif State.Follow.Mode=="under" then
-        hrp.CFrame = tHRP.CFrame * CFrame.new(0,-12,0) * CFrame.Angles(math.rad(90),0,0)
+        if not State.UnderCFrame then
+            State.UnderCFrame = hrp.CFrame
+        end
+        local targetCFrame = tHRP.CFrame * CFrame.new(0,-12,0) * CFrame.Angles(math.rad(90),0,0)
+        State.UnderCFrame = State.UnderCFrame:Lerp(targetCFrame, math.clamp(UNDER_LERP_SPEED*dt,0,1))
+        hrp.CFrame = State.UnderCFrame
     end
 
     -- FreeCam
     if State.FreeCam.Active and head then
-        -- 重力無効のままSAFE_Yに置く
         hrp.CFrame = CFrame.new(hrp.Position.X, SAFE_Y, hrp.Position.Z)
         local yaw,pitch = math.rad(State.FreeCam.Yaw), math.rad(State.FreeCam.Pitch)
-        local dir = Vector3.new(math.cos(pitch)*math.sin(yaw), math.sin(pitch), math.cos(pitch)*math.cos(yaw))
+        local dir = Vector3.new(math.cos(pitch)*math.sin(yaw),math.sin(pitch),math.cos(pitch)*math.cos(yaw))
         camera.CFrame = CFrame.new(head.Position - dir*State.FreeCam.Zoom, head.Position)
     end
 
