@@ -798,7 +798,7 @@ espTab:CreateToggle({
 -- HitBoxスライダー
 espTab:CreateSlider({
     Name = "HitBox倍率",
-    Range = {1, 10}, -- 1倍～10倍まで
+    Range = {1, 20}, -- 1倍～10倍まで
     Increment = 0.1,
     Suffix = "倍",
     CurrentValue = 1,
