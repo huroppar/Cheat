@@ -1209,6 +1209,13 @@ for plr, btn in pairs(playerButtons) do
         end)
     end
 end
+    if followActive and selectedTarget and selectedTarget.Character and player.Character then
+        local tHRP = selectedTarget.Character:FindFirstChild("HumanoidRootPart")
+        local myHRP = player.Character:FindFirstChild("HumanoidRootPart")
+        if tHRP and myHRP then
+            myHRP.CFrame = tHRP.CFrame * CFrame.new(0,0,7)
+        end
+    end
 end)
 
 
