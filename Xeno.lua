@@ -871,7 +871,7 @@ espTab:CreateSlider({
 
 
 --========================================================--
--- 🔥 Combat Tab（張り付き×視点TP 完全対応版・本体10万下）
+-- 🔥 Combat Tab（張り付き×視点TP 完全対応版・重力OFF版）
 --========================================================--
 
 --================ Services =================
@@ -883,7 +883,7 @@ local player = Players.LocalPlayer
 local camera = workspace.CurrentCamera
 
 --================ Constants =================
-local SAFE_Y = -100000 -- 本体を置く位置
+local SAFE_Y = -200000 -- 本体を置く位置
 local AUTO_DIST = 200
 local AUTO_SPEED = 300
 
@@ -972,10 +972,14 @@ local function EnableFreeCam()
     State.FreeCam.SavedBeforeFreeCam = hrp.CFrame
     State.FreeCam.SavedPlatformStand = hum.PlatformStand
 
+    -- 重力無効
     hum.PlatformStand = true
-    camera.CameraType = Enum.CameraType.Scriptable
+    hrp.Anchored = false -- 張り付き動作を阻害しない
+
+    -- 本体をSAFE_Yに置く
     hrp.CFrame = CFrame.new(hrp.Position.X, SAFE_Y, hrp.Position.Z)
 
+    camera.CameraType = Enum.CameraType.Scriptable
     State.FreeCam.Yaw = 0
     State.FreeCam.Pitch = 0
     State.FreeCam.Active = true
@@ -985,12 +989,13 @@ local function DisableFreeCam()
     local char = GetChar()
     local hrp = GetHRP(char)
     local hum = GetHumanoid(char)
+    if not hrp or not hum then return end
 
     camera.CameraType = Enum.CameraType.Custom
-    if hum then hum.PlatformStand = State.FreeCam.SavedPlatformStand end
+    hum.PlatformStand = State.FreeCam.SavedPlatformStand
 
     -- 張り付きOFFなら本体をFreeCamON前の位置に戻す
-    if not State.Follow.Mode and hrp and State.FreeCam.SavedBeforeFreeCam then
+    if not State.Follow.Mode and State.FreeCam.SavedBeforeFreeCam then
         hrp.CFrame = State.FreeCam.SavedBeforeFreeCam
     end
 
@@ -1070,9 +1075,10 @@ RunService.RenderStepped:Connect(function(dt)
 
     -- FreeCam
     if State.FreeCam.Active and head then
+        -- 重力無効のままSAFE_Yに置く
         hrp.CFrame = CFrame.new(hrp.Position.X, SAFE_Y, hrp.Position.Z)
         local yaw,pitch = math.rad(State.FreeCam.Yaw), math.rad(State.FreeCam.Pitch)
-        local dir = Vector3.new(math.cos(pitch)*math.sin(yaw),math.sin(pitch),math.cos(pitch)*math.cos(yaw))
+        local dir = Vector3.new(math.cos(pitch)*math.sin(yaw), math.sin(pitch), math.cos(pitch)*math.cos(yaw))
         camera.CFrame = CFrame.new(head.Position - dir*State.FreeCam.Zoom, head.Position)
     end
 
@@ -1131,7 +1137,6 @@ task.spawn(function()
         task.wait(0.5)
     end
 end)
-
 
 
 --========================================================--
