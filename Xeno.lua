@@ -1151,9 +1151,14 @@ end)
 --============================--
 RunService.Heartbeat:Connect(function()
     for plr, btn in pairs(playerButtons) do
-        if btn and plr.Character then
+        if btn then
+            local name = plr.Name or "Unknown"
             local hp,maxhp = GetHP(plr)
-            pcall(function() btn:Set(plr.Name.." ["..hp.."/"..maxhp.."]") end)
+            hp = hp or 0
+            maxhp = maxhp or 0
+            pcall(function()
+                btn:Set(name.." ["..hp.."/"..maxhp.."]")
+            end)
         end
     end
 end)
