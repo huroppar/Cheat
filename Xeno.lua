@@ -872,7 +872,7 @@ espTab:CreateSlider({
 
 --========================================================--
 --                     🔥 Combat Tab                      --
---                整理済み・拡張前提構造                   --
+--              完全整理・追加前提テンプレ                 --
 --========================================================--
 
 --================ Services =================
@@ -887,7 +887,7 @@ local camera = workspace.CurrentCamera
 local combatTab = Window:CreateTab("戦闘", 4483362458)
 
 --========================================================--
--- State（ここだけ見れば全体が分かる）
+-- State（ここ“だけ”見れば全体が分かる）
 --========================================================--
 local State = {
     Target = nil,
@@ -900,6 +900,7 @@ local State = {
 
     FreeCam = {
         Active = false,
+
         SavedBodyCFrame = nil,
         SavedPlatformStand = false,
 
@@ -920,7 +921,7 @@ local State = {
 }
 
 --========================================================--
--- Utility
+-- Utility（共通）
 --========================================================--
 local function GetChar()
     return player.Character
@@ -935,13 +936,63 @@ local function GetHumanoid(char)
 end
 
 --========================================================--
--- Tracer
+-- Tracer（描画系はまとめる）
 --========================================================--
-local tracerLine = Drawing.new("Line")
-tracerLine.Visible = false
-tracerLine.Thickness = 2
-tracerLine.Transparency = 1
-tracerLine.Color = Color3.fromRGB(0,255,255)
+local TracerLine = Drawing.new("Line")
+TracerLine.Visible = false
+TracerLine.Thickness = 2
+TracerLine.Transparency = 1
+TracerLine.Color = Color3.fromRGB(0,255,255)
+
+local function UpdateTracer(myHRP, targetHRP)
+    if not State.Tracer.Active or not myHRP or not targetHRP then
+        TracerLine.Visible = false
+        return
+    end
+
+    local p1,v1 = camera:WorldToViewportPoint(myHRP.Position)
+    local p2,v2 = camera:WorldToViewportPoint(targetHRP.Position)
+
+    if v1 and v2 then
+        TracerLine.From = Vector2.new(p1.X,p1.Y)
+        TracerLine.To   = Vector2.new(p2.X,p2.Y)
+        TracerLine.Visible = true
+    else
+        TracerLine.Visible = false
+    end
+end
+
+--========================================================--
+-- Follow Logic
+--========================================================--
+local function UpdateFollow(myHRP, targetHRP)
+    if State.Follow.Active and targetHRP and not State.FreeCam.Active then
+        myHRP.CFrame = targetHRP.CFrame * State.Follow.Offset
+    end
+end
+
+--========================================================--
+-- FreeCam Logic
+--========================================================--
+local function UpdateFreeCam(myHRP, targetHead)
+    if not State.FreeCam.Active or not targetHead then return end
+
+    myHRP.CFrame = State.FreeCam.SafeCFrame
+
+    local yaw = math.rad(State.FreeCam.Yaw)
+    local pitch = math.rad(State.FreeCam.Pitch)
+
+    local dir = Vector3.new(
+        math.cos(pitch) * math.sin(yaw),
+        math.sin(pitch),
+        math.cos(pitch) * math.cos(yaw)
+    )
+
+    camera.CFrame = CFrame.new(
+        targetHead.Position - dir * State.FreeCam.Zoom,
+        targetHead.Position
+    )
+end
 
 --========================================================--
 -- UI : 選択TP
@@ -949,13 +1000,13 @@ tracerLine.Color = Color3.fromRGB(0,255,255)
 combatTab:CreateButton({
     Name = "選択中プレイヤーへ TP",
     Callback = function()
-        if not State.Target then return end
-        local char = GetChar()
-        local tChar = State.Target.Character
-        if not char or not tChar then return end
+        local target = State.Target
+        if not target then return end
 
+        local char = GetChar()
         local myHRP = GetHRP(char)
-        local tHRP = GetHRP(tChar)
+        local tHRP = GetHRP(target.Character)
+
         if myHRP and tHRP then
             char:PivotTo(tHRP.CFrame * CFrame.new(0,0,3))
         end
@@ -969,8 +1020,6 @@ combatTab:CreateToggle({
     Name = "張り付き",
     CurrentValue = false,
     Callback = function(v)
-        if not State.Target then return end
-
         local char = GetChar()
         local hrp = GetHRP(char)
         if not hrp then return end
@@ -978,9 +1027,7 @@ combatTab:CreateToggle({
         State.Follow.Active = v
 
         if v then
-            if not State.Follow.SavedCFrame then
-                State.Follow.SavedCFrame = hrp.CFrame
-            end
+            State.Follow.SavedCFrame = hrp.CFrame
         else
             if State.Follow.SavedCFrame then
                 char:PivotTo(State.Follow.SavedCFrame)
@@ -997,8 +1044,6 @@ combatTab:CreateToggle({
     Name = "視点TP（向き固定）",
     CurrentValue = false,
     Callback = function(v)
-        if not State.Target then return end
-
         local char = GetChar()
         local hrp = GetHRP(char)
         local hum = GetHumanoid(char)
@@ -1011,17 +1056,17 @@ combatTab:CreateToggle({
             State.FreeCam.SavedPlatformStand = hum.PlatformStand
 
             camera.CameraType = Enum.CameraType.Scriptable
-            hrp.CFrame = State.FreeCam.SafeCFrame
             hum.PlatformStand = true
+            hrp.CFrame = State.FreeCam.SafeCFrame
 
             State.FreeCam.Yaw = 0
             State.FreeCam.Pitch = 0
         else
             camera.CameraType = Enum.CameraType.Custom
+            hum.PlatformStand = State.FreeCam.SavedPlatformStand
             if State.FreeCam.SavedBodyCFrame then
                 hrp.CFrame = State.FreeCam.SavedBodyCFrame
             end
-            hum.PlatformStand = State.FreeCam.SavedPlatformStand
         end
     end
 })
@@ -1034,7 +1079,7 @@ combatTab:CreateToggle({
     CurrentValue = false,
     Callback = function(v)
         State.Tracer.Active = v
-        if not v then tracerLine.Visible = false end
+        if not v then TracerLine.Visible = false end
     end
 })
 
@@ -1045,7 +1090,7 @@ UIS.InputChanged:Connect(function(input)
     if not State.FreeCam.Active then return end
 
     if input.UserInputType == Enum.UserInputType.MouseMovement then
-        State.FreeCam.Yaw -= input.Delta.X * State.FreeCam.Sensitivity
+        State.FreeCam.Yaw   -= input.Delta.X * State.FreeCam.Sensitivity
         State.FreeCam.Pitch = math.clamp(
             State.FreeCam.Pitch - input.Delta.Y * State.FreeCam.Sensitivity,
             -75, 75
@@ -1060,11 +1105,10 @@ UIS.InputChanged:Connect(function(input)
 end)
 
 --========================================================--
--- RenderStepped（動作系は全部ここ）
+-- RenderStepped（動作は全部ここ）
 --========================================================--
 RunService.RenderStepped:Connect(function()
     local char = GetChar()
-    if not char then return end
     local myHRP = GetHRP(char)
     if not myHRP then return end
 
@@ -1073,49 +1117,13 @@ RunService.RenderStepped:Connect(function()
     local tHRP = tChar and GetHRP(tChar)
     local head = tChar and tChar:FindFirstChild("Head")
 
-    --================ Follow =================
-    if State.Follow.Active and tHRP and not State.FreeCam.Active then
-        myHRP.CFrame = tHRP.CFrame * State.Follow.Offset
-    end
-
-    --================ FreeCam =================
-    if State.FreeCam.Active and head then
-        myHRP.CFrame = State.FreeCam.SafeCFrame
-
-        local yaw = math.rad(State.FreeCam.Yaw)
-        local pitch = math.rad(State.FreeCam.Pitch)
-
-        local dir = Vector3.new(
-            math.cos(pitch) * math.sin(yaw),
-            math.sin(pitch),
-            math.cos(pitch) * math.cos(yaw)
-        )
-
-        camera.CFrame = CFrame.new(
-            head.Position - dir * State.FreeCam.Zoom,
-            head.Position
-        )
-    end
-
-    --================ Tracer =================
-    if State.Tracer.Active and tHRP then
-        local p1,v1 = camera:WorldToViewportPoint(myHRP.Position)
-        local p2,v2 = camera:WorldToViewportPoint(tHRP.Position)
-
-        if v1 and v2 then
-            tracerLine.From = Vector2.new(p1.X,p1.Y)
-            tracerLine.To   = Vector2.new(p2.X,p2.Y)
-            tracerLine.Visible = true
-        else
-            tracerLine.Visible = false
-        end
-    else
-        tracerLine.Visible = false
-    end
+    UpdateFollow(myHRP, tHRP)
+    UpdateFreeCam(myHRP, head)
+    UpdateTracer(myHRP, tHRP)
 end)
 
 --========================================================--
--- Player List（拡張前提）
+-- Player List（完全拡張前提）
 --========================================================--
 combatTab:CreateSection("プレイヤー一覧")
 
@@ -1131,20 +1139,19 @@ end
 
 local function AddPlayer(plr)
     local hp,maxhp = GetHP(plr)
-    local btn = combatTab:CreateButton({
+    playerButtons[plr] = combatTab:CreateButton({
         Name = plr.Name.." ["..hp.."/"..maxhp.."]",
         Callback = function()
             State.Target = plr
         end
     })
-    playerButtons[plr] = btn
 end
 
 local function RefreshPlayers()
-    local exists = {}
+    local alive = {}
     for _,plr in ipairs(Players:GetPlayers()) do
         if plr ~= player then
-            exists[plr] = true
+            alive[plr] = true
             if not playerButtons[plr] then
                 AddPlayer(plr)
             end
@@ -1152,7 +1159,7 @@ local function RefreshPlayers()
     end
 
     for plr,btn in pairs(playerButtons) do
-        if not exists[plr] then
+        if not alive[plr] then
             pcall(function() btn:Remove() end)
             playerButtons[plr] = nil
         end
