@@ -871,7 +871,7 @@ espTab:CreateSlider({
 
 
 --========================================================--
---                     🔥 Combat Tab (最終完成版)          --
+--                     🔥 Combat Tab                      --
 --========================================================--
 
 --================ Services =================
@@ -895,6 +895,48 @@ local function getChar()
     return char, hum, hrp
 end
 
+--================ 復帰管理（共通） =================
+local ReturnManager = {
+    savedCFrame = nil,
+    savedAnchored = nil,
+    savedCharacter = nil,
+    activeCount = 0
+}
+
+function ReturnManager:Enter()
+    local _,_,hrp = getChar()
+    if not hrp then return end
+
+    if self.activeCount == 0 then
+        self.savedCFrame = hrp.CFrame
+        self.savedAnchored = hrp.Anchored
+        self.savedCharacter = player.Character
+    end
+
+    self.activeCount += 1
+end
+
+function ReturnManager:Exit()
+    local _,_,hrp = getChar()
+    if not hrp then return end
+
+    self.activeCount -= 1
+    if self.activeCount > 0 then return end
+    self.activeCount = 0
+
+    if self.savedCFrame and player.Character == self.savedCharacter then
+        hrp.CFrame = self.savedCFrame
+    else
+        hrp.CFrame = CFrame.new(0, 10, 0)
+    end
+
+    hrp.Anchored = self.savedAnchored or false
+
+    self.savedCFrame = nil
+    self.savedAnchored = nil
+    self.savedCharacter = nil
+end
+
 --================ 状態 =================
 local selectedTarget = nil
 
@@ -915,10 +957,7 @@ local camYaw, camPitch = 0,0
 local zoomDist = 8
 local sensitivity = 0.25
 local minZoom, maxZoom = 3,25
-
 local savedCamType
-local savedHRP
-local savedAnchored
 
 --================ Tracer =================
 local tracerActive = false
@@ -979,7 +1018,7 @@ combatTab:CreateToggle({
     end
 })
 
---================ 視点のみTP（20万下・落下防止） =================
+--================ 視点のみTP（20万下・固定） =================
 combatTab:CreateToggle({
     Name = "視点のみTP（落下防止）",
     Callback = function(v)
@@ -989,21 +1028,18 @@ combatTab:CreateToggle({
         mode.freeCam = v
 
         if v then
-            savedCamType = camera.CameraType
-            savedHRP = hrp.CFrame
-            savedAnchored = hrp.Anchored
+            ReturnManager:Enter()
 
+            savedCamType = camera.CameraType
             camera.CameraType = Enum.CameraType.Scriptable
+
             hrp.CFrame = CFrame.new(0, -200000, 0)
             hrp.Anchored = true
 
             camYaw, camPitch = 0,0
         else
             camera.CameraType = savedCamType or Enum.CameraType.Custom
-            if savedHRP then
-                hrp.CFrame = savedHRP
-            end
-            hrp.Anchored = savedAnchored or false
+            ReturnManager:Exit()
         end
     end
 })
@@ -1031,17 +1067,16 @@ UIS.InputChanged:Connect(function(input)
 end)
 
 --========================================================--
--- 🔥 RenderStepped（一本化・return禁止構造）
+-- RenderStepped
 --========================================================--
 RunService.RenderStepped:Connect(function(dt)
-    local char, hum, hrp = getChar()
+    local char, _, hrp = getChar()
     if not char or not hrp then return end
 
     local targetChar = selectedTarget and selectedTarget.Character
     local tHRP = targetChar and targetChar:FindFirstChild("HumanoidRootPart")
     local head = targetChar and targetChar:FindFirstChild("Head")
 
-    --================ 移動制御 =================
     if tHRP then
         if mode.follow then
             hrp.CFrame = tHRP.CFrame * FOLLOW_OFFSET
@@ -1061,7 +1096,6 @@ RunService.RenderStepped:Connect(function(dt)
         end
     end
 
-    --================ カメラ =================
     if mode.freeCam and head then
         local yaw = math.rad(camYaw)
         local pitch = math.rad(camPitch)
@@ -1074,7 +1108,6 @@ RunService.RenderStepped:Connect(function(dt)
         camera.CFrame = CFrame.new(camPos, head.Position)
     end
 
-    --================ Tracer =================
     if tracerActive and tHRP then
         local p1,v1 = camera:WorldToViewportPoint(hrp.Position)
         local p2,v2 = camera:WorldToViewportPoint(tHRP.Position)
@@ -1094,7 +1127,6 @@ end)
 -- プレイヤー一覧（HPリアルタイム）
 --========================================================--
 task.wait(1)
-
 combatTab:CreateLabel("プレイヤー一覧")
 
 local playerButtons = {}
@@ -1114,11 +1146,6 @@ local function createPlayerButton(plr)
         Name = plr.Name.." ["..hp.."/"..maxhp.."]",
         Callback = function()
             selectedTarget = plr
-            RayField:Notify({
-                Title = "ターゲット選択",
-                Content = plr.Name.." を選択した",
-                Duration = 2
-            })
         end
     })
     playerButtons[plr] = btn
@@ -1126,7 +1153,6 @@ end
 
 local function updatePlayerList()
     local alive = {}
-
     for _,plr in ipairs(Players:GetPlayers()) do
         if plr ~= player then
             alive[plr] = true
@@ -1158,7 +1184,6 @@ RunService.Heartbeat:Connect(function()
         end
     end
 end)
-
 
 --========================================================--
 --                 🔥 World Of Stand                     --
