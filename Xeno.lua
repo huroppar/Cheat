@@ -870,7 +870,7 @@ espTab:CreateSlider({
 
 
 --========================================================--
---                     🔥 Combat Tab 完全版（改良版）        --
+--                     🔥 Combat Tab 完全版（張り付き改良版） --
 --========================================================--
 
 local Players = game:GetService("Players")
@@ -939,12 +939,11 @@ end
 setupCharacter()
 player.CharacterAdded:Connect(function()
     setupCharacter()
-    invisible = false
-end)
-player.CharacterAdded:Connect(function()
-    setupCharacter() -- 新しいキャラのパーツを取得
+    -- 死後もInvisible ONなら再適用
     if invisible then
-        setInvisible(true) -- ONなら透明化適用
+        for _, part in pairs(parts) do
+            part.Transparency = 0.5
+        end
     end
 end)
 
@@ -968,6 +967,44 @@ _G.SetTarget = function(tar)
 end
 
 --============================--
+-- Noclip（壁貫通）
+--============================--
+local function enableNoclip()
+    if noclipConn then return end
+    local char = player.Character
+    if not char then return end
+    for _,p in ipairs(char:GetDescendants()) do
+        if p:IsA("BasePart") then
+            originalCanCollide[p] = p.CanCollide
+        end
+    end
+    noclipConn = RunService.Stepped:Connect(function()
+        local char = player.Character
+        if not char then return end
+        for _,p in ipairs(char:GetDescendants()) do
+            if p:IsA("BasePart") then
+                p.CanCollide = false
+            end
+        end
+    end)
+end
+
+local function disableNoclip()
+    if noclipConn then
+        noclipConn:Disconnect()
+        noclipConn = nil
+    end
+    local char = player.Character
+    if not char then return end
+    for p,canCollide in pairs(originalCanCollide) do
+        if p and p.Parent then
+            p.CanCollide = canCollide
+        end
+    end
+    originalCanCollide = {}
+end
+
+--============================--
 -- Follow系
 --============================--
 local function EnableFollow(mode)
@@ -985,23 +1022,11 @@ local function DisableFollow()
     local hum = GetHumanoid(player.Character)
     if hrp and originalPos_Follow then
         hrp.CFrame = originalPos_Follow
-        if hum then hum.PlatformStand = false end
+        if hum then hum.PlatformStand = false hum.Gravity = 196.2 end
     end
-    -- 下向き用の壁貫通解除・重力回復
-    if noclipEnabled then
-        disableNoclip()
-    end
-    if hum then
-        hum.PlatformStand = false
-        hum:SetStateEnabled(Enum.HumanoidStateType.FallingDown,true)
-        hum:SetStateEnabled(Enum.HumanoidStateType.Freefall,true)
-        hum:SetStateEnabled(Enum.HumanoidStateType.Jumping,true)
-    end
+    -- 下向き用の壁貫通解除
+    if noclipEnabled then disableNoclip() end
 end
-
-
-
-
 
 --============================--
 -- GUIボタン/トグル設定
@@ -1022,7 +1047,6 @@ combatTab:CreateToggle({Name="張り付き v2（距離制御）", Callback=funct
 combatTab:CreateToggle({Name="下向き張り付き", Callback=function(v) if v then EnableFollow("under") else DisableFollow() end end})
 combatTab:CreateToggle({Name="ターゲット線", Callback=function(v) tracerActive=v if not v then tracerLine.Visible=false end end})
 
--- Invisible関連 GUI
 combatTab:CreateToggle({
     Name = "Invisible",
     CurrentValue = false,
@@ -1051,6 +1075,15 @@ combatTab:CreateInput({
         else
             RayField:Notify({Title="エラー", Content="無効なキー名です", Duration=3})
         end
+    end
+})
+
+combatTab:CreateToggle({
+    Name = "壁貫通",
+    CurrentValue = false,
+    Callback = function(v)
+        noclipEnabled = v
+        if v then enableNoclip() else disableNoclip() end
     end
 })
 
@@ -1117,47 +1150,39 @@ RunService.RenderStepped:Connect(function(dt)
     local myHRP = GetHRP(char)
     if not myHRP then return end
     local hum = GetHumanoid(char)
+    if not hum then return end
+
+    -- 張り付き中は重力無効
+    hum.Gravity = 0
 
     --==== Follow ====
     if followActive and selectedTarget and selectedTarget.Character then
         local targetHRP = GetHRP(selectedTarget.Character)
         if targetHRP then
             if followMode=="normal" then
-                -- 瞬間TP
                 myHRP.CFrame = targetHRP.CFrame * CFrame.new(0,0,7)
             elseif followMode=="v2" then
                 local dVec = targetHRP.Position - myHRP.Position
                 local dist = dVec.Magnitude
                 local speed = 300
                 if dist > 200 then
-                    -- 200スタッド以上なら高速スライドで接近
                     myHRP.CFrame = myHRP.CFrame:Lerp(CFrame.new(myHRP.Position + dVec.Unit * speed * dt), 1)
                 else
-                    -- 200スタッド以内で張り付き開始（ターゲット後ろ7スタッド）
                     myHRP.CFrame = myHRP.CFrame:Lerp(targetHRP.CFrame * CFrame.new(0,0,7), 0.2)
                 end
             elseif followMode=="under" then
-                -- 下向き：壁貫通+重力無効+PlatformStand
                 if not noclipEnabled then enableNoclip() end
-                if hum then
-                    hum.PlatformStand = true
-                    hum:ChangeState(Enum.HumanoidStateType.Physics)
-                    hum.UseJumpPower = false
-                    hum.Jump = false
-                end
-                local goalCF = targetHRP.CFrame * CFrame.new(0,-9,0) * CFrame.Angles(math.rad(90),0,0)
+                hum.PlatformStand = true
+                local goalCF = targetHRP.CFrame * CFrame.new(0,-12,0) * CFrame.Angles(math.rad(90),0,0)
                 myHRP.CFrame = myHRP.CFrame:Lerp(goalCF, 0.3)
             end
         end
     else
-        -- 下向き中止時は壁貫通解除
-        if noclipEnabled then disableNoclip() end
-        if hum then hum.PlatformStand = false end
+        if not followActive then
+            hum.Gravity = 196.2 -- 元に戻す
+            hum.PlatformStand = false
+        end
     end
-
-		if followMode=="under" and not originalPos_Follow then
-    originalPos_Follow = myHRP.CFrame -- 下向き開始時に保存
-end
 
     --==== Tracer ====
     if tracerActive and selectedTarget and selectedTarget.Character then
