@@ -286,155 +286,101 @@ playerTab:CreateToggle({
     end
 })
 
---================ Fly 設定 =================
-local flyEnabled = false
-local specialFlyEnabled = false
+--=============================
+-- Fly機能（向き自由・重力のみ無効）
+--=============================
+local flyActive = false
 local flySpeed = 50
-local specialFlySpeed = 50
 
-local flyKeys = {W=false,A=false,S=false,D=false,Space=false,LeftShift=false}
+local flyKeys = {
+	W = false,
+	A = false,
+	S = false,
+	D = false,
+	Space = false,
+	LeftShift = false
+}
 
-local flyBV, flyBG
-
--- Fly / 特殊Fly 更新関数
-local function updateFly(hrp)
-    if not hrp then return end
-
-    -- Fly 有効
-    if flyEnabled or specialFlyEnabled then
-        if not flyBV then
-            flyBV = Instance.new("BodyVelocity")
-            flyBV.MaxForce = Vector3.new(1e9,1e9,1e9)
-            flyBV.Velocity = Vector3.zero
-            flyBV.Parent = hrp
-        end
-        if not flyBG then
-            flyBG = Instance.new("BodyGyro")
-            flyBG.MaxTorque = Vector3.new(1e9,1e9,1e9)
-            flyBG.CFrame = hrp.CFrame
-            flyBG.Parent = hrp
-        end
-
-        hrp.Anchored = false
-        local _, hum = getCharacter()
-        if hum then hum.PlatformStand = true end
-    else
-        -- Fly 無効
-        if flyBV then flyBV:Destroy(); flyBV = nil end
-        if flyBG then flyBG:Destroy(); flyBG = nil end
-        local _, hum = getCharacter()
-        if hum then hum.PlatformStand = false end
-    end
-end
-
---============================
--- Fly
---============================
-local flyEnabled = false
-local flySpeed = 50
-local flyKeys = {W=false,A=false,S=false,D=false,Space=false,LeftShift=false}
-
-local flyBV, flyBG, flyConn
-
-local function enableFly(hrp)
-    if not hrp then return end
-    if flyBV then return end
-
-    -- BodyVelocityで移動
-    flyBV = Instance.new("BodyVelocity")
-    flyBV.MaxForce = Vector3.new(1e9,1e9,1e9)
-    flyBV.Velocity = Vector3.zero
-    flyBV.Parent = hrp
-
-    -- BodyGyroで姿勢固定
-    flyBG = Instance.new("BodyGyro")
-    flyBG.MaxTorque = Vector3.new(1e9,1e9,1e9)
-    flyBG.CFrame = hrp.CFrame
-    flyBG.Parent = hrp
-
-    -- PlatformStandで拘束無効・座る無効・スタン無効
-    local _, hum = getCharacter()
-    if hum then hum.PlatformStand = true; hum.Sit=false end
-
-    -- 物理安定化
-    flyConn = RunService.RenderStepped:Connect(function()
-        hrp.AssemblyLinearVelocity = Vector3.zero
-        hrp.AssemblyAngularVelocity = Vector3.zero
-    end)
-end
-
-local function disableFly(hrp)
-    if flyBV then flyBV:Destroy(); flyBV=nil end
-    if flyBG then flyBG:Destroy(); flyBG=nil end
-    if flyConn then flyConn:Disconnect(); flyConn=nil end
-    local _, hum = getCharacter()
-    if hum then hum.PlatformStand=false end
-end
-
-local function applyFly(hrp)
-    if not hrp then return end
-    local cam = workspace.CurrentCamera
-    local move = Vector3.zero
-    if flyKeys.W then move += cam.CFrame.LookVector end
-    if flyKeys.S then move -= cam.CFrame.LookVector end
-    if flyKeys.A then move -= cam.CFrame.RightVector end
-    if flyKeys.D then move += cam.CFrame.RightVector end
-    if flyKeys.Space then move += Vector3.yAxis end
-    if flyKeys.LeftShift then move -= Vector3.yAxis end
-
-    if flyBV then
-        if move.Magnitude>0 then
-            flyBV.Velocity = move.Unit * flySpeed
-        else
-            flyBV.Velocity = Vector3.zero
-        end
-        flyBG.CFrame = CFrame.new(hrp.Position, hrp.Position + cam.CFrame.LookVector)
-    end
-end
-
---============================
--- GUI
---============================
+-- Fly ON / OFF
 playerTab:CreateToggle({
-    Name="Fly",
-    CurrentValue=false,
-    Callback=function(v)
-        flyEnabled=v
-        local _,_,hrp=getCharacter()
-        if v then enableFly(hrp) else disableFly(hrp) end
-    end
+	Name = "Fly",
+	CurrentValue = false,
+	Flag = "FlyToggle",
+	Callback = function(state)
+		flyActive = state
+		local _, hum, root = getCharacter()
+		if not hum or not root then return end
+
+		if flyActive then
+			-- 🔵 重力だけ無効化（向きはそのまま）
+			root.AssemblyLinearVelocity = Vector3.zero
+			root.AssemblyAngularVelocity = Vector3.zero
+		else
+			-- 🔵 通常に戻す
+			root.AssemblyLinearVelocity = Vector3.zero
+			root.AssemblyAngularVelocity = Vector3.zero
+		end
+	end
 })
 
+-- Fly速度
 playerTab:CreateSlider({
-    Name="Fly速度",
-    Range={10,5000},
-    Increment=5,
-    CurrentValue=flySpeed,
-    Callback=function(v) flySpeed=v end
+	Name = "Fly速度",
+	Range = {10, 2000},
+	Increment = 5,
+	CurrentValue = flySpeed,
+	Flag = "FlySpeedSlider",
+	Callback = function(val)
+		flySpeed = val
+	end
 })
 
---============================
--- 入力
---============================
-UserInputService.InputBegan:Connect(function(i,g)
-    if g then return end
-    if flyKeys[i.KeyCode.Name] ~= nil then flyKeys[i.KeyCode.Name]=true end
+-- キー入力
+UserInputService.InputBegan:Connect(function(input, gpe)
+	if gpe then return end
+	if input.UserInputType == Enum.UserInputType.Keyboard then
+		if flyKeys[input.KeyCode.Name] ~= nil then
+			flyKeys[input.KeyCode.Name] = true
+		end
+	end
 end)
 
-UserInputService.InputEnded:Connect(function(i,g)
-    if g then return end
-    if flyKeys[i.KeyCode.Name] ~= nil then flyKeys[i.KeyCode.Name]=false end
+UserInputService.InputEnded:Connect(function(input, gpe)
+	if gpe then return end
+	if input.UserInputType == Enum.UserInputType.Keyboard then
+		if flyKeys[input.KeyCode.Name] ~= nil then
+			flyKeys[input.KeyCode.Name] = false
+		end
+	end
 end)
 
---============================
--- RenderStepped
---============================
-RunService.RenderStepped:Connect(function()
-    local _,_,hrp=getCharacter()
-    if hrp and flyEnabled then applyFly(hrp) end
+-- Fly制御
+RunService.RenderStepped:Connect(function(dt)
+	if not flyActive then return end
+
+	local _, hum, root = getCharacter()
+	if not hum or not root then return end
+
+	-- 🔒 落下防止（重力キャンセル）
+	root.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
+
+	local cam = workspace.CurrentCamera
+	local move = Vector3.zero
+
+	-- 前後左右（＝向きは普通に変わる）
+	if flyKeys.W then move += cam.CFrame.LookVector end
+	if flyKeys.S then move -= cam.CFrame.LookVector end
+	if flyKeys.A then move -= cam.CFrame.RightVector end
+	if flyKeys.D then move += cam.CFrame.RightVector end
+
+	-- 上下
+	if flyKeys.Space then move += Vector3.new(0, 1, 0) end
+	if flyKeys.LeftShift then move -= Vector3.new(0, 1, 0) end
+
+	if move.Magnitude > 0 then
+		root.CFrame = root.CFrame + (move.Unit * flySpeed * dt)
+	end
 end)
-
-
 
 --================================
 -- スピード反映
