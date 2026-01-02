@@ -1145,6 +1145,77 @@ RunService.RenderStepped:Connect(function(dt)
     end
 end)
 
+--========================================================--
+-- プレイヤー一覧（常時表示・HPリアルタイム）
+--========================================================--
+
+combatTab:CreateLabel("プレイヤー一覧")
+
+local playerButtons = {}
+
+local function getHP(plr)
+    if plr.Character and plr.Character:FindFirstChild("Humanoid") then
+        local hum = plr.Character.Humanoid
+        return math.floor(hum.Health), math.floor(hum.MaxHealth)
+    end
+    return 0, 0
+end
+
+local function createPlayerButton(plr)
+    if plr == player then return end
+
+    local hp, maxhp = getHP(plr)
+    local btn = combatTab:CreateButton({
+        Name = plr.Name .. " [" .. hp .. "/" .. maxhp .. "]",
+        Callback = function()
+            selectedTarget = plr
+            RayField:Notify({
+                Title = "ターゲット選択",
+                Content = plr.Name .. " を選択した",
+                Duration = 2
+            })
+        end
+    })
+
+    playerButtons[plr] = btn
+end
+
+local function updatePlayerList()
+    local exists = {}
+
+    for _, plr in ipairs(Players:GetPlayers()) do
+        exists[plr] = true
+        if not playerButtons[plr] then
+            createPlayerButton(plr)
+        end
+    end
+
+    for plr, btn in pairs(playerButtons) do
+        if not exists[plr] then
+            pcall(function() btn:Remove() end)
+            playerButtons[plr] = nil
+        end
+    end
+end
+
+-- 初期生成
+updatePlayerList()
+
+-- 出入り対応
+Players.PlayerAdded:Connect(updatePlayerList)
+Players.PlayerRemoving:Connect(updatePlayerList)
+
+-- HPリアルタイム更新
+RunService.Heartbeat:Connect(function()
+    for plr, btn in pairs(playerButtons) do
+        if btn and plr.Character then
+            local hp, maxhp = getHP(plr)
+            pcall(function()
+                btn:Set(plr.Name .. " [" .. hp .. "/" .. maxhp .. "]")
+            end)
+        end
+    end
+end)
 
 --========================================================--
 --                 🔥 World Of Stand                     --
