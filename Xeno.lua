@@ -871,10 +871,10 @@ espTab:CreateSlider({
 
 
 --========================================================--
---                     🔥 Combat Tab                      --
+-- 🔥 Combat Tab（整理済み・完成版）
 --========================================================--
 
---================= Services =================
+--================ Services =================
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UIS = game:GetService("UserInputService")
@@ -882,46 +882,58 @@ local UIS = game:GetService("UserInputService")
 local player = Players.LocalPlayer
 local camera = workspace.CurrentCamera
 
---================= Constants =================
+--================ Constants =================
 local SAFE_Y = -200000
 local AUTO_DIST = 200
 local AUTO_SPEED = 300
 
---================= Tab =================
+--================ Tab =================
 local combatTab = Window:CreateTab("戦闘", 4483362458)
 
---================= State =================
-local selectedTarget = nil
+--================ State =================
+local selectedTarget
 
-local followActive = false
-local autoFollowActive = false
-local underFollowActive = false
-local freeCamActive = false
+local mode = nil -- "follow" | "auto" | "under" | "freecam"
 
---================= Position Save =================
-local savedPos_Follow = nil
-local savedPos_Auto = nil
-local savedPos_Under = nil
-local savedPos_FreeCam = nil
-
+local savedPos = {}
 local savedPlatformStand = false
 
---================= Camera =================
+--================ Camera =================
 local camYaw, camPitch = 0,0
 local sensitivity = 0.25
 local zoomDist = 8
 local minZoom, maxZoom = 3,25
 
---================= Tracer =================
+--================ Tracer =================
 local tracerActive = false
 local tracerLine = Drawing.new("Line")
 tracerLine.Visible = false
 tracerLine.Thickness = 2
-tracerLine.Transparency = 1
 tracerLine.Color = Color3.fromRGB(0,255,255)
 
 --========================================================--
--- ★ ターゲットへTP
+-- 共通解除
+--========================================================--
+local function DisableAll()
+    mode = nil
+    camera.CameraType = Enum.CameraType.Custom
+    tracerLine.Visible = false
+
+    local char = player.Character
+    if char then
+        local hrp = char:FindFirstChild("HumanoidRootPart")
+        local hum = char:FindFirstChild("Humanoid")
+        if hrp and savedPos[char] then
+            hrp.CFrame = savedPos[char]
+        end
+        if hum then
+            hum.PlatformStand = savedPlatformStand
+        end
+    end
+end
+
+--========================================================--
+-- 選択TP
 --========================================================--
 combatTab:CreateButton({
     Name = "選択中プレイヤーへTP",
@@ -929,292 +941,172 @@ combatTab:CreateButton({
         if selectedTarget and selectedTarget.Character then
             local hrp = selectedTarget.Character:FindFirstChild("HumanoidRootPart")
             if hrp and player.Character then
-                player.Character:PivotTo(hrp.CFrame * CFrame.new(0,0,3))
+                player.Character:PivotTo(hrp.CFrame * CFrame.new(0,0,4))
             end
         end
     end
 })
 
 --========================================================--
--- ★ 張り付き
+-- 張り付き
 --========================================================--
 combatTab:CreateToggle({
     Name = "張り付き",
-    CurrentValue = false,
-    Callback = function(state)
-        if not selectedTarget then return end
-        local hrp = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
-        if not hrp then return end
-
-        if state then
-            savedPos_Follow = hrp.CFrame
-            followActive = true
-            autoFollowActive = false
-            underFollowActive = false
-        else
-            followActive = false
-            if savedPos_Follow then
-                hrp.CFrame = savedPos_Follow
-            end
+    Callback = function(v)
+        DisableAll()
+        if v and player.Character then
+            savedPos[player.Character] =
+                player.Character.HumanoidRootPart.CFrame
+            mode = "follow"
         end
     end
 })
 
---========================================================--
--- ★ 張り付き v2（距離制御）
---========================================================--
 combatTab:CreateToggle({
     Name = "張り付き v2（距離制御）",
-    CurrentValue = false,
-    Callback = function(state)
-        if not selectedTarget then return end
-        local hrp = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
-        if not hrp then return end
-
-        if state then
-            savedPos_Auto = hrp.CFrame
-            autoFollowActive = true
-            followActive = false
-            underFollowActive = false
-        else
-            autoFollowActive = false
-            if savedPos_Auto then
-                hrp.CFrame = savedPos_Auto
-            end
+    Callback = function(v)
+        DisableAll()
+        if v and player.Character then
+            savedPos[player.Character] =
+                player.Character.HumanoidRootPart.CFrame
+            mode = "auto"
         end
     end
 })
 
---========================================================--
--- ★ 下向き張り付き
---========================================================--
 combatTab:CreateToggle({
     Name = "下向き張り付き",
-    CurrentValue = false,
-    Callback = function(state)
-        if not selectedTarget then return end
-        local hrp = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
-        if not hrp then return end
-
-        if state then
-            savedPos_Under = hrp.CFrame
-            underFollowActive = true
-            followActive = false
-            autoFollowActive = false
-        else
-            underFollowActive = false
-            if savedPos_Under then
-                hrp.CFrame = savedPos_Under
-            end
+    Callback = function(v)
+        DisableAll()
+        if v and player.Character then
+            savedPos[player.Character] =
+                player.Character.HumanoidRootPart.CFrame
+            mode = "under"
         end
     end
 })
 
 --========================================================--
--- ★ 視点TP（20万下固定）
+-- 視点TP
 --========================================================--
 combatTab:CreateToggle({
     Name = "視点TP（固定）",
-    CurrentValue = false,
-    Callback = function(state)
-        if not selectedTarget then return end
-        local char = player.Character
-        if not char then return end
+    Callback = function(v)
+        DisableAll()
+        if v and player.Character then
+            local char = player.Character
+            local hrp = char.HumanoidRootPart
+            local hum = char.Humanoid
 
-        local hrp = char:FindFirstChild("HumanoidRootPart")
-        local hum = char:FindFirstChild("Humanoid")
-        if not hrp or not hum then return end
-
-        if state then
-            savedPos_FreeCam = hrp.CFrame
+            savedPos[char] = hrp.CFrame
             savedPlatformStand = hum.PlatformStand
 
-            camera.CameraType = Enum.CameraType.Scriptable
             hrp.CFrame = CFrame.new(hrp.Position.X, SAFE_Y, hrp.Position.Z)
             hum.PlatformStand = true
-            freeCamActive = true
-        else
-            freeCamActive = false
-            camera.CameraType = Enum.CameraType.Custom
-            hum.PlatformStand = savedPlatformStand
-            if savedPos_FreeCam then
-                hrp.CFrame = savedPos_FreeCam
-            end
+            camera.CameraType = Enum.CameraType.Scriptable
+
+            mode = "freecam"
         end
     end
 })
 
 --========================================================--
--- ★ トレーサー
+-- Tracer
 --========================================================--
 combatTab:CreateToggle({
     Name = "ターゲット線",
-    CurrentValue = false,
-    Callback = function(state)
-        tracerActive = state
-        if not state then
-            tracerLine.Visible = false
-        end
+    Callback = function(v)
+        tracerActive = v
+        if not v then tracerLine.Visible = false end
     end
 })
 
 --========================================================--
--- マウス操作（自由カメラ）
+-- マウス
 --========================================================--
-UIS.InputChanged:Connect(function(input)
-    if not freeCamActive then return end
-
-    if input.UserInputType == Enum.UserInputType.MouseMovement then
-        camYaw -= input.Delta.X * sensitivity
-        camPitch = math.clamp(camPitch - input.Delta.Y * sensitivity, -75, 75)
-    elseif input.UserInputType == Enum.UserInputType.MouseWheel then
-        zoomDist = math.clamp(zoomDist - input.Position.Z * 2, minZoom, maxZoom)
+UIS.InputChanged:Connect(function(i)
+    if mode ~= "freecam" then return end
+    if i.UserInputType == Enum.UserInputType.MouseMovement then
+        camYaw -= i.Delta.X * sensitivity
+        camPitch = math.clamp(camPitch - i.Delta.Y * sensitivity, -75,75)
+    elseif i.UserInputType == Enum.UserInputType.MouseWheel then
+        zoomDist = math.clamp(zoomDist - i.Position.Z * 2, minZoom, maxZoom)
     end
 end)
 
 --========================================================--
--- RenderStepped（全処理統合）
+-- RenderStepped
 --========================================================--
 RunService.RenderStepped:Connect(function(dt)
-    local char = player.Character
-    if not char then return end
-    local myHRP = char:FindFirstChild("HumanoidRootPart")
+    if not selectedTarget or not selectedTarget.Character then return end
+    if not player.Character then return end
 
-    -- 視点TP 本体固定
-    if freeCamActive and myHRP then
-        myHRP.Velocity = Vector3.zero
-        myHRP.AssemblyLinearVelocity = Vector3.zero
+    local myHRP = player.Character:FindFirstChild("HumanoidRootPart")
+    local tHRP = selectedTarget.Character:FindFirstChild("HumanoidRootPart")
+    local head = selectedTarget.Character:FindFirstChild("Head")
+
+    if not myHRP or not tHRP then return end
+
+    if mode == "follow" then
+        myHRP.CFrame = tHRP.CFrame * CFrame.new(0,0,7)
+
+    elseif mode == "auto" then
+        local d = (tHRP.Position - myHRP.Position)
+        if d.Magnitude > AUTO_DIST then
+            myHRP.CFrame += d.Unit * AUTO_SPEED * dt
+        else
+            myHRP.CFrame = tHRP.CFrame * CFrame.new(0,0,7)
+        end
+
+    elseif mode == "under" then
+        myHRP.CFrame =
+            tHRP.CFrame
+            * CFrame.new(0,-12,0)
+            * CFrame.Angles(math.rad(90),0,0)
+
+    elseif mode == "freecam" and head then
         myHRP.CFrame = CFrame.new(myHRP.Position.X, SAFE_Y, myHRP.Position.Z)
+        local yaw,pitch = math.rad(camYaw), math.rad(camPitch)
+        local dir = Vector3.new(
+            math.cos(pitch)*math.sin(yaw),
+            math.sin(pitch),
+            math.cos(pitch)*math.cos(yaw)
+        )
+        camera.CFrame =
+            CFrame.new(head.Position - dir * zoomDist, head.Position)
     end
 
-    -- ターゲット存在時のみ
-    if selectedTarget and selectedTarget.Character then
-        local tHRP = selectedTarget.Character:FindFirstChild("HumanoidRootPart")
-        local head = selectedTarget.Character:FindFirstChild("Head")
-
-        if tHRP and myHRP then
-            if followActive then
-                myHRP.CFrame = tHRP.CFrame * CFrame.new(0,0,7)
-
-            elseif autoFollowActive then
-                local dist = (tHRP.Position - myHRP.Position).Magnitude
-                if dist > AUTO_DIST then
-                    local dir = (tHRP.Position - myHRP.Position).Unit
-                    myHRP.CFrame += dir * AUTO_SPEED * dt
-                else
-                    myHRP.CFrame = tHRP.CFrame * CFrame.new(0,0,7)
-                end
-
-            elseif underFollowActive then
-                myHRP.CFrame =
-                    tHRP.CFrame
-                    * CFrame.new(0,-12,0)
-                    * CFrame.Angles(math.rad(90),0,0)
-            end
-        end
-
-        -- 自由カメラ
-        if freeCamActive and head then
-            local yaw = math.rad(camYaw)
-            local pitch = math.rad(camPitch)
-            local dir = Vector3.new(
-                math.cos(pitch)*math.sin(yaw),
-                math.sin(pitch),
-                math.cos(pitch)*math.cos(yaw)
-            )
-            local camPos = head.Position - dir * zoomDist
-            camera.CFrame = CFrame.new(camPos, head.Position)
-        end
-
-        -- Tracer
-        if tracerActive and myHRP and tHRP then
-            local p1,v1 = camera:WorldToViewportPoint(myHRP.Position)
-            local p2,v2 = camera:WorldToViewportPoint(tHRP.Position)
-            if v1 and v2 then
-                tracerLine.From = Vector2.new(p1.X,p1.Y)
-                tracerLine.To = Vector2.new(p2.X,p2.Y)
-                tracerLine.Visible = true
-            else
-                tracerLine.Visible = false
-            end
+    if tracerActive then
+        local p1,v1 = camera:WorldToViewportPoint(myHRP.Position)
+        local p2,v2 = camera:WorldToViewportPoint(tHRP.Position)
+        if v1 and v2 then
+            tracerLine.From = Vector2.new(p1.X,p1.Y)
+            tracerLine.To   = Vector2.new(p2.X,p2.Y)
+            tracerLine.Visible = true
         else
             tracerLine.Visible = false
         end
-    else
-        tracerLine.Visible = false
     end
 end)
---========================================================--
--- プレイヤー一覧（HPリアルタイム）
---========================================================--
 
+--========================================================--
+-- プレイヤー一覧（Label方式）
+--========================================================--
 combatTab:CreateLabel("プレイヤー一覧")
+local labels = {}
 
-local playerButtons = {}
-
-local function GetHP(plr)
-    if plr.Character and plr.Character:FindFirstChild("Humanoid") then
-        return math.floor(plr.Character.Humanoid.Health), math.floor(plr.Character.Humanoid.MaxHealth)
-    end
-    return 0,0
-end
-
-local function CreatePlayerButton(plr)
-    local hp, maxhp = GetHP(plr)
-    local btn = combatTab:CreateButton({
-        Name = plr.Name.." ["..hp.."/"..maxhp.."]",
-        Callback = function()
-            selectedTarget = plr
-            RayField:Notify({
-                Title = "選択",
-                Content = plr.Name .. " をターゲットにしたよ！",
-                Duration = 3
-            })
-        end
-    })
-    playerButtons[plr] = btn
-end
-
-local function UpdatePlayerList()
-    local current = {}
-
-    for _, p in ipairs(Players:GetPlayers()) do
-        if p ~= player then
-            current[p] = true
-            if not playerButtons[p] then
-                CreatePlayerButton(p)
-            end
-        end
-    end
-
-    for plr, btn in pairs(playerButtons) do
-        if not current[plr] then
-            pcall(function() btn:Remove() end)
-            playerButtons[plr] = nil
-        end
-    end
-end
-
-UpdatePlayerList()
-Players.PlayerAdded:Connect(UpdatePlayerList)
-Players.PlayerRemoving:Connect(UpdatePlayerList)
-
--- HP更新 + 張り付き
 RunService.Heartbeat:Connect(function()
-for plr, btn in pairs(playerButtons) do
-    if btn and plr.Character then  -- btn が存在するかチェック
-        local hp,maxhp = GetHP(plr)
-        pcall(function()
-            btn:Set(plr.Name.." ["..hp.."/"..maxhp.."]")
-        end)
-    end
-end
-    if followActive and selectedTarget and selectedTarget.Character and player.Character then
-        local tHRP = selectedTarget.Character:FindFirstChild("HumanoidRootPart")
-        local myHRP = player.Character:FindFirstChild("HumanoidRootPart")
-        if tHRP and myHRP then
-            myHRP.CFrame = tHRP.CFrame * CFrame.new(0,0,7)
+    local text = ""
+    for _,p in ipairs(Players:GetPlayers()) do
+        if p ~= player and p.Character and p.Character:FindFirstChild("Humanoid") then
+            local h = p.Character.Humanoid
+            text ..= p.Name.." ["..math.floor(h.Health).."/"..math.floor(h.MaxHealth).."]\n"
         end
+    end
+    if not labels.main then
+        labels.main = combatTab:CreateLabel(text)
+    else
+        labels.main:Set(text)
     end
 end)
 
