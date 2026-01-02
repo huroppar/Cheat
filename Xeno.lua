@@ -871,12 +871,11 @@ espTab:CreateSlider({
 
 
 --========================================================--
---                     🔥 Combat Tab 完全版（滑らか張り付き対応）     --
+--                     🔥 Combat Tab 完全版（安全版）           --
 --========================================================--
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
-local UIS = game:GetService("UserInputService")
 
 local player = Players.LocalPlayer
 local camera = workspace.CurrentCamera
@@ -886,7 +885,7 @@ local combatTab = Window:CreateTab("戦闘", 4483362458)
 --============================--
 -- 定数
 --============================--
-local SAFE_Y = -20000 -- 無敵ゾーン
+local SAFE_Y = -200000
 
 --============================--
 -- 状態変数
@@ -896,12 +895,6 @@ local selectedTarget = nil
 local followActive = false
 local followMode = nil -- "normal", "v2", "under"
 local originalPos_Follow = nil
-
-local freeCamActive = false
-local originalPos_FreeCam = nil
-local savedPlatformStand = false
-local camYaw, camPitch = 0,0
-local zoomDist = 8
 
 local tracerActive = false
 local tracerLine = Drawing.new("Line")
@@ -953,36 +946,7 @@ local function DisableFollow()
 end
 
 --============================--
--- FreeCam系
---============================--
-local function EnableFreeCam()
-    if not selectedTarget then return end
-    freeCamActive = true
-    local hrp = GetHRP(player.Character)
-    local hum = GetHumanoid(player.Character)
-    if not hrp or not hum then return end
-    originalPos_FreeCam = hrp.CFrame
-    savedPlatformStand = hum.PlatformStand
-    hrp.CFrame = CFrame.new(hrp.Position.X, SAFE_Y, hrp.Position.Z)
-    hum.PlatformStand = true
-    camera.CameraType = Enum.CameraType.Scriptable
-    camYaw, camPitch = 0,0
-end
-
-local function DisableFreeCam()
-    freeCamActive = false
-    local hrp = GetHRP(player.Character)
-    local hum = GetHumanoid(player.Character)
-    if not hrp or not hum then return end
-    camera.CameraType = Enum.CameraType.Custom
-    hum.PlatformStand = savedPlatformStand
-    if not followActive and originalPos_FreeCam then
-        hrp.CFrame = originalPos_FreeCam
-    end
-end
-
---============================--
--- UI作成
+-- GUI作成
 --============================--
 combatTab:CreateButton({
     Name = "選択中のプレイヤーへ TP",
@@ -998,8 +962,63 @@ combatTab:CreateButton({
 combatTab:CreateToggle({Name="普通の張り付き", Callback=function(v) if v then EnableFollow("normal") else DisableFollow() end end})
 combatTab:CreateToggle({Name="張り付き v2（距離制御）", Callback=function(v) if v then EnableFollow("v2") else DisableFollow() end end})
 combatTab:CreateToggle({Name="下向き張り付き", Callback=function(v) if v then EnableFollow("under") else DisableFollow() end end})
-combatTab:CreateToggle({Name="視点TP(向き固定)", Callback=function(v) if v then EnableFreeCam() else DisableFreeCam() end end})
 combatTab:CreateToggle({Name="ターゲット線", Callback=function(v) tracerActive=v if not v then tracerLine.Visible=false end end})
+
+--============================--
+-- 自分だけキャラ表示トグル
+--============================--
+do
+    local originalCFrame = nil
+    local cloneChar = nil
+
+    combatTab:CreateToggle({
+        Name = "自分だけキャラ表示",
+        CurrentValue = false,
+        Callback = function(on)
+            local char = player.Character
+            if not char then return end
+            local hrp = GetHRP(char)
+            if not hrp then return end
+
+            if on then
+                -- 元の位置保存
+                originalCFrame = hrp.CFrame
+
+                -- SAFE_Yに本体移動
+                hrp.CFrame = CFrame.new(hrp.Position.X, SAFE_Y, hrp.Position.Z)
+
+                -- クライアント用コピー
+                cloneChar = char:Clone()
+                cloneChar.Parent = workspace -- まず親を設定
+
+                -- パーツ設定
+                for _, part in ipairs(cloneChar:GetChildren()) do
+                    if part:IsA("BasePart") then
+                        part.CanCollide = true
+                        part.Transparency = 0
+                    end
+                end
+
+                -- HumanoidRootPart/Humanoid安全取得
+                local cloneHRP = cloneChar:WaitForChild("HumanoidRootPart",1)
+                local cloneHum = cloneChar:FindFirstChildOfClass("Humanoid")
+                if cloneHRP and cloneHum then
+                    cloneHum.PlatformStand = false
+                    cloneHRP.CFrame = originalCFrame
+                end
+            else
+                -- 元に戻す
+                if originalCFrame then
+                    hrp.CFrame = originalCFrame
+                end
+                if cloneChar then
+                    cloneChar:Destroy()
+                    cloneChar = nil
+                end
+            end
+        end
+    })
+end
 
 --============================--
 -- プレイヤー一覧 + HP
@@ -1046,7 +1065,7 @@ Players.PlayerAdded:Connect(UpdatePlayerList)
 Players.PlayerRemoving:Connect(UpdatePlayerList)
 
 --============================--
--- RenderStepped + Heartbeat
+-- RenderStepped
 --============================--
 RunService.RenderStepped:Connect(function(dt)
     local char = player.Character
@@ -1061,12 +1080,8 @@ RunService.RenderStepped:Connect(function(dt)
     --==== Follow ====
     if followActive then
         if followMode=="normal" then
-            -- 普通張り付き：ターゲットの少し後ろに固定
-            local offset = CFrame.new(0,0,7)
-            myHRP.CFrame = targetHRP.CFrame * offset
-
+            myHRP.CFrame = targetHRP.CFrame * CFrame.new(0,0,7)
         elseif followMode=="v2" then
-            -- V2距離制御：200スタッド以内で滑らか追従
             local dVec = targetHRP.Position - myHRP.Position
             local dist = dVec.Magnitude
             local speed = 300
@@ -1075,31 +1090,9 @@ RunService.RenderStepped:Connect(function(dt)
             else
                 myHRP.CFrame = myHRP.CFrame:Lerp(targetHRP.CFrame * CFrame.new(0,0,7), 0.2)
             end
-
         elseif followMode=="under" then
-            -- 下向き張り付き：仰向け固定で12スタッド下
             myHRP.CFrame = targetHRP.CFrame * CFrame.new(0,-12,0) * CFrame.Angles(math.rad(90),0,0)
             if hum then hum.PlatformStand = true end
-        end
-    end
-
-    --==== FreeCam ====
-    if freeCamActive then
-        local head = selectedTarget.Character:FindFirstChild("Head")
-        if head then
-            local yaw = math.rad(camYaw)
-            local pitch = math.rad(camPitch)
-            local lookDir = Vector3.new(
-                math.cos(pitch)*math.sin(yaw),
-                math.sin(pitch),
-                math.cos(pitch)*math.cos(yaw)
-            )
-            local camPos = head.Position - lookDir * zoomDist
-            camera.CFrame = CFrame.new(camPos, head.Position)
-
-            if not followActive then
-                myHRP.CFrame = CFrame.new(myHRP.Position.X, SAFE_Y, myHRP.Position.Z)
-            end
         end
     end
 
@@ -1119,7 +1112,9 @@ RunService.RenderStepped:Connect(function(dt)
     end
 end)
 
+--============================--
 -- HP更新
+--============================--
 RunService.Heartbeat:Connect(function()
     for plr, btn in pairs(playerButtons) do
         if btn and plr.Character then
@@ -1128,7 +1123,6 @@ RunService.Heartbeat:Connect(function()
         end
     end
 end)
-
 
 --========================================================--
 --                 🔥 World Of Stand                     --
@@ -1144,10 +1138,7 @@ local LocalPlayer = Players.LocalPlayer
 local humanoid, rootPart
 local parts = {}
 
---================= Invisible State =================
-local invisibleEnabled = false
-local keyToggleEnabled = true
-local toggleKey = Enum.KeyCode.G
+
 
 --================= GUI =================
 local StandTab = Window:CreateTab("スタンドの世界", 4483362458)
@@ -1174,52 +1165,6 @@ LocalPlayer.CharacterAdded:Connect(function()
     setupCharacter()
 end)
 
---============================--
--- キャラ隠しTPトグル（既存GUI用）
---============================--
-do
-    local originalCFrame_Hide = nil
-    local originalTransparency = {}
-
-    combatTab:CreateToggle({
-        Name = "キャラ隠しTP",
-        CurrentValue = false,
-        Callback = function(state)
-            local char = player.Character
-            if not char then return end
-            local hrp = GetHRP(char)
-            if not hrp then return end
-
-            if state then
-                -- 元の位置保存
-                originalCFrame_Hide = hrp.CFrame
-                originalTransparency = {}
-                -- 全パーツ透明化
-                for _, part in ipairs(char:GetChildren()) do
-                    if part:IsA("BasePart") then
-                        originalTransparency[part] = part.Transparency
-                        part.Transparency = 1
-                        part.CanCollide = false
-                    end
-                end
-                -- 無敵ゾーンへ
-                hrp.CFrame = CFrame.new(hrp.Position.X, SAFE_Y, hrp.Position.Z)
-            else
-                -- 元の位置に戻す
-                if originalCFrame_Hide then
-                    hrp.CFrame = originalCFrame_Hide
-                end
-                -- 透明度を戻す
-                for part, trans in pairs(originalTransparency) do
-                    if part then
-                        part.Transparency = trans
-                        part.CanCollide = true
-                    end
-                end
-            end
-        end
-    })
-end
 
 --========================================================--
 --                 📦 Chest System                       --
