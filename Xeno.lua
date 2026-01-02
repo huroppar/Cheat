@@ -286,26 +286,26 @@ playerTab:CreateToggle({
     end
 })
 
---================================
--- Fly
---================================
+--============================
+-- Fly 設定
+--============================
 local flyEnabled = false
 local flySpeed = 50
-
-local flyKeys = {
-    W=false,A=false,S=false,D=false,
-    Space=false,LeftShift=false
-}
-
 local flyBV
 
---================ Fly Toggle ================
+local specialFlyEnabled = false
+local specialFlySpeed = 50
+
+local flyKeys = {W=false,A=false,S=false,D=false,Space=false,LeftShift=false}
+
+--============================
+-- Flyトグル
+--============================
 playerTab:CreateToggle({
     Name = "Fly",
     CurrentValue = false,
     Callback = function(v)
         flyEnabled = v
-
         local _, _, hrp = getCharacter()
         if not hrp then return end
 
@@ -325,7 +325,7 @@ playerTab:CreateToggle({
 
 playerTab:CreateSlider({
     Name = "Fly速度",
-    Range = {10, 5000},
+    Range = {10,5000},
     Increment = 5,
     CurrentValue = flySpeed,
     Callback = function(v)
@@ -333,7 +333,30 @@ playerTab:CreateSlider({
     end
 })
 
---================ Input ================
+--============================
+-- 特殊Flyトグル
+--============================
+playerTab:CreateToggle({
+    Name = "特殊Fly",
+    CurrentValue = false,
+    Callback = function(v)
+        specialFlyEnabled = v
+    end
+})
+
+playerTab:CreateSlider({
+    Name = "特殊Fly速度",
+    Range = {10,5000},
+    Increment = 5,
+    CurrentValue = specialFlySpeed,
+    Callback = function(v)
+        specialFlySpeed = v
+    end
+})
+
+--============================
+-- Input管理
+--============================
 UserInputService.InputBegan:Connect(function(i,g)
     if g then return end
     if flyKeys[i.KeyCode.Name] ~= nil then
@@ -348,17 +371,15 @@ UserInputService.InputEnded:Connect(function(i,g)
     end
 end)
 
---================ Fly Loop ================
-RunService.RenderStepped:Connect(function()
-    if not flyEnabled or not flyBV then return end
-
-    local _, _, hrp = getCharacter()
-    if not hrp then return end
+--============================
+-- Fly処理
+--============================
+RunService.RenderStepped:Connect(function(dt)
+    local char, hum, hrp = getCharacter()
+    if not hrp or not hum then return end
 
     local cam = workspace.CurrentCamera
     local move = Vector3.zero
-
-    -- 見てる方向そのまま
     if flyKeys.W then move += cam.CFrame.LookVector end
     if flyKeys.S then move -= cam.CFrame.LookVector end
     if flyKeys.A then move -= cam.CFrame.RightVector end
@@ -366,12 +387,27 @@ RunService.RenderStepped:Connect(function()
     if flyKeys.Space then move += Vector3.yAxis end
     if flyKeys.LeftShift then move -= Vector3.yAxis end
 
-    if move.Magnitude > 0 then
-        flyBV.Velocity = move.Unit * flySpeed
-    else
-        flyBV.Velocity = Vector3.zero -- ← これが「落ちない」核心
+    -- 普通Fly
+    if flyEnabled and flyBV then
+        if move.Magnitude > 0 then
+            flyBV.Velocity = move.Unit * flySpeed
+        else
+            flyBV.Velocity = Vector3.zero
+        end
+    end
+
+    -- 特殊Fly（拘束無視CFrame移動）
+    if specialFlyEnabled then
+        -- 座ってても強制解除
+        if hum.Sit then hum.Sit = false end
+        hum.PlatformStand = true
+
+        if move.Magnitude > 0 then
+            hrp.CFrame = hrp.CFrame + move.Unit * specialFlySpeed * dt
+        end
     end
 end)
+
 
 
 --================================
