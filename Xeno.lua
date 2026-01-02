@@ -896,26 +896,27 @@ local combatTab = Window:CreateTab("戦闘", 4483362458)
 local State = {
     Target = nil,
 
+    -- 張り付き系
     Follow = {
         Mode = nil, -- "follow" | "auto" | "under"
-        SavedBeforeFollow = nil,
+        SavedBeforeFollow = nil
     },
 
+    -- 視点TP系
     FreeCam = {
         Active = false,
         SavedBeforeFreeCam = nil,
         SavedPlatformStand = false,
-
         Yaw = 0,
         Pitch = 0,
         Sensitivity = 0.25,
-
         Zoom = 8,
         MinZoom = 3,
-        MaxZoom = 25,
+        MaxZoom = 25
     },
 
-    Tracer = false,
+    -- Tracer
+    Tracer = false
 }
 
 --========================================================--
@@ -942,16 +943,34 @@ tracerLine.Thickness = 2
 tracerLine.Color = Color3.fromRGB(0,255,255)
 
 --========================================================--
--- Follow 切替（共通）
+-- Follow 切替
 --========================================================--
 local function DisableFollow()
     local char = GetChar()
     local hrp = GetHRP(char)
     if hrp and State.Follow.SavedBeforeFollow then
         hrp.CFrame = State.Follow.SavedBeforeFollow
+        State.Follow.SavedBeforeFollow = nil
     end
     State.Follow.Mode = nil
-    State.Follow.SavedBeforeFollow = nil
+end
+
+local function EnableFollow(mode)
+    -- 張り付き同士は同時不可
+    if State.Follow.Mode then
+        DisableFollow()
+    end
+
+    local char = GetChar()
+    local hrp = GetHRP(char)
+    if not hrp then return end
+
+    -- FreeCam中は位置保存しない（視点TP位置を優先）
+    if not State.FreeCam.Active then
+        State.Follow.SavedBeforeFollow = hrp.CFrame
+    end
+
+    State.Follow.Mode = mode
 end
 
 --========================================================--
@@ -983,6 +1002,7 @@ local function DisableFreeCam()
     camera.CameraType = Enum.CameraType.Custom
     if hum then hum.PlatformStand = State.FreeCam.SavedPlatformStand end
 
+    -- 張り付きがOFFなら元位置に戻す
     if not State.Follow.Mode and hrp and State.FreeCam.SavedBeforeFreeCam then
         hrp.CFrame = State.FreeCam.SavedBeforeFreeCam
     end
@@ -1008,19 +1028,6 @@ combatTab:CreateButton({
 --========================================================--
 -- UI : 張り付き
 --========================================================--
-local function EnableFollow(mode)
-    DisableFollow()
-    local char = GetChar()
-    local hrp = GetHRP(char)
-    if not hrp then return end
-
-    if not State.FreeCam.Active then
-        State.Follow.SavedBeforeFollow = hrp.CFrame
-    end
-
-    State.Follow.Mode = mode
-end
-
 combatTab:CreateToggle({
     Name = "張り付き",
     Callback = function(v)
@@ -1097,10 +1104,9 @@ RunService.RenderStepped:Connect(function(dt)
     local head = target.Character:FindFirstChild("Head")
     if not tHRP then return end
 
-    -- Follow
+    -- Follow系
     if State.Follow.Mode == "follow" then
         hrp.CFrame = tHRP.CFrame * CFrame.new(0,0,7)
-
     elseif State.Follow.Mode == "auto" then
         local d = tHRP.Position - hrp.Position
         if d.Magnitude > AUTO_DIST then
@@ -1108,12 +1114,11 @@ RunService.RenderStepped:Connect(function(dt)
         else
             hrp.CFrame = tHRP.CFrame * CFrame.new(0,0,7)
         end
-
     elseif State.Follow.Mode == "under" then
         hrp.CFrame = tHRP.CFrame * CFrame.new(0,-12,0) * CFrame.Angles(math.rad(90),0,0)
     end
 
-    -- FreeCam
+    -- FreeCam系（独立）
     if State.FreeCam.Active and head then
         hrp.CFrame = CFrame.new(hrp.Position.X, SAFE_Y, hrp.Position.Z)
         local yaw,pitch = math.rad(State.FreeCam.Yaw), math.rad(State.FreeCam.Pitch)
@@ -1138,7 +1143,6 @@ RunService.RenderStepped:Connect(function(dt)
         end
     end
 end)
-
 
 --========================================================--
 -- Player List（完全拡張前提）
