@@ -1144,76 +1144,74 @@ RunService.RenderStepped:Connect(function(dt)
         tracerLine.Visible = false
     end
 end)
-
 --========================================================--
--- プレイヤー一覧（Rayfield安定版）
+-- プレイヤー一覧（HPリアルタイム）
 --========================================================--
 
-combatTab:CreateSection("プレイヤー一覧")
+combatTab:CreateLabel("プレイヤー一覧")
 
 local playerButtons = {}
 
-local function getHP(plr)
+local function GetHP(plr)
     if plr.Character and plr.Character:FindFirstChild("Humanoid") then
-        local hum = plr.Character.Humanoid
-        return math.floor(hum.Health), math.floor(hum.MaxHealth)
+        return math.floor(plr.Character.Humanoid.Health), math.floor(plr.Character.Humanoid.MaxHealth)
     end
-    return 0, 0
+    return 0,0
 end
 
--- 初回生成（1回だけ）
-for _, plr in ipairs(Players:GetPlayers()) do
-    if plr ~= player then
-        local hp, maxhp = getHP(plr)
-
-        local btn = combatTab:CreateButton({
-            Name = plr.Name .. " [" .. hp .. "/" .. maxhp .. "]",
-            Callback = function()
-                selectedTarget = plr
-                RayField:Notify({
-                    Title = "ターゲット選択",
-                    Content = plr.Name .. " を選択した",
-                    Duration = 2
-                })
-            end
-        })
-
-        playerButtons[plr] = btn
-    end
-end
-
--- 途中参加（追加のみ）
-Players.PlayerAdded:Connect(function(plr)
-    if plr == player then return end
-    task.wait(0.5) -- Character待ち
-
-    local hp, maxhp = getHP(plr)
+local function CreatePlayerButton(plr)
+    local hp, maxhp = GetHP(plr)
     local btn = combatTab:CreateButton({
-        Name = plr.Name .. " [" .. hp .. "/" .. maxhp .. "]",
+        Name = plr.Name.." ["..hp.."/"..maxhp.."]",
         Callback = function()
             selectedTarget = plr
             RayField:Notify({
-                Title = "ターゲット選択",
-                Content = plr.Name .. " を選択した",
-                Duration = 2
+                Title = "選択",
+                Content = plr.Name .. " をターゲットにしたよ！",
+                Duration = 3
             })
         end
     })
-
     playerButtons[plr] = btn
-end)
+end
 
--- HP更新のみ（削除しない）
-RunService.Heartbeat:Connect(function()
-    for plr, btn in pairs(playerButtons) do
-        if plr.Character and btn then
-            local hp, maxhp = getHP(plr)
-            pcall(function()
-                btn:Set(plr.Name .. " [" .. hp .. "/" .. maxhp .. "]")
-            end)
+local function UpdatePlayerList()
+    local current = {}
+
+    for _, p in ipairs(Players:GetPlayers()) do
+        if p ~= player then
+            current[p] = true
+            if not playerButtons[p] then
+                CreatePlayerButton(p)
+            end
         end
     end
-end)
+
+    for plr, btn in pairs(playerButtons) do
+        if not current[plr] then
+            pcall(function() btn:Remove() end)
+            playerButtons[plr] = nil
+        end
+    end
+end
+
+UpdatePlayerList()
+Players.PlayerAdded:Connect(UpdatePlayerList)
+Players.PlayerRemoving:Connect(UpdatePlayerList)
+
+-- HP更新 + 張り付き
+RunService.Heartbeat:Connect(function()
+for plr, btn in pairs(playerButtons) do
+    if btn and plr.Character then  -- btn が存在するかチェック
+        local hp,maxhp = GetHP(plr)
+        pcall(function()
+            btn:Set(plr.Name.." ["..hp.."/"..maxhp.."]")
+        end)
+    end
+end
+
+
+
 
 --========================================================--
 --                 🔥 World Of Stand                     --
