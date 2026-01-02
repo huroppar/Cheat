@@ -871,7 +871,7 @@ espTab:CreateSlider({
 
 
 --========================================================--
--- 🔥 Combat Tab（張り付き×視点TP 完全対応版）
+-- 🔥 Combat Tab（張り付き×視点TP 完全対応版・本体10万下）
 --========================================================--
 
 --================ Services =================
@@ -883,7 +883,7 @@ local player = Players.LocalPlayer
 local camera = workspace.CurrentCamera
 
 --================ Constants =================
-local SAFE_Y = -200000
+local SAFE_Y = -100000 -- 本体を置く位置
 local AUTO_DIST = 200
 local AUTO_SPEED = 300
 
@@ -896,13 +896,11 @@ local combatTab = Window:CreateTab("戦闘", 4483362458)
 local State = {
     Target = nil,
 
-    -- 張り付き系
     Follow = {
         Mode = nil, -- "follow" | "auto" | "under"
-        SavedBeforeFollow = nil
+        SavedBeforeFollow = nil,
     },
 
-    -- 視点TP系
     FreeCam = {
         Active = false,
         SavedBeforeFreeCam = nil,
@@ -912,27 +910,18 @@ local State = {
         Sensitivity = 0.25,
         Zoom = 8,
         MinZoom = 3,
-        MaxZoom = 25
+        MaxZoom = 25,
     },
 
-    -- Tracer
-    Tracer = false
+    Tracer = false,
 }
 
 --========================================================--
 -- Utility
 --========================================================--
-local function GetChar()
-    return player.Character
-end
-
-local function GetHRP(char)
-    return char and char:FindFirstChild("HumanoidRootPart")
-end
-
-local function GetHumanoid(char)
-    return char and char:FindFirstChildOfClass("Humanoid")
-end
+local function GetChar() return player.Character end
+local function GetHRP(char) return char and char:FindFirstChild("HumanoidRootPart") end
+local function GetHumanoid(char) return char and char:FindFirstChildOfClass("Humanoid") end
 
 --========================================================--
 -- Tracer
@@ -943,7 +932,7 @@ tracerLine.Thickness = 2
 tracerLine.Color = Color3.fromRGB(0,255,255)
 
 --========================================================--
--- Follow 切替
+-- Follow切替
 --========================================================--
 local function DisableFollow()
     local char = GetChar()
@@ -957,15 +946,13 @@ end
 
 local function EnableFollow(mode)
     -- 張り付き同士は同時不可
-    if State.Follow.Mode then
-        DisableFollow()
-    end
+    if State.Follow.Mode then DisableFollow() end
 
     local char = GetChar()
     local hrp = GetHRP(char)
     if not hrp then return end
 
-    -- FreeCam中は位置保存しない（視点TP位置を優先）
+    -- FreeCam中なら視点TP位置優先で保存はしない
     if not State.FreeCam.Active then
         State.Follow.SavedBeforeFollow = hrp.CFrame
     end
@@ -974,7 +961,7 @@ local function EnableFollow(mode)
 end
 
 --========================================================--
--- FreeCam 切替
+-- FreeCam切替
 --========================================================--
 local function EnableFreeCam()
     local char = GetChar()
@@ -1002,7 +989,7 @@ local function DisableFreeCam()
     camera.CameraType = Enum.CameraType.Custom
     if hum then hum.PlatformStand = State.FreeCam.SavedPlatformStand end
 
-    -- 張り付きがOFFなら元位置に戻す
+    -- 張り付きOFFなら本体をFreeCamON前の位置に戻す
     if not State.Follow.Mode and hrp and State.FreeCam.SavedBeforeFreeCam then
         hrp.CFrame = State.FreeCam.SavedBeforeFreeCam
     end
@@ -1028,66 +1015,30 @@ combatTab:CreateButton({
 --========================================================--
 -- UI : 張り付き
 --========================================================--
-combatTab:CreateToggle({
-    Name = "張り付き",
-    Callback = function(v)
-        if v then EnableFollow("follow") else DisableFollow() end
-    end
-})
-
-combatTab:CreateToggle({
-    Name = "張り付き v2（距離制御）",
-    Callback = function(v)
-        if v then EnableFollow("auto") else DisableFollow() end
-    end
-})
-
-combatTab:CreateToggle({
-    Name = "下向き張り付き",
-    Callback = function(v)
-        if v then EnableFollow("under") else DisableFollow() end
-    end
-})
+combatTab:CreateToggle({Name="張り付き", Callback=function(v) if v then EnableFollow("follow") else DisableFollow() end end})
+combatTab:CreateToggle({Name="張り付き v2（距離制御）", Callback=function(v) if v then EnableFollow("auto") else DisableFollow() end end})
+combatTab:CreateToggle({Name="下向き張り付き", Callback=function(v) if v then EnableFollow("under") else DisableFollow() end end})
 
 --========================================================--
 -- UI : 視点TP
 --========================================================--
-combatTab:CreateToggle({
-    Name = "視点TP（固定）",
-    Callback = function(v)
-        if v then EnableFreeCam() else DisableFreeCam() end
-    end
-})
+combatTab:CreateToggle({Name="視点TP（固定）", Callback=function(v) if v then EnableFreeCam() else DisableFreeCam() end end})
 
 --========================================================--
 -- Tracer
 --========================================================--
-combatTab:CreateToggle({
-    Name = "ターゲット線",
-    Callback = function(v)
-        State.Tracer = v
-        if not v then tracerLine.Visible = false end
-    end
-})
+combatTab:CreateToggle({Name="ターゲット線", Callback=function(v) State.Tracer=v if not v then tracerLine.Visible=false end end})
 
 --========================================================--
 -- Mouse（FreeCam）
 --========================================================--
 UIS.InputChanged:Connect(function(i)
     if not State.FreeCam.Active then return end
-
-    if i.UserInputType == Enum.UserInputType.MouseMovement then
-        State.FreeCam.Yaw -= i.Delta.X * State.FreeCam.Sensitivity
-        State.FreeCam.Pitch = math.clamp(
-            State.FreeCam.Pitch - i.Delta.Y * State.FreeCam.Sensitivity,
-            -75,75
-        )
-    elseif i.UserInputType == Enum.UserInputType.MouseWheel then
-        State.FreeCam.Zoom = math.clamp(
-            State.FreeCam.Zoom - i.Position.Z * 2,
-            State.FreeCam.MinZoom,
-            State.FreeCam.MaxZoom
-        )
+    if i.UserInputType==Enum.UserInputType.MouseMovement then
+        State.FreeCam.Yaw -= i.Delta.X*State.FreeCam.Sensitivity
+        State.FreeCam.Pitch = math.clamp(State.FreeCam.Pitch - i.Delta.Y*State.FreeCam.Sensitivity,-75,75)
+    elseif i.UserInputType==Enum.UserInputType.MouseWheel then
+        State.FreeCam.Zoom = math.clamp(State.FreeCam.Zoom - i.Position.Z*2,State.FreeCam.MinZoom,State.FreeCam.MaxZoom)
     end
 end)
 
@@ -1099,35 +1050,30 @@ RunService.RenderStepped:Connect(function(dt)
     local hrp = GetHRP(char)
     local target = State.Target
     if not hrp or not target or not target.Character then return end
-
     local tHRP = GetHRP(target.Character)
     local head = target.Character:FindFirstChild("Head")
     if not tHRP then return end
 
-    -- Follow系
-    if State.Follow.Mode == "follow" then
+    -- Follow
+    if State.Follow.Mode=="follow" then
         hrp.CFrame = tHRP.CFrame * CFrame.new(0,0,7)
-    elseif State.Follow.Mode == "auto" then
+    elseif State.Follow.Mode=="auto" then
         local d = tHRP.Position - hrp.Position
         if d.Magnitude > AUTO_DIST then
-            hrp.CFrame += d.Unit * AUTO_SPEED * dt
+            hrp.CFrame += d.Unit*AUTO_SPEED*dt
         else
             hrp.CFrame = tHRP.CFrame * CFrame.new(0,0,7)
         end
-    elseif State.Follow.Mode == "under" then
+    elseif State.Follow.Mode=="under" then
         hrp.CFrame = tHRP.CFrame * CFrame.new(0,-12,0) * CFrame.Angles(math.rad(90),0,0)
     end
 
-    -- FreeCam系（独立）
+    -- FreeCam
     if State.FreeCam.Active and head then
         hrp.CFrame = CFrame.new(hrp.Position.X, SAFE_Y, hrp.Position.Z)
         local yaw,pitch = math.rad(State.FreeCam.Yaw), math.rad(State.FreeCam.Pitch)
-        local dir = Vector3.new(
-            math.cos(pitch)*math.sin(yaw),
-            math.sin(pitch),
-            math.cos(pitch)*math.cos(yaw)
-        )
-        camera.CFrame = CFrame.new(head.Position - dir * State.FreeCam.Zoom, head.Position)
+        local dir = Vector3.new(math.cos(pitch)*math.sin(yaw),math.sin(pitch),math.cos(pitch)*math.cos(yaw))
+        camera.CFrame = CFrame.new(head.Position - dir*State.FreeCam.Zoom, head.Position)
     end
 
     -- Tracer
@@ -1135,70 +1081,52 @@ RunService.RenderStepped:Connect(function(dt)
         local p1,v1 = camera:WorldToViewportPoint(hrp.Position)
         local p2,v2 = camera:WorldToViewportPoint(tHRP.Position)
         if v1 and v2 then
-            tracerLine.From = Vector2.new(p1.X,p1.Y)
-            tracerLine.To = Vector2.new(p2.X,p2.Y)
-            tracerLine.Visible = true
+            tracerLine.From=Vector2.new(p1.X,p1.Y)
+            tracerLine.To=Vector2.new(p2.X,p2.Y)
+            tracerLine.Visible=true
         else
-            tracerLine.Visible = false
+            tracerLine.Visible=false
         end
     end
 end)
 
 --========================================================--
--- Player List（完全拡張前提）
+-- Player List
 --========================================================--
 combatTab:CreateSection("プレイヤー一覧")
-
-local playerButtons = {}
-
+local playerButtons={}
 local function GetHP(plr)
     local hum = plr.Character and plr.Character:FindFirstChildOfClass("Humanoid")
-    if hum then
-        return math.floor(hum.Health), math.floor(hum.MaxHealth)
-    end
+    if hum then return math.floor(hum.Health), math.floor(hum.MaxHealth) end
     return 0,0
 end
-
 local function AddPlayer(plr)
-    local hp,maxhp = GetHP(plr)
-    playerButtons[plr] = combatTab:CreateButton({
-        Name = plr.Name.." ["..hp.."/"..maxhp.."]",
-        Callback = function()
-            State.Target = plr
-        end
-    })
+    local hp,maxhp=GetHP(plr)
+    playerButtons[plr]=combatTab:CreateButton({Name=plr.Name.." ["..hp.."/"..maxhp.."]",Callback=function() State.Target=plr end})
 end
-
 local function RefreshPlayers()
-    local alive = {}
+    local alive={}
     for _,plr in ipairs(Players:GetPlayers()) do
-        if plr ~= player then
-            alive[plr] = true
-            if not playerButtons[plr] then
-                AddPlayer(plr)
-            end
+        if plr~=player then
+            alive[plr]=true
+            if not playerButtons[plr] then AddPlayer(plr) end
         end
     end
-
     for plr,btn in pairs(playerButtons) do
         if not alive[plr] then
             pcall(function() btn:Remove() end)
-            playerButtons[plr] = nil
+            playerButtons[plr]=nil
         end
     end
 end
-
 RefreshPlayers()
 Players.PlayerAdded:Connect(RefreshPlayers)
 Players.PlayerRemoving:Connect(RefreshPlayers)
-
 task.spawn(function()
     while true do
         for plr,btn in pairs(playerButtons) do
-            local hp,maxhp = GetHP(plr)
-            pcall(function()
-                btn:Set(plr.Name.." ["..hp.."/"..maxhp.."]")
-            end)
+            local hp,maxhp=GetHP(plr)
+            pcall(function() btn:Set(plr.Name.." ["..hp.."/"..maxhp.."]") end)
         end
         task.wait(0.5)
     end
