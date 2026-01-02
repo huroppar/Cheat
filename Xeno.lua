@@ -1065,7 +1065,7 @@ RunService.RenderStepped:Connect(function(dt)
                 myHRP.CFrame = targetHRP.CFrame * CFrame.new(0,0,7)
             end
         elseif followMode=="under" then
-            myHRP.CFrame = targetHRP.CFrame * CFrame.new(0,-12,0) * CFrame.Angles(math.rad(90,0,0)
+            myHRP.CFrame = targetHRP.CFrame * CFrame.new(0,-12,0) * CFrame.Angles(math.rad(90),0,0)
             local hum = GetHumanoid(player.Character)
             if hum then hum.PlatformStand = true end
         end
