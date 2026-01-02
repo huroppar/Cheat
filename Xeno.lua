@@ -286,40 +286,80 @@ playerTab:CreateToggle({
     end
 })
 
---============================
--- Fly 設定
---============================
+--================ Fly 設定 =================
 local flyEnabled = false
-local flySpeed = 50
-local flyBV
-
 local specialFlyEnabled = false
+local flySpeed = 50
 local specialFlySpeed = 50
 
 local flyKeys = {W=false,A=false,S=false,D=false,Space=false,LeftShift=false}
 
---============================
--- Flyトグル
---============================
+local flyBV, flyBG
+
+-- Fly / 特殊Fly 更新関数
+local function updateFly(hrp)
+    if not hrp then return end
+
+    -- Fly 有効
+    if flyEnabled or specialFlyEnabled then
+        if not flyBV then
+            flyBV = Instance.new("BodyVelocity")
+            flyBV.MaxForce = Vector3.new(1e9,1e9,1e9)
+            flyBV.Velocity = Vector3.zero
+            flyBV.Parent = hrp
+        end
+        if not flyBG then
+            flyBG = Instance.new("BodyGyro")
+            flyBG.MaxTorque = Vector3.new(1e9,1e9,1e9)
+            flyBG.CFrame = hrp.CFrame
+            flyBG.Parent = hrp
+        end
+
+        hrp.Anchored = false
+        local _, hum = getCharacter()
+        if hum then hum.PlatformStand = true end
+    else
+        -- Fly 無効
+        if flyBV then flyBV:Destroy(); flyBV = nil end
+        if flyBG then flyBG:Destroy(); flyBG = nil end
+        local _, hum = getCharacter()
+        if hum then hum.PlatformStand = false end
+    end
+end
+
+--================ Fly 速度 =================
+local function applyFlyMovement(hrp)
+    if not hrp or not (flyEnabled or specialFlyEnabled) then return end
+
+    local cam = workspace.CurrentCamera
+    local move = Vector3.zero
+    local speed = flyEnabled and flySpeed or specialFlySpeed
+
+    if flyKeys.W then move += cam.CFrame.LookVector end
+    if flyKeys.S then move -= cam.CFrame.LookVector end
+    if flyKeys.A then move -= cam.CFrame.RightVector end
+    if flyKeys.D then move += cam.CFrame.RightVector end
+    if flyKeys.Space then move += Vector3.yAxis end
+    if flyKeys.LeftShift then move -= Vector3.yAxis end
+
+    if move.Magnitude > 0 then
+        flyBV.Velocity = move.Unit * speed
+    else
+        flyBV.Velocity = Vector3.zero
+    end
+
+    -- BodyGyroで回転維持
+    flyBG.CFrame = CFrame.new(hrp.Position, hrp.Position + cam.CFrame.LookVector)
+end
+
+--================ Fly GUI =================
 playerTab:CreateToggle({
     Name = "Fly",
     CurrentValue = false,
     Callback = function(v)
         flyEnabled = v
         local _, _, hrp = getCharacter()
-        if not hrp then return end
-
-        if v then
-            flyBV = Instance.new("BodyVelocity")
-            flyBV.MaxForce = Vector3.new(1e9, 1e9, 1e9)
-            flyBV.Velocity = Vector3.zero
-            flyBV.Parent = hrp
-        else
-            if flyBV then
-                flyBV:Destroy()
-                flyBV = nil
-            end
-        end
+        updateFly(hrp)
     end
 })
 
@@ -333,14 +373,13 @@ playerTab:CreateSlider({
     end
 })
 
---============================
--- 特殊Flyトグル
---============================
 playerTab:CreateToggle({
     Name = "特殊Fly",
     CurrentValue = false,
     Callback = function(v)
         specialFlyEnabled = v
+        local _, _, hrp = getCharacter()
+        updateFly(hrp)
     end
 })
 
@@ -354,15 +393,29 @@ playerTab:CreateSlider({
     end
 })
 
---============================
--- Input管理
---============================
-UserInputService.InputBegan:Connect(function(i,g)
-    if g then return end
-    if flyKeys[i.KeyCode.Name] ~= nil then
-        flyKeys[i.KeyCode.Name] = true
+--================ Fly 動作 =================
+RunService.RenderStepped:Connect(function()
+    local _, _, hrp = getCharacter()
+    if hrp then
+        applyFlyMovement(hrp)
+        -- 状態維持
+        if flyEnabled or specialFlyEnabled then
+            updateFly(hrp)
+        end
     end
 end)
+
+--================ 入力 =================
+UserInputService.InputBegan:Connect(function(i,g)
+    if g then return end
+    if flyKeys[i.KeyCode.Name] ~= nil then flyKeys[i.KeyCode.Name] = true end
+end)
+
+UserInputService.InputEnded:Connect(function(i,g)
+    if g then return end
+    if flyKeys[i.KeyCode.Name] ~= nil then flyKeys[i.KeyCode.Name] = false end
+end)
+
 
 UserInputService.InputEnded:Connect(function(i,g)
     if g then return end
