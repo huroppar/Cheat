@@ -1149,7 +1149,9 @@ end)
 -- プレイヤー一覧（常時表示・HPリアルタイム）
 --========================================================--
 
-combatTab:CreateLabel("プレイヤー一覧")
+
+
+combatTab:CreateSection("プレイヤー一覧")
 
 local playerButtons = {}
 
@@ -1161,51 +1163,47 @@ local function getHP(plr)
     return 0, 0
 end
 
-local function createPlayerButton(plr)
-    if plr == player then return end
-
-    local hp, maxhp = getHP(plr)
-    local btn = combatTab:CreateButton({
-        Name = plr.Name .. " [" .. hp .. "/" .. maxhp .. "]",
-        Callback = function()
-            selectedTarget = plr
-            RayField:Notify({
-                Title = "ターゲット選択",
-                Content = plr.Name .. " を選択した",
-                Duration = 2
-            })
-        end
-    })
-
-    playerButtons[plr] = btn
+local function clearButtons()
+    for _, btn in pairs(playerButtons) do
+        pcall(function()
+            btn:Destroy() -- ★ RemoveじゃなくDestroy
+        end)
+    end
+    table.clear(playerButtons)
 end
 
-local function updatePlayerList()
-    local exists = {}
+local function rebuildPlayerList()
+    clearButtons()
 
     for _, plr in ipairs(Players:GetPlayers()) do
-        exists[plr] = true
-        if not playerButtons[plr] then
-            createPlayerButton(plr)
-        end
-    end
+        if plr ~= player then
+            local hp, maxhp = getHP(plr)
 
-    for plr, btn in pairs(playerButtons) do
-        if not exists[plr] then
-            pcall(function() btn:Remove() end)
-            playerButtons[plr] = nil
+            local btn = combatTab:CreateButton({
+                Name = plr.Name .. " [" .. hp .. "/" .. maxhp .. "]",
+                Callback = function()
+                    selectedTarget = plr
+                    RayField:Notify({
+                        Title = "ターゲット選択",
+                        Content = plr.Name .. " を選択した",
+                        Duration = 2
+                    })
+                end
+            })
+
+            playerButtons[plr] = btn
         end
     end
 end
 
 -- 初期生成
-updatePlayerList()
+rebuildPlayerList()
 
--- 出入り対応
-Players.PlayerAdded:Connect(updatePlayerList)
-Players.PlayerRemoving:Connect(updatePlayerList)
+-- 出入りで再生成
+Players.PlayerAdded:Connect(rebuildPlayerList)
+Players.PlayerRemoving:Connect(rebuildPlayerList)
 
--- HPリアルタイム更新
+-- HP更新（名前書き換え）
 RunService.Heartbeat:Connect(function()
     for plr, btn in pairs(playerButtons) do
         if btn and plr.Character then
