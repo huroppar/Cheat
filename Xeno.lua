@@ -871,8 +871,7 @@ espTab:CreateSlider({
 
 
 --========================================================--
---                     🔥 Combat Tab                      --
---              完全整理・追加前提テンプレ                 --
+-- 🔥 Combat Tab（張り付き×視点TP 完全対応版）
 --========================================================--
 
 --================ Services =================
@@ -883,25 +882,28 @@ local UIS = game:GetService("UserInputService")
 local player = Players.LocalPlayer
 local camera = workspace.CurrentCamera
 
+--================ Constants =================
+local SAFE_Y = -200000
+local AUTO_DIST = 200
+local AUTO_SPEED = 300
+
 --================ Tab =================
 local combatTab = Window:CreateTab("戦闘", 4483362458)
 
 --========================================================--
--- State（ここ“だけ”見れば全体が分かる）
+-- State
 --========================================================--
 local State = {
     Target = nil,
 
     Follow = {
-        Active = false,
-        Offset = CFrame.new(0, 0, 7),
-        SavedCFrame = nil,
+        Mode = nil, -- "follow" | "auto" | "under"
+        SavedBeforeFollow = nil,
     },
 
     FreeCam = {
         Active = false,
-
-        SavedBodyCFrame = nil,
+        SavedBeforeFreeCam = nil,
         SavedPlatformStand = false,
 
         Yaw = 0,
@@ -911,17 +913,13 @@ local State = {
         Zoom = 8,
         MinZoom = 3,
         MaxZoom = 25,
-
-        SafeCFrame = CFrame.new(0, 1500, 0),
     },
 
-    Tracer = {
-        Active = false,
-    }
+    Tracer = false,
 }
 
 --========================================================--
--- Utility（共通）
+-- Utility
 --========================================================--
 local function GetChar()
     return player.Character
@@ -936,79 +934,73 @@ local function GetHumanoid(char)
 end
 
 --========================================================--
--- Tracer（描画系はまとめる）
+-- Tracer
 --========================================================--
-local TracerLine = Drawing.new("Line")
-TracerLine.Visible = false
-TracerLine.Thickness = 2
-TracerLine.Transparency = 1
-TracerLine.Color = Color3.fromRGB(0,255,255)
+local tracerLine = Drawing.new("Line")
+tracerLine.Visible = false
+tracerLine.Thickness = 2
+tracerLine.Color = Color3.fromRGB(0,255,255)
 
-local function UpdateTracer(myHRP, targetHRP)
-    if not State.Tracer.Active or not myHRP or not targetHRP then
-        TracerLine.Visible = false
-        return
+--========================================================--
+-- Follow 切替（共通）
+--========================================================--
+local function DisableFollow()
+    local char = GetChar()
+    local hrp = GetHRP(char)
+    if hrp and State.Follow.SavedBeforeFollow then
+        hrp.CFrame = State.Follow.SavedBeforeFollow
     end
-
-    local p1,v1 = camera:WorldToViewportPoint(myHRP.Position)
-    local p2,v2 = camera:WorldToViewportPoint(targetHRP.Position)
-
-    if v1 and v2 then
-        TracerLine.From = Vector2.new(p1.X,p1.Y)
-        TracerLine.To   = Vector2.new(p2.X,p2.Y)
-        TracerLine.Visible = true
-    else
-        TracerLine.Visible = false
-    end
+    State.Follow.Mode = nil
+    State.Follow.SavedBeforeFollow = nil
 end
 
 --========================================================--
--- Follow Logic
+-- FreeCam 切替
 --========================================================--
-local function UpdateFollow(myHRP, targetHRP)
-    if State.Follow.Active and targetHRP and not State.FreeCam.Active then
-        myHRP.CFrame = targetHRP.CFrame * State.Follow.Offset
-    end
+local function EnableFreeCam()
+    local char = GetChar()
+    local hrp = GetHRP(char)
+    local hum = GetHumanoid(char)
+    if not hrp or not hum then return end
+
+    State.FreeCam.SavedBeforeFreeCam = hrp.CFrame
+    State.FreeCam.SavedPlatformStand = hum.PlatformStand
+
+    hum.PlatformStand = true
+    camera.CameraType = Enum.CameraType.Scriptable
+    hrp.CFrame = CFrame.new(hrp.Position.X, SAFE_Y, hrp.Position.Z)
+
+    State.FreeCam.Yaw = 0
+    State.FreeCam.Pitch = 0
+    State.FreeCam.Active = true
 end
 
---========================================================--
--- FreeCam Logic
---========================================================--
-local function UpdateFreeCam(myHRP, targetHead)
-    if not State.FreeCam.Active or not targetHead then return end
+local function DisableFreeCam()
+    local char = GetChar()
+    local hrp = GetHRP(char)
+    local hum = GetHumanoid(char)
 
-    myHRP.CFrame = State.FreeCam.SafeCFrame
+    camera.CameraType = Enum.CameraType.Custom
+    if hum then hum.PlatformStand = State.FreeCam.SavedPlatformStand end
 
-    local yaw = math.rad(State.FreeCam.Yaw)
-    local pitch = math.rad(State.FreeCam.Pitch)
+    if not State.Follow.Mode and hrp and State.FreeCam.SavedBeforeFreeCam then
+        hrp.CFrame = State.FreeCam.SavedBeforeFreeCam
+    end
 
-    local dir = Vector3.new(
-        math.cos(pitch) * math.sin(yaw),
-        math.sin(pitch),
-        math.cos(pitch) * math.cos(yaw)
-    )
-
-    camera.CFrame = CFrame.new(
-        targetHead.Position - dir * State.FreeCam.Zoom,
-        targetHead.Position
-    )
+    State.FreeCam.Active = false
 end
 
 --========================================================--
 -- UI : 選択TP
 --========================================================--
 combatTab:CreateButton({
-    Name = "選択中プレイヤーへ TP",
+    Name = "選択中プレイヤーへTP",
     Callback = function()
-        local target = State.Target
-        if not target then return end
-
-        local char = GetChar()
-        local myHRP = GetHRP(char)
-        local tHRP = GetHRP(target.Character)
-
-        if myHRP and tHRP then
-            char:PivotTo(tHRP.CFrame * CFrame.new(0,0,3))
+        local t = State.Target
+        if not t or not t.Character then return end
+        local hrp = GetHRP(t.Character)
+        if hrp and GetChar() then
+            GetChar():PivotTo(hrp.CFrame * CFrame.new(0,0,4))
         end
     end
 })
@@ -1016,88 +1008,76 @@ combatTab:CreateButton({
 --========================================================--
 -- UI : 張り付き
 --========================================================--
+local function EnableFollow(mode)
+    DisableFollow()
+    local char = GetChar()
+    local hrp = GetHRP(char)
+    if not hrp then return end
+
+    if not State.FreeCam.Active then
+        State.Follow.SavedBeforeFollow = hrp.CFrame
+    end
+
+    State.Follow.Mode = mode
+end
+
 combatTab:CreateToggle({
     Name = "張り付き",
-    CurrentValue = false,
     Callback = function(v)
-        local char = GetChar()
-        local hrp = GetHRP(char)
-        if not hrp then return end
+        if v then EnableFollow("follow") else DisableFollow() end
+    end
+})
 
-        State.Follow.Active = v
+combatTab:CreateToggle({
+    Name = "張り付き v2（距離制御）",
+    Callback = function(v)
+        if v then EnableFollow("auto") else DisableFollow() end
+    end
+})
 
-        if v then
-            State.Follow.SavedCFrame = hrp.CFrame
-        else
-            if State.Follow.SavedCFrame then
-                char:PivotTo(State.Follow.SavedCFrame)
-                State.Follow.SavedCFrame = nil
-            end
-        end
+combatTab:CreateToggle({
+    Name = "下向き張り付き",
+    Callback = function(v)
+        if v then EnableFollow("under") else DisableFollow() end
     end
 })
 
 --========================================================--
--- UI : 視点TP（FreeCam）
+-- UI : 視点TP
 --========================================================--
 combatTab:CreateToggle({
-    Name = "視点TP（向き固定）",
-    CurrentValue = false,
+    Name = "視点TP（固定）",
     Callback = function(v)
-        local char = GetChar()
-        local hrp = GetHRP(char)
-        local hum = GetHumanoid(char)
-        if not hrp or not hum then return end
-
-        State.FreeCam.Active = v
-
-        if v then
-            State.FreeCam.SavedBodyCFrame = hrp.CFrame
-            State.FreeCam.SavedPlatformStand = hum.PlatformStand
-
-            camera.CameraType = Enum.CameraType.Scriptable
-            hum.PlatformStand = true
-            hrp.CFrame = State.FreeCam.SafeCFrame
-
-            State.FreeCam.Yaw = 0
-            State.FreeCam.Pitch = 0
-        else
-            camera.CameraType = Enum.CameraType.Custom
-            hum.PlatformStand = State.FreeCam.SavedPlatformStand
-            if State.FreeCam.SavedBodyCFrame then
-                hrp.CFrame = State.FreeCam.SavedBodyCFrame
-            end
-        end
+        if v then EnableFreeCam() else DisableFreeCam() end
     end
 })
 
 --========================================================--
--- UI : Tracer
+-- Tracer
 --========================================================--
 combatTab:CreateToggle({
     Name = "ターゲット線",
-    CurrentValue = false,
     Callback = function(v)
-        State.Tracer.Active = v
-        if not v then TracerLine.Visible = false end
+        State.Tracer = v
+        if not v then tracerLine.Visible = false end
     end
 })
 
 --========================================================--
--- Mouse Input（FreeCam専用）
+-- Mouse（FreeCam）
 --========================================================--
-UIS.InputChanged:Connect(function(input)
+UIS.InputChanged:Connect(function(i)
     if not State.FreeCam.Active then return end
 
-    if input.UserInputType == Enum.UserInputType.MouseMovement then
-        State.FreeCam.Yaw   -= input.Delta.X * State.FreeCam.Sensitivity
+    if i.UserInputType == Enum.UserInputType.MouseMovement then
+        State.FreeCam.Yaw -= i.Delta.X * State.FreeCam.Sensitivity
         State.FreeCam.Pitch = math.clamp(
-            State.FreeCam.Pitch - input.Delta.Y * State.FreeCam.Sensitivity,
-            -75, 75
+            State.FreeCam.Pitch - i.Delta.Y * State.FreeCam.Sensitivity,
+            -75,75
         )
-    elseif input.UserInputType == Enum.UserInputType.MouseWheel then
+    elseif i.UserInputType == Enum.UserInputType.MouseWheel then
         State.FreeCam.Zoom = math.clamp(
-            State.FreeCam.Zoom - input.Position.Z * 2,
+            State.FreeCam.Zoom - i.Position.Z * 2,
             State.FreeCam.MinZoom,
             State.FreeCam.MaxZoom
         )
@@ -1105,22 +1085,60 @@ UIS.InputChanged:Connect(function(input)
 end)
 
 --========================================================--
--- RenderStepped（動作は全部ここ）
+-- RenderStepped
 --========================================================--
-RunService.RenderStepped:Connect(function()
+RunService.RenderStepped:Connect(function(dt)
     local char = GetChar()
-    local myHRP = GetHRP(char)
-    if not myHRP then return end
-
+    local hrp = GetHRP(char)
     local target = State.Target
-    local tChar = target and target.Character
-    local tHRP = tChar and GetHRP(tChar)
-    local head = tChar and tChar:FindFirstChild("Head")
+    if not hrp or not target or not target.Character then return end
 
-    UpdateFollow(myHRP, tHRP)
-    UpdateFreeCam(myHRP, head)
-    UpdateTracer(myHRP, tHRP)
+    local tHRP = GetHRP(target.Character)
+    local head = target.Character:FindFirstChild("Head")
+    if not tHRP then return end
+
+    -- Follow
+    if State.Follow.Mode == "follow" then
+        hrp.CFrame = tHRP.CFrame * CFrame.new(0,0,7)
+
+    elseif State.Follow.Mode == "auto" then
+        local d = tHRP.Position - hrp.Position
+        if d.Magnitude > AUTO_DIST then
+            hrp.CFrame += d.Unit * AUTO_SPEED * dt
+        else
+            hrp.CFrame = tHRP.CFrame * CFrame.new(0,0,7)
+        end
+
+    elseif State.Follow.Mode == "under" then
+        hrp.CFrame = tHRP.CFrame * CFrame.new(0,-12,0) * CFrame.Angles(math.rad(90),0,0)
+    end
+
+    -- FreeCam
+    if State.FreeCam.Active and head then
+        hrp.CFrame = CFrame.new(hrp.Position.X, SAFE_Y, hrp.Position.Z)
+        local yaw,pitch = math.rad(State.FreeCam.Yaw), math.rad(State.FreeCam.Pitch)
+        local dir = Vector3.new(
+            math.cos(pitch)*math.sin(yaw),
+            math.sin(pitch),
+            math.cos(pitch)*math.cos(yaw)
+        )
+        camera.CFrame = CFrame.new(head.Position - dir * State.FreeCam.Zoom, head.Position)
+    end
+
+    -- Tracer
+    if State.Tracer then
+        local p1,v1 = camera:WorldToViewportPoint(hrp.Position)
+        local p2,v2 = camera:WorldToViewportPoint(tHRP.Position)
+        if v1 and v2 then
+            tracerLine.From = Vector2.new(p1.X,p1.Y)
+            tracerLine.To = Vector2.new(p2.X,p2.Y)
+            tracerLine.Visible = true
+        else
+            tracerLine.Visible = false
+        end
+    end
 end)
+
 
 --========================================================--
 -- Player List（完全拡張前提）
