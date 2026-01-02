@@ -327,110 +327,52 @@ local function updateFly(hrp)
     end
 end
 
---================ Fly 速度 =================
-local function applyFlyMovement(hrp)
-    if not hrp or not (flyEnabled or specialFlyEnabled) then return end
+--============================
+-- Fly
+--============================
+local flyEnabled = false
+local flySpeed = 50
+local flyKeys = {W=false,A=false,S=false,D=false,Space=false,LeftShift=false}
 
-    local cam = workspace.CurrentCamera
-    local move = Vector3.zero
-    local speed = flyEnabled and flySpeed or specialFlySpeed
+local flyBV, flyBG, flyConn
 
-    if flyKeys.W then move += cam.CFrame.LookVector end
-    if flyKeys.S then move -= cam.CFrame.LookVector end
-    if flyKeys.A then move -= cam.CFrame.RightVector end
-    if flyKeys.D then move += cam.CFrame.RightVector end
-    if flyKeys.Space then move += Vector3.yAxis end
-    if flyKeys.LeftShift then move -= Vector3.yAxis end
+local function enableFly(hrp)
+    if not hrp then return end
+    if flyBV then return end
 
-    if move.Magnitude > 0 then
-        flyBV.Velocity = move.Unit * speed
-    else
-        flyBV.Velocity = Vector3.zero
-    end
+    -- BodyVelocityで移動
+    flyBV = Instance.new("BodyVelocity")
+    flyBV.MaxForce = Vector3.new(1e9,1e9,1e9)
+    flyBV.Velocity = Vector3.zero
+    flyBV.Parent = hrp
 
-    -- BodyGyroで回転維持
-    flyBG.CFrame = CFrame.new(hrp.Position, hrp.Position + cam.CFrame.LookVector)
+    -- BodyGyroで姿勢固定
+    flyBG = Instance.new("BodyGyro")
+    flyBG.MaxTorque = Vector3.new(1e9,1e9,1e9)
+    flyBG.CFrame = hrp.CFrame
+    flyBG.Parent = hrp
+
+    -- PlatformStandで拘束無効・座る無効・スタン無効
+    local _, hum = getCharacter()
+    if hum then hum.PlatformStand = true; hum.Sit=false end
+
+    -- 物理安定化
+    flyConn = RunService.RenderStepped:Connect(function()
+        hrp.AssemblyLinearVelocity = Vector3.zero
+        hrp.AssemblyAngularVelocity = Vector3.zero
+    end)
 end
 
---================ Fly GUI =================
-playerTab:CreateToggle({
-    Name = "Fly",
-    CurrentValue = false,
-    Callback = function(v)
-        flyEnabled = v
-        local _, _, hrp = getCharacter()
-        updateFly(hrp)
-    end
-})
+local function disableFly(hrp)
+    if flyBV then flyBV:Destroy(); flyBV=nil end
+    if flyBG then flyBG:Destroy(); flyBG=nil end
+    if flyConn then flyConn:Disconnect(); flyConn=nil end
+    local _, hum = getCharacter()
+    if hum then hum.PlatformStand=false end
+end
 
-playerTab:CreateSlider({
-    Name = "Fly速度",
-    Range = {10,5000},
-    Increment = 5,
-    CurrentValue = flySpeed,
-    Callback = function(v)
-        flySpeed = v
-    end
-})
-
-playerTab:CreateToggle({
-    Name = "特殊Fly",
-    CurrentValue = false,
-    Callback = function(v)
-        specialFlyEnabled = v
-        local _, _, hrp = getCharacter()
-        updateFly(hrp)
-    end
-})
-
-playerTab:CreateSlider({
-    Name = "特殊Fly速度",
-    Range = {10,5000},
-    Increment = 5,
-    CurrentValue = specialFlySpeed,
-    Callback = function(v)
-        specialFlySpeed = v
-    end
-})
-
---================ Fly 動作 =================
-RunService.RenderStepped:Connect(function()
-    local _, _, hrp = getCharacter()
-    if hrp then
-        applyFlyMovement(hrp)
-        -- 状態維持
-        if flyEnabled or specialFlyEnabled then
-            updateFly(hrp)
-        end
-    end
-end)
-
---================ 入力 =================
-UserInputService.InputBegan:Connect(function(i,g)
-    if g then return end
-    if flyKeys[i.KeyCode.Name] ~= nil then flyKeys[i.KeyCode.Name] = true end
-end)
-
-UserInputService.InputEnded:Connect(function(i,g)
-    if g then return end
-    if flyKeys[i.KeyCode.Name] ~= nil then flyKeys[i.KeyCode.Name] = false end
-end)
-
-
-UserInputService.InputEnded:Connect(function(i,g)
-    if g then return end
-    if flyKeys[i.KeyCode.Name] ~= nil then
-        flyKeys[i.KeyCode.Name] = false
-    end
-end)
-
---============================
--- Fly処理
---============================
-RunService.RenderStepped:Connect(function(dt)
-    local char, hum, hrp = getCharacter()
-    if not hrp or not hum then return end
-
+local function applyFly(hrp)
+    if not hrp then return end
     local cam = workspace.CurrentCamera
     local move = Vector3.zero
     if flyKeys.W then move += cam.CFrame.LookVector end
@@ -440,25 +382,56 @@ RunService.RenderStepped:Connect(function(dt)
     if flyKeys.Space then move += Vector3.yAxis end
     if flyKeys.LeftShift then move -= Vector3.yAxis end
 
-    -- 普通Fly
-    if flyEnabled and flyBV then
-        if move.Magnitude > 0 then
+    if flyBV then
+        if move.Magnitude>0 then
             flyBV.Velocity = move.Unit * flySpeed
         else
             flyBV.Velocity = Vector3.zero
         end
+        flyBG.CFrame = CFrame.new(hrp.Position, hrp.Position + cam.CFrame.LookVector)
     end
+end
 
-    -- 特殊Fly（拘束無視CFrame移動）
-    if specialFlyEnabled then
-        -- 座ってても強制解除
-        if hum.Sit then hum.Sit = false end
-        hum.PlatformStand = true
-
-        if move.Magnitude > 0 then
-            hrp.CFrame = hrp.CFrame + move.Unit * specialFlySpeed * dt
-        end
+--============================
+-- GUI
+--============================
+playerTab:CreateToggle({
+    Name="Fly",
+    CurrentValue=false,
+    Callback=function(v)
+        flyEnabled=v
+        local _,_,hrp=getCharacter()
+        if v then enableFly(hrp) else disableFly(hrp) end
     end
+})
+
+playerTab:CreateSlider({
+    Name="Fly速度",
+    Range={10,5000},
+    Increment=5,
+    CurrentValue=flySpeed,
+    Callback=function(v) flySpeed=v end
+})
+
+--============================
+-- 入力
+--============================
+UserInputService.InputBegan:Connect(function(i,g)
+    if g then return end
+    if flyKeys[i.KeyCode.Name] ~= nil then flyKeys[i.KeyCode.Name]=true end
+end)
+
+UserInputService.InputEnded:Connect(function(i,g)
+    if g then return end
+    if flyKeys[i.KeyCode.Name] ~= nil then flyKeys[i.KeyCode.Name]=false end
+end)
+
+--============================
+-- RenderStepped
+--============================
+RunService.RenderStepped:Connect(function()
+    local _,_,hrp=getCharacter()
+    if hrp and flyEnabled then applyFly(hrp) end
 end)
 
 
