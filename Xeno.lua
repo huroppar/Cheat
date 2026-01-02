@@ -944,6 +944,74 @@ combatTab:CreateToggle({
     end
 })
 
+
+
+--============================
+-- ★ 極限張り付きボタン
+--============================
+combatTab:CreateButton({
+    Name = "張り付きV2",
+    Callback = function()
+        if not selectedTarget or not selectedTarget.Character then
+            RayField:Notify({
+                Title = "エラー",
+                Content = "先にターゲット選んで！",
+                Duration = 3
+            })
+            return
+        end
+
+        local myChar = player.Character
+        local targetChar = selectedTarget.Character
+        if not myChar or not targetChar then return end
+
+        local myHRP = myChar:FindFirstChild("HumanoidRootPart")
+        local targetHRP = targetChar:FindFirstChild("HumanoidRootPart")
+        if not myHRP or not targetHRP then return end
+
+        -- 既存の追従削除（PivotTo追従とか）
+        if myHRP:FindFirstChild("FollowAlign") then
+            myHRP.FollowAlign:Destroy()
+        end
+
+        -- フォルダ作成
+        local alignFolder = Instance.new("Folder")
+        alignFolder.Name = "FollowAlign"
+        alignFolder.Parent = myHRP
+
+        -- 位置追従
+        local att0 = Instance.new("Attachment", myHRP)
+        local att1 = Instance.new("Attachment", targetHRP)
+
+        local ap = Instance.new("AlignPosition")
+        ap.Name = "AlignPosition"
+        ap.Attachment0 = att0
+        ap.Attachment1 = att1
+        ap.MaxForce = 1e6
+        ap.Responsiveness = 1000
+        ap.RigidityEnabled = true
+        ap.Position = Vector3.new(0,0,7) -- 後ろにオフセット
+        ap.Parent = alignFolder
+
+        -- 向き追従
+        local ao = Instance.new("AlignOrientation")
+        ao.Name = "AlignOrientation"
+        ao.Attachment0 = att0
+        ao.Attachment1 = att1
+        ao.MaxTorque = 1e6
+        ao.Responsiveness = 1000
+        ao.RigidityEnabled = true
+        ao.Parent = alignFolder
+
+        RayField:Notify({
+            Title = "極限張り付き",
+            Content = selectedTarget.Name.." に張り付き中",
+            Duration = 3
+        })
+    end
+})
+
+
 --============================
 -- ★ カメラ自由追従
 --============================
