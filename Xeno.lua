@@ -871,444 +871,214 @@ espTab:CreateSlider({
 
 
 --========================================================--
---                     🔥 Combat Tab                      --
+--                     🔥 Combat Tab (完成版)              --
 --========================================================--
 
+--================ Services =================
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
-local player = Players.LocalPlayer
-local camera = workspace.CurrentCamera
 local UIS = game:GetService("UserInputService")
 
+local player = Players.LocalPlayer
+local camera = workspace.CurrentCamera
+
+--================ GUI =================
 local combatTab = Window:CreateTab("戦闘", 4483362458)
 
---============================
--- 状態変数
---============================
-local selectedTarget = nil
-local followActive = false
-local freeCamActive = false
-local originalPos = nil
-local originalCamType = nil
-local savedHRPCFrame = nil
-local savedPlatformStand = false
---============================
--- Tracer（線）
---============================
-local tracerActive = false
-
-local tracerLine = Drawing.new("Line")
-tracerLine.Visible = false
-tracerLine.Thickness = 2
-tracerLine.Transparency = 1
-tracerLine.Color = Color3.fromRGB(0,255,255) -- ネオン水色
-
---============================
--- ★ プレイヤーへTP
---============================
-combatTab:CreateButton({
-    Name = "選択中のプレイヤーへ TP",
-    Callback = function()
-        if selectedTarget and selectedTarget.Character and selectedTarget.Character:FindFirstChild("HumanoidRootPart") then
-            local hrp = selectedTarget.Character.HumanoidRootPart
-            player.Character:PivotTo(hrp.CFrame * CFrame.new(0,0,3))
-        else
-            RayField:Notify({
-                Title = "エラー",
-                Content = "ターゲット無効！",
-                Duration = 3
-            })
-        end
-    end
-})
-
---============================
--- ★ 張り付きトグル
---============================
-combatTab:CreateToggle({
-    Name = "張り付き",
-    CurrentValue = false,
-    Callback = function(state)
-        if not selectedTarget then
-            RayField:Notify({
-                Title = "エラー",
-                Content = "先にプレイヤーを選んで！",
-                Duration = 3
-            })
-            return
-        end
-        followActive = state
-        local myHRP = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
-        if not myHRP then return end
-
-        if state then
-            originalPos = myHRP.CFrame
-            RayField:Notify({
-                Title = "張り付き開始",
-                Content = selectedTarget.Name .. " の後ろへ追従中",
-                Duration = 3
-            })
-        else
-            if originalPos then
-                player.Character:PivotTo(originalPos)
-            end
-            RayField:Notify({
-                Title = "解除",
-                Content = "元の位置に戻ったよ！",
-                Duration = 3
-            })
-        end
-    end
-})
-
-
-
---============================
--- ★ 距離制御付き張り付きトグル
---============================
-local autoFollowActive = false
-local followDistance = 200      -- 張り付き開始距離
-local slideSpeed = 300          -- 1秒あたり移動スタッド量（スライド速度）
-
-combatTab:CreateToggle({
-    Name = "張り付きv2(BloxFruit使用可)",
-    CurrentValue = false,
-    Callback = function(state)
-        if not selectedTarget then
-            RayField:Notify({
-                Title = "エラー",
-                Content = "先にターゲットを選んで！",
-                Duration = 3
-            })
-            return
-        end
-
-        autoFollowActive = state
-        local myHRP = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
-        if not myHRP then return end
-
-        if state then
-            RayField:Notify({
-                Title = "張り付きv2",
-                Content = "200スタッド以内で自動的に張り付き開始",
-                Duration = 3
-            })
-        else
-            RayField:Notify({
-                Title = "解除",
-                Content = "張り付き解除",
-                Duration = 2
-            })
-        end
-    end
-})
-
---============================
--- RenderSteppedで距離チェック + スライド移動
---============================
-RunService.RenderStepped:Connect(function(dt)
-    if autoFollowActive and selectedTarget and selectedTarget.Character and player.Character then
-        local myHRP = player.Character:FindFirstChild("HumanoidRootPart")
-        local targetHRP = selectedTarget.Character:FindFirstChild("HumanoidRootPart")
-        if myHRP and targetHRP then
-            local dist = (targetHRP.Position - myHRP.Position).Magnitude
-
-            if dist > followDistance then
-                -- ターゲットに向かってスライド移動
-                local dir = (targetHRP.Position - myHRP.Position).Unit
-                myHRP.CFrame = myHRP.CFrame + dir * slideSpeed * dt
-            else
-                -- 距離内なら後ろ張り付き
-                local offset = Vector3.new(0,0,7) -- 後ろオフセット
-                myHRP.CFrame = targetHRP.CFrame * CFrame.new(offset)
-            end
-        end
-    end
-end)
-
-
-
-local attachActive = false
-local originalCF = nil
-local originalHumPlatform = nil
-
-combatTab:CreateToggle({
-    Name = "下向き張り付き(スタンドの世界推奨)",
-    CurrentValue = false,
-    Callback = function(v)
-        local char, hum, hrp = getCharacter()
-        if not char or not hum or not hrp or not selectedTarget then
-            Rayfield:Notify({
-                Title = "エラー",
-                Content = "キャラかターゲットが無効です！",
-                Duration = 3
-            })
-            return
-        end
-
-        attachActive = v
-
-        if v then
-            -- ON前の状態を保存
-            originalCF = hrp.CFrame
-            originalHumPlatform = hum.PlatformStand
-
-            hum.PlatformStand = true
-
-            Rayfield:Notify({
-                Title = "開始",
-                Content = selectedTarget.Name .. " の下に張り付き中",
-                Duration = 3
-            })
-        else
-            -- 元の状態に戻す
-            if originalCF then
-                hrp.CFrame = originalCF
-            end
-            hum.PlatformStand = originalHumPlatform or false
-
-            Rayfield:Notify({
-                Title = "解除",
-                Content = "元の向きと位置に戻したよ",
-                Duration = 3
-            })
-        end
-    end
-})
-
-RunService.RenderStepped:Connect(function()
-    if attachActive and selectedTarget and selectedTarget.Character then
-        local _, _, tHRP = getCharacter()
-        local targetHRP = selectedTarget.Character:FindFirstChild("HumanoidRootPart")
-        if targetHRP and tHRP then
-            -- 寝た向きにして、足元より下に張り付き
-            tHRP.CFrame = targetHRP.CFrame * CFrame.new(0, -12, 0) * CFrame.Angles(math.rad(90), 0, 0)
-        end
-    end
-end)
-
-
---============================
--- ★ カメラ自由追従
---============================
-local camYaw, camPitch = 0,0
-local sensitivity = 0.25
-local zoomDist = 8
-local minZoom, maxZoom = 3,25
-local safePos = CFrame.new(0,1500,0)
-local originalHRP = nil
-
-_G.SetTarget = function(tar)
-	if typeof(tar) == "Instance" and tar:FindFirstChild("Humanoid") then
-		selectedTarget = tar
-	end
+--================ Utils =================
+local function getChar()
+    local char = player.Character
+    if not char then return end
+    local hum = char:FindFirstChildOfClass("Humanoid")
+    local hrp = char:FindFirstChild("HumanoidRootPart")
+    if not hum or not hrp then return end
+    return char, hum, hrp
 end
 
-combatTab:CreateToggle({
-    Name = "視点TP(向き固定)",
-    CurrentValue = false,
-    Callback = function(state)
-        if not selectedTarget then
-            RayField:Notify({
-                Title = "エラー",
-                Content = "ターゲット選んで！",
-                Duration = 2
-            })
-            return
-        end
+--================ 状態 =================
+local selectedTarget = nil
 
-        freeCamActive = state
+local mode = {
+    follow = false,
+    autoFollow = false,
+    under = false,
+    freeCam = false
+}
 
-        local char = player.Character
-        if not char then return end
-        local hrp = char:FindFirstChild("HumanoidRootPart")
-        local hum = char:FindFirstChild("Humanoid")
-        if not hrp or not hum then return end
+--================ 設定 =================
+local FOLLOW_OFFSET = CFrame.new(0,0,7)
+local AUTO_DIST = 200
+local AUTO_SPEED = 300
 
-        if state then
-            -- カメラ制御開始
-            originalHRP = hrp.CFrame
-            savedPlatformStand = hum.PlatformStand
+--================ カメラ =================
+local camYaw, camPitch = 0,0
+local zoomDist = 8
+local sensitivity = 0.25
+local minZoom, maxZoom = 3,25
+local savedCamType
+local savedHRP
 
-            camera.CameraType = Enum.CameraType.Scriptable
-            hrp.CFrame = safePos
-            hum.PlatformStand = true
+--================ Tracer =================
+local tracerActive = false
+local tracer = Drawing.new("Line")
+tracer.Visible = false
+tracer.Thickness = 2
+tracer.Color = Color3.fromRGB(0,255,255)
 
-            camYaw, camPitch = 0,0
-        else
-            -- カメラ解除
-            camera.CameraType = Enum.CameraType.Custom
-            if originalHRP then
-                hrp.CFrame = originalHRP
+--========================================================--
+-- Target Setter
+--========================================================--
+_G.SetTarget = function(plr)
+    if typeof(plr) == "Instance" and plr:IsA("Player") then
+        selectedTarget = plr
+    end
+end
+
+--========================================================--
+-- Buttons
+--========================================================--
+combatTab:CreateButton({
+    Name = "選択中プレイヤーへTP",
+    Callback = function()
+        if selectedTarget and selectedTarget.Character then
+            local hrp = selectedTarget.Character:FindFirstChild("HumanoidRootPart")
+            local _,_,myHRP = getChar()
+            if hrp and myHRP then
+                myHRP.CFrame = hrp.CFrame * FOLLOW_OFFSET
             end
-            hum.PlatformStand = savedPlatformStand
         end
     end
 })
 
---============================
--- ★ ターゲット線（Tracer）
---============================
+combatTab:CreateToggle({
+    Name = "張り付き",
+    Callback = function(v)
+        mode.follow = v
+        mode.autoFollow = false
+        mode.under = false
+    end
+})
+
+combatTab:CreateToggle({
+    Name = "張り付きv2(距離制御)",
+    Callback = function(v)
+        mode.autoFollow = v
+        mode.follow = false
+        mode.under = false
+    end
+})
+
+combatTab:CreateToggle({
+    Name = "下向き張り付き",
+    Callback = function(v)
+        mode.under = v
+        mode.follow = false
+        mode.autoFollow = false
+    end
+})
+
+combatTab:CreateToggle({
+    Name = "視点TP(安定)",
+    Callback = function(v)
+        local _, hum, hrp = getChar()
+        if not hum or not hrp then return end
+
+        mode.freeCam = v
+
+        if v then
+            savedCamType = camera.CameraType
+            savedHRP = hrp.CFrame
+            camera.CameraType = Enum.CameraType.Scriptable
+            hrp.CFrame = CFrame.new(0,5000,0)
+        else
+            camera.CameraType = savedCamType or Enum.CameraType.Custom
+            if savedHRP then
+                hrp.CFrame = savedHRP
+            end
+        end
+    end
+})
+
 combatTab:CreateToggle({
     Name = "ターゲット線",
-    CurrentValue = false,
-    Callback = function(state)
-        tracerActive = state
-        if not state then
-            tracerLine.Visible = false
-        end
+    Callback = function(v)
+        tracerActive = v
+        tracer.Visible = false
     end
 })
 
-
---============================
--- マウス操作
---============================
+--========================================================--
+-- Mouse
+--========================================================--
 UIS.InputChanged:Connect(function(input)
-    if not freeCamActive then return end
+    if not mode.freeCam then return end
+
     if input.UserInputType == Enum.UserInputType.MouseMovement then
-        camYaw = camYaw - input.Delta.X * sensitivity
+        camYaw -= input.Delta.X * sensitivity
         camPitch = math.clamp(camPitch - input.Delta.Y * sensitivity, -75, 75)
     elseif input.UserInputType == Enum.UserInputType.MouseWheel then
         zoomDist = math.clamp(zoomDist - input.Position.Z * 2, minZoom, maxZoom)
     end
 end)
 
---============================
--- RenderStepped カメラ制御
---============================
-RunService.RenderStepped:Connect(function()
-    --============================
-    -- Follow処理
-    --============================
-    if followActive and selectedTarget and selectedTarget.Character and player.Character then
-        local targetHRP = selectedTarget.Character:FindFirstChild("HumanoidRootPart")
-        local myHRP = player.Character:FindFirstChild("HumanoidRootPart")
-        if targetHRP and myHRP then
-            myHRP.CFrame = targetHRP.CFrame * CFrame.new(0,0,7)
-        end
-    end
+--========================================================--
+-- 🔥 RenderStepped（一本化）
+--========================================================--
+RunService.RenderStepped:Connect(function(dt)
+    local char, hum, hrp = getChar()
+    if not char or not hrp then return end
+    if not selectedTarget or not selectedTarget.Character then return end
 
-    --============================
-    -- 自由カメラ
-    --============================
-    if freeCamActive and selectedTarget and selectedTarget.Character then
-        local head = selectedTarget.Character:FindFirstChild("Head")
-        if head then
-            local yaw = math.rad(camYaw)
-            local pitch = math.rad(camPitch)
-            local lookDir = Vector3.new(
-                math.cos(pitch) * math.sin(yaw),
-                math.sin(pitch),
-                math.cos(pitch) * math.cos(yaw)
-            )
-            local camPos = head.Position - lookDir * zoomDist
-            camera.CFrame = CFrame.new(camPos, head.Position)
-        end
-    end
+    local tHRP = selectedTarget.Character:FindFirstChild("HumanoidRootPart")
+    local head = selectedTarget.Character:FindFirstChild("Head")
+    if not tHRP then return end
 
-    --============================
-    -- 🔥 Tracer 描画（ここが重要）
-    --============================
-    if tracerActive and selectedTarget and selectedTarget.Character and player.Character then
-        local myHRP = player.Character:FindFirstChild("HumanoidRootPart")
-        local tHRP = selectedTarget.Character:FindFirstChild("HumanoidRootPart")
+    --================ 移動制御 =================
+    if mode.follow then
+        hrp.CFrame = tHRP.CFrame * FOLLOW_OFFSET
 
-        if myHRP and tHRP then
-            local p1, v1 = camera:WorldToViewportPoint(myHRP.Position)
-            local p2, v2 = camera:WorldToViewportPoint(tHRP.Position)
-
-            if v1 and v2 then
-                tracerLine.From = Vector2.new(p1.X, p1.Y)
-                tracerLine.To   = Vector2.new(p2.X, p2.Y)
-                tracerLine.Visible = true
-            else
-                tracerLine.Visible = false
-            end
+    elseif mode.autoFollow then
+        local dist = (tHRP.Position - hrp.Position).Magnitude
+        if dist > AUTO_DIST then
+            local dir = (tHRP.Position - hrp.Position).Unit
+            hrp.CFrame += dir * AUTO_SPEED * dt
         else
-            tracerLine.Visible = false
+            hrp.CFrame = tHRP.CFrame * FOLLOW_OFFSET
+        end
+
+    elseif mode.under then
+        hrp.CFrame = tHRP.CFrame * CFrame.new(0,-12,0) * CFrame.Angles(math.rad(90),0,0)
+    end
+
+    --================ カメラ =================
+    if mode.freeCam and head then
+        local yaw = math.rad(camYaw)
+        local pitch = math.rad(camPitch)
+        local dir = Vector3.new(
+            math.cos(pitch) * math.sin(yaw),
+            math.sin(pitch),
+            math.cos(pitch) * math.cos(yaw)
+        )
+        local camPos = head.Position - dir * zoomDist
+        camera.CFrame = CFrame.new(camPos, head.Position)
+    end
+
+    --================ Tracer =================
+    if tracerActive then
+        local p1,v1 = camera:WorldToViewportPoint(hrp.Position)
+        local p2,v2 = camera:WorldToViewportPoint(tHRP.Position)
+        if v1 and v2 then
+            tracer.From = Vector2.new(p1.X,p1.Y)
+            tracer.To   = Vector2.new(p2.X,p2.Y)
+            tracer.Visible = true
+        else
+            tracer.Visible = false
         end
     else
-        tracerLine.Visible = false
+        tracer.Visible = false
     end
 end)
 
-
---========================================================--
--- プレイヤー一覧（HPリアルタイム）
---========================================================--
-
-combatTab:CreateLabel("プレイヤー一覧")
-
-local playerButtons = {}
-
-local function GetHP(plr)
-    if plr.Character and plr.Character:FindFirstChild("Humanoid") then
-        return math.floor(plr.Character.Humanoid.Health), math.floor(plr.Character.Humanoid.MaxHealth)
-    end
-    return 0,0
-end
-
-local function CreatePlayerButton(plr)
-    local hp, maxhp = GetHP(plr)
-    local btn = combatTab:CreateButton({
-        Name = plr.Name.." ["..hp.."/"..maxhp.."]",
-        Callback = function()
-            selectedTarget = plr
-            RayField:Notify({
-                Title = "選択",
-                Content = plr.Name .. " をターゲットにしたよ！",
-                Duration = 3
-            })
-        end
-    })
-    playerButtons[plr] = btn
-end
-
-local function UpdatePlayerList()
-    local current = {}
-
-    for _, p in ipairs(Players:GetPlayers()) do
-        if p ~= player then
-            current[p] = true
-            if not playerButtons[p] then
-                CreatePlayerButton(p)
-            end
-        end
-    end
-
-    for plr, btn in pairs(playerButtons) do
-        if not current[plr] then
-            pcall(function() btn:Remove() end)
-            playerButtons[plr] = nil
-        end
-    end
-end
-
-UpdatePlayerList()
-Players.PlayerAdded:Connect(UpdatePlayerList)
-Players.PlayerRemoving:Connect(UpdatePlayerList)
-
--- HP更新 + 張り付き
-RunService.Heartbeat:Connect(function()
-for plr, btn in pairs(playerButtons) do
-    if btn and plr.Character then  -- btn が存在するかチェック
-        local hp,maxhp = GetHP(plr)
-        pcall(function()
-            btn:Set(plr.Name.." ["..hp.."/"..maxhp.."]")
-        end)
-    end
-end
-
-
-    if followActive and selectedTarget and selectedTarget.Character and player.Character then
-        local tHRP = selectedTarget.Character:FindFirstChild("HumanoidRootPart")
-        local myHRP = player.Character:FindFirstChild("HumanoidRootPart")
-        if tHRP and myHRP then
-            myHRP.CFrame = tHRP.CFrame * CFrame.new(0,0,7)
-        end
-    end
-end)
 
 
 --========================================================--
