@@ -1307,19 +1307,18 @@ end
 -- Invisible 移動処理（心臓部）
 RunService.Heartbeat:Connect(function()
     if not invisibleEnabled then return end
-    if not rootPart or not humanoid then return end
+    if not rootPart then return end
 
     local cf = rootPart.CFrame
-    local cam = humanoid.CameraOffset
 
+    -- 本体だけ一瞬逃がす（カメラは触らない）
     rootPart.CFrame = cf * CFrame.new(0, -200000, 0)
-    humanoid.CameraOffset = Vector3.new(0, -200000, 0)
 
     RunService.RenderStepped:Wait()
 
     rootPart.CFrame = cf
-    humanoid.CameraOffset = cam
 end)
+
 
 -- キー入力
 UIS.InputBegan:Connect(function(input, gp)
