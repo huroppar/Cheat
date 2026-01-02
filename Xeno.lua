@@ -871,7 +871,7 @@ espTab:CreateSlider({
 
 
 --========================================================--
---                     🔥 Combat Tab (完成版)              --
+--                     🔥 Combat Tab (最終完成版)          --
 --========================================================--
 
 --================ Services =================
@@ -915,8 +915,10 @@ local camYaw, camPitch = 0,0
 local zoomDist = 8
 local sensitivity = 0.25
 local minZoom, maxZoom = 3,25
+
 local savedCamType
 local savedHRP
+local savedAnchored
 
 --================ Tracer =================
 local tracerActive = false
@@ -940,11 +942,11 @@ end
 combatTab:CreateButton({
     Name = "選択中プレイヤーへTP",
     Callback = function()
-        if selectedTarget and selectedTarget.Character then
-            local hrp = selectedTarget.Character:FindFirstChild("HumanoidRootPart")
-            local _,_,myHRP = getChar()
-            if hrp and myHRP then
-                myHRP.CFrame = hrp.CFrame * FOLLOW_OFFSET
+        local _,_,myHRP = getChar()
+        if selectedTarget and selectedTarget.Character and myHRP then
+            local tHRP = selectedTarget.Character:FindFirstChild("HumanoidRootPart")
+            if tHRP then
+                myHRP.CFrame = tHRP.CFrame * FOLLOW_OFFSET
             end
         end
     end
@@ -977,24 +979,31 @@ combatTab:CreateToggle({
     end
 })
 
+--================ 視点のみTP（20万下・落下防止） =================
 combatTab:CreateToggle({
-    Name = "視点TP(安定)",
+    Name = "視点のみTP（落下防止）",
     Callback = function(v)
-        local _, hum, hrp = getChar()
-        if not hum or not hrp then return end
+        local _,_,hrp = getChar()
+        if not hrp then return end
 
         mode.freeCam = v
 
         if v then
             savedCamType = camera.CameraType
             savedHRP = hrp.CFrame
+            savedAnchored = hrp.Anchored
+
             camera.CameraType = Enum.CameraType.Scriptable
-            hrp.CFrame = CFrame.new(0,5000,0)
+            hrp.CFrame = CFrame.new(0, -200000, 0)
+            hrp.Anchored = true
+
+            camYaw, camPitch = 0,0
         else
             camera.CameraType = savedCamType or Enum.CameraType.Custom
             if savedHRP then
                 hrp.CFrame = savedHRP
             end
+            hrp.Anchored = savedAnchored or false
         end
     end
 })
@@ -1022,32 +1031,34 @@ UIS.InputChanged:Connect(function(input)
 end)
 
 --========================================================--
--- 🔥 RenderStepped（一本化）
+-- 🔥 RenderStepped（一本化・return禁止構造）
 --========================================================--
 RunService.RenderStepped:Connect(function(dt)
     local char, hum, hrp = getChar()
     if not char or not hrp then return end
-    if not selectedTarget or not selectedTarget.Character then return end
 
-    local tHRP = selectedTarget.Character:FindFirstChild("HumanoidRootPart")
-    local head = selectedTarget.Character:FindFirstChild("Head")
-    if not tHRP then return end
+    local targetChar = selectedTarget and selectedTarget.Character
+    local tHRP = targetChar and targetChar:FindFirstChild("HumanoidRootPart")
+    local head = targetChar and targetChar:FindFirstChild("Head")
 
     --================ 移動制御 =================
-    if mode.follow then
-        hrp.CFrame = tHRP.CFrame * FOLLOW_OFFSET
-
-    elseif mode.autoFollow then
-        local dist = (tHRP.Position - hrp.Position).Magnitude
-        if dist > AUTO_DIST then
-            local dir = (tHRP.Position - hrp.Position).Unit
-            hrp.CFrame += dir * AUTO_SPEED * dt
-        else
+    if tHRP then
+        if mode.follow then
             hrp.CFrame = tHRP.CFrame * FOLLOW_OFFSET
-        end
 
-    elseif mode.under then
-        hrp.CFrame = tHRP.CFrame * CFrame.new(0,-12,0) * CFrame.Angles(math.rad(90),0,0)
+        elseif mode.autoFollow then
+            local dist = (tHRP.Position - hrp.Position).Magnitude
+            if dist > AUTO_DIST then
+                local dir = (tHRP.Position - hrp.Position).Unit
+                hrp.CFrame += dir * AUTO_SPEED * dt
+            else
+                hrp.CFrame = tHRP.CFrame * FOLLOW_OFFSET
+            end
+
+        elseif mode.under then
+            hrp.CFrame = tHRP.CFrame * CFrame.new(0,-12,0)
+                * CFrame.Angles(math.rad(90),0,0)
+        end
     end
 
     --================ カメラ =================
@@ -1064,7 +1075,7 @@ RunService.RenderStepped:Connect(function(dt)
     end
 
     --================ Tracer =================
-    if tracerActive then
+    if tracerActive and tHRP then
         local p1,v1 = camera:WorldToViewportPoint(hrp.Position)
         local p2,v2 = camera:WorldToViewportPoint(tHRP.Position)
         if v1 and v2 then
@@ -1079,28 +1090,24 @@ RunService.RenderStepped:Connect(function(dt)
     end
 end)
 
-
 --========================================================--
--- プレイヤー一覧（HPリアルタイム・安定版）
+-- プレイヤー一覧（HPリアルタイム）
 --========================================================--
-
 combatTab:CreateLabel("プレイヤー一覧")
 
 local playerButtons = {}
 
 local function getHP(plr)
-    if plr.Character then
-        local hum = plr.Character:FindFirstChildOfClass("Humanoid")
-        if hum then
-            return math.floor(hum.Health), math.floor(hum.MaxHealth)
-        end
+    local char = plr.Character
+    local hum = char and char:FindFirstChildOfClass("Humanoid")
+    if hum then
+        return math.floor(hum.Health), math.floor(hum.MaxHealth)
     end
     return 0,0
 end
 
 local function createPlayerButton(plr)
     local hp,maxhp = getHP(plr)
-
     local btn = combatTab:CreateButton({
         Name = plr.Name.." ["..hp.."/"..maxhp.."]",
         Callback = function()
@@ -1112,7 +1119,6 @@ local function createPlayerButton(plr)
             })
         end
     })
-
     playerButtons[plr] = btn
 end
 
@@ -1140,10 +1146,9 @@ updatePlayerList()
 Players.PlayerAdded:Connect(updatePlayerList)
 Players.PlayerRemoving:Connect(updatePlayerList)
 
--- HPリアルタイム更新（軽量）
 RunService.Heartbeat:Connect(function()
     for plr,btn in pairs(playerButtons) do
-        if btn and plr.Character then
+        if btn then
             local hp,maxhp = getHP(plr)
             pcall(function()
                 btn:Set(plr.Name.." ["..hp.."/"..maxhp.."]")
@@ -1151,6 +1156,7 @@ RunService.Heartbeat:Connect(function()
         end
     end
 end)
+
 
 --========================================================--
 --                 🔥 World Of Stand                     --
