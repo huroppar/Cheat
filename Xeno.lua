@@ -820,6 +820,37 @@ espTab:CreateSlider({
         end
     end
 })
+--================================
+-- 自分の攻撃HitBox拡大
+--================================
+-- 元サイズ保存用
+local originalSize = nil
+local hitboxScale = 1
+
+-- HitBox拡大用スライダー
+espTab:CreateSlider({
+    Name = "攻撃範囲倍率",
+    Range = {1, 10},
+    Increment = 0.1,
+    Suffix = "倍",
+    CurrentValue = 1,
+    Callback = function(v)
+        hitboxScale = v
+
+        local char = LocalPlayer.Character
+        if char then
+            local hrp = char:FindFirstChild("HumanoidRootPart")
+            if hrp then
+                if not originalSize then
+                    originalSize = hrp.Size -- 元サイズを保存
+                end
+                -- 倍率に応じてサイズ変更
+                hrp.Size = originalSize * hitboxScale
+            end
+        end
+    end
+})
+
 
 
 --========================================================--
