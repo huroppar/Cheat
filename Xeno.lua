@@ -757,6 +757,10 @@ espTab:CreateToggle({
 --================================
 -- HitBox
 --================================
+-- HitBox倍率
+local hitboxScale = 1
+
+-- HitBoxトグル
 espTab:CreateToggle({
     Name = "HitBox表示",
     CurrentValue = false,
@@ -771,7 +775,11 @@ espTab:CreateToggle({
                         if not originalSize[plr] then
                             originalSize[plr] = hrp.Size
                         end
-                        hrp.Size = Vector3.new(8,8,8)
+
+                        -- キャラサイズに応じてHitBoxを拡大
+                        local baseScale = math.max(hrp.Size.X, hrp.Size.Y, hrp.Size.Z) / 2
+                        local newSize = Vector3.new(baseScale*2, baseScale*2, baseScale*2) * hitboxScale
+                        hrp.Size = newSize
                         hrp.Transparency = 0.5
                         hrp.CanCollide = false
                         hrp.Color = isEnemy(plr) and Color3.new(1,0,0) or Color3.new(1,1,1)
@@ -780,6 +788,32 @@ espTab:CreateToggle({
                             hrp.Size = originalSize[plr]
                         end
                         hrp.Transparency = 1
+                    end
+                end
+            end
+        end
+    end
+})
+
+-- HitBoxスライダー
+espTab:CreateSlider({
+    Name = "HitBox倍率",
+    Range = {1, 10}, -- 1倍～10倍まで
+    Increment = 0.1,
+    Suffix = "倍",
+    CurrentValue = 1,
+    Callback = function(v)
+        hitboxScale = v
+
+        -- HitBox有効時は即反映
+        if hitboxEnabled then
+            for _, plr in ipairs(Players:GetPlayers()) do
+                if plr ~= LocalPlayer and plr.Character then
+                    local hrp = plr.Character:FindFirstChild("HumanoidRootPart")
+                    if hrp and originalSize[plr] then
+                        local baseScale = math.max(originalSize[plr].X, originalSize[plr].Y, originalSize[plr].Z) / 2
+                        hrp.Size = Vector3.new(baseScale*2, baseScale*2, baseScale*2) * hitboxScale
+                        hrp.Transparency = 0.5
                     end
                 end
             end
