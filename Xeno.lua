@@ -34,13 +34,12 @@ local infiniteJumpEnabled = false
 -- noclip
 local noclipEnabled = false
 local noclipConn = nil
+local originalCanCollide = {}
 
 -- freeze
 local freezeEnabled = false
 local freezeConn = nil
 local freezeCFrame = nil
-
-
 
 -- 空中TP
 local airTPActive = false
@@ -159,6 +158,16 @@ end)
 --================================
 local function enableNoclip()
     if noclipConn then return end
+    local char = LocalPlayer.Character
+    if not char then return end
+
+    -- オンにする前のCanCollideを保存
+    for _,p in ipairs(char:GetDescendants()) do
+        if p:IsA("BasePart") then
+            originalCanCollide[p] = p.CanCollide
+        end
+    end
+
     noclipConn = RunService.Stepped:Connect(function()
         local char = LocalPlayer.Character
         if not char then return end
@@ -177,11 +186,14 @@ local function disableNoclip()
     end
     local char = LocalPlayer.Character
     if not char then return end
-    for _,p in ipairs(char:GetDescendants()) do
-        if p:IsA("BasePart") then
-            p.CanCollide = true
+
+    -- オンにする前の状態に戻す
+    for p,canCollide in pairs(originalCanCollide) do
+        if p and p.Parent then
+            p.CanCollide = canCollide
         end
     end
+    originalCanCollide = {}
 end
 
 playerTab:CreateToggle({
@@ -189,9 +201,14 @@ playerTab:CreateToggle({
     CurrentValue = false,
     Callback = function(v)
         noclipEnabled = v
-        if v then enableNoclip() else disableNoclip() end
+        if v then
+            enableNoclip()
+        else
+            disableNoclip()
+        end
     end
 })
+
 
 --================================
 -- 空中TP
