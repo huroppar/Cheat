@@ -871,7 +871,7 @@ espTab:CreateSlider({
 
 
 --========================================================--
---                     🔥 Combat Tab 完全版（整理版）             --
+--                     🔥 Combat Tab 完全版（整理版・安全版）     --
 --========================================================--
 
 local Players = game:GetService("Players")
@@ -913,8 +913,13 @@ tracerLine.Color = Color3.fromRGB(0,255,255)
 --============================--
 -- Utility
 --============================--
-local function GetHRP(char) return char and char:FindFirstChild("HumanoidRootPart") end
-local function GetHumanoid(char) return char and char:FindFirstChildOfClass("Humanoid") end
+local function GetHRP(char)
+    return char and char:FindFirstChild("HumanoidRootPart")
+end
+
+local function GetHumanoid(char)
+    return char and char:FindFirstChildOfClass("Humanoid")
+end
 
 --============================--
 -- プレイヤー選択
@@ -941,13 +946,9 @@ local function DisableFollow()
     followMode = nil
     local hrp = GetHRP(player.Character)
     local hum = GetHumanoid(player.Character)
-    if hrp then
-        if freeCamActive then
-            hrp.CFrame = CFrame.new(hrp.Position.X, SAFE_Y, hrp.Position.Z)
-        elseif originalPos_Follow then
-            hrp.CFrame = originalPos_Follow
-            if hum then hum.PlatformStand = false end
-        end
+    if hrp and originalPos_Follow then
+        hrp.CFrame = originalPos_Follow
+        if hum then hum.PlatformStand = false end
     end
 end
 
@@ -1056,17 +1057,17 @@ RunService.RenderStepped:Connect(function(dt)
 
     --==== Follow ====
     if followActive then
+        local hum = GetHumanoid(player.Character)
         if followMode=="v2" then
             local dVec = targetHRP.Position - myHRP.Position
             local dist = dVec.Magnitude
             if dist > 200 then
-                myHRP.CFrame += dVec.Unit * 300 * dt
+                myHRP.CFrame = myHRP.CFrame + dVec.Unit * 300 * dt
             else
                 myHRP.CFrame = targetHRP.CFrame * CFrame.new(0,0,7)
             end
         elseif followMode=="under" then
             myHRP.CFrame = targetHRP.CFrame * CFrame.new(0,-12,0) * CFrame.Angles(math.rad(90),0,0)
-            local hum = GetHumanoid(player.Character)
             if hum then hum.PlatformStand = true end
         end
     end
