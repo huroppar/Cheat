@@ -1027,6 +1027,67 @@ RunService.RenderStepped:Connect(function(dt)
 end)
 
 
+
+local attachActive = false
+local originalCF = nil
+local originalHumPlatform = nil
+
+playerTab:CreateToggle({
+    Name = "下向き張り付き(スタンドの世界推奨)",
+    CurrentValue = false,
+    Callback = function(v)
+        local char, hum, hrp = getCharacter()
+        if not char or not hum or not hrp or not selectedTarget then
+            Rayfield:Notify({
+                Title = "エラー",
+                Content = "キャラかターゲットが無効です！",
+                Duration = 3
+            })
+            return
+        end
+
+        attachActive = v
+
+        if v then
+            -- ON前の状態を保存
+            originalCF = hrp.CFrame
+            originalHumPlatform = hum.PlatformStand
+
+            hum.PlatformStand = true
+
+            Rayfield:Notify({
+                Title = "開始",
+                Content = selectedTarget.Name .. " の下に張り付き中",
+                Duration = 3
+            })
+        else
+            -- 元の状態に戻す
+            if originalCF then
+                hrp.CFrame = originalCF
+            end
+            hum.PlatformStand = originalHumPlatform or false
+
+            Rayfield:Notify({
+                Title = "解除",
+                Content = "元の向きと位置に戻したよ",
+                Duration = 3
+            })
+        end
+    end
+})
+
+RunService.RenderStepped:Connect(function()
+    if attachActive and selectedTarget and selectedTarget.Character then
+        local _, _, tHRP = getCharacter()
+        local targetHRP = selectedTarget.Character:FindFirstChild("HumanoidRootPart")
+        if targetHRP and tHRP then
+            -- 寝た向きにして、足元より下に張り付き
+            tHRP.CFrame = targetHRP.CFrame * CFrame.new(0, -12, 0) * CFrame.Angles(math.rad(90), 0, 0)
+        end
+    end
+end)
+
+
 --============================
 -- ★ カメラ自由追従
 --============================
