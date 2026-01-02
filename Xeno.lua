@@ -1080,6 +1080,77 @@ RunService.RenderStepped:Connect(function(dt)
 end)
 
 
+--========================================================--
+-- プレイヤー一覧（HPリアルタイム・安定版）
+--========================================================--
+
+combatTab:CreateLabel("プレイヤー一覧")
+
+local playerButtons = {}
+
+local function getHP(plr)
+    if plr.Character then
+        local hum = plr.Character:FindFirstChildOfClass("Humanoid")
+        if hum then
+            return math.floor(hum.Health), math.floor(hum.MaxHealth)
+        end
+    end
+    return 0,0
+end
+
+local function createPlayerButton(plr)
+    local hp,maxhp = getHP(plr)
+
+    local btn = combatTab:CreateButton({
+        Name = plr.Name.." ["..hp.."/"..maxhp.."]",
+        Callback = function()
+            selectedTarget = plr
+            RayField:Notify({
+                Title = "ターゲット選択",
+                Content = plr.Name.." を選択した",
+                Duration = 2
+            })
+        end
+    })
+
+    playerButtons[plr] = btn
+end
+
+local function updatePlayerList()
+    local alive = {}
+
+    for _,plr in ipairs(Players:GetPlayers()) do
+        if plr ~= player then
+            alive[plr] = true
+            if not playerButtons[plr] then
+                createPlayerButton(plr)
+            end
+        end
+    end
+
+    for plr,btn in pairs(playerButtons) do
+        if not alive[plr] then
+            pcall(function() btn:Remove() end)
+            playerButtons[plr] = nil
+        end
+    end
+end
+
+updatePlayerList()
+Players.PlayerAdded:Connect(updatePlayerList)
+Players.PlayerRemoving:Connect(updatePlayerList)
+
+-- HPリアルタイム更新（軽量）
+RunService.Heartbeat:Connect(function()
+    for plr,btn in pairs(playerButtons) do
+        if btn and plr.Character then
+            local hp,maxhp = getHP(plr)
+            pcall(function()
+                btn:Set(plr.Name.." ["..hp.."/"..maxhp.."]")
+            end)
+        end
+    end
+end)
 
 --========================================================--
 --                 🔥 World Of Stand                     --
