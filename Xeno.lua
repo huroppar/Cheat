@@ -1146,10 +1146,8 @@ RunService.RenderStepped:Connect(function(dt)
 end)
 
 --========================================================--
--- プレイヤー一覧（常時表示・HPリアルタイム）
+-- プレイヤー一覧（Rayfield安定版）
 --========================================================--
-
-
 
 combatTab:CreateSection("プレイヤー一覧")
 
@@ -1163,50 +1161,52 @@ local function getHP(plr)
     return 0, 0
 end
 
-local function clearButtons()
-    for _, btn in pairs(playerButtons) do
-        pcall(function()
-            btn:Destroy() -- ★ RemoveじゃなくDestroy
-        end)
+-- 初回生成（1回だけ）
+for _, plr in ipairs(Players:GetPlayers()) do
+    if plr ~= player then
+        local hp, maxhp = getHP(plr)
+
+        local btn = combatTab:CreateButton({
+            Name = plr.Name .. " [" .. hp .. "/" .. maxhp .. "]",
+            Callback = function()
+                selectedTarget = plr
+                RayField:Notify({
+                    Title = "ターゲット選択",
+                    Content = plr.Name .. " を選択した",
+                    Duration = 2
+                })
+            end
+        })
+
+        playerButtons[plr] = btn
     end
-    table.clear(playerButtons)
 end
 
-local function rebuildPlayerList()
-    clearButtons()
+-- 途中参加（追加のみ）
+Players.PlayerAdded:Connect(function(plr)
+    if plr == player then return end
+    task.wait(0.5) -- Character待ち
 
-    for _, plr in ipairs(Players:GetPlayers()) do
-        if plr ~= player then
-            local hp, maxhp = getHP(plr)
-
-            local btn = combatTab:CreateButton({
-                Name = plr.Name .. " [" .. hp .. "/" .. maxhp .. "]",
-                Callback = function()
-                    selectedTarget = plr
-                    RayField:Notify({
-                        Title = "ターゲット選択",
-                        Content = plr.Name .. " を選択した",
-                        Duration = 2
-                    })
-                end
+    local hp, maxhp = getHP(plr)
+    local btn = combatTab:CreateButton({
+        Name = plr.Name .. " [" .. hp .. "/" .. maxhp .. "]",
+        Callback = function()
+            selectedTarget = plr
+            RayField:Notify({
+                Title = "ターゲット選択",
+                Content = plr.Name .. " を選択した",
+                Duration = 2
             })
-
-            playerButtons[plr] = btn
         end
-    end
-end
+    })
 
--- 初期生成
-rebuildPlayerList()
+    playerButtons[plr] = btn
+end)
 
--- 出入りで再生成
-Players.PlayerAdded:Connect(rebuildPlayerList)
-Players.PlayerRemoving:Connect(rebuildPlayerList)
-
--- HP更新（名前書き換え）
+-- HP更新のみ（削除しない）
 RunService.Heartbeat:Connect(function()
     for plr, btn in pairs(playerButtons) do
-        if btn and plr.Character then
+        if plr.Character and btn then
             local hp, maxhp = getHP(plr)
             pcall(function()
                 btn:Set(plr.Name .. " [" .. hp .. "/" .. maxhp .. "]")
