@@ -1174,68 +1174,52 @@ LocalPlayer.CharacterAdded:Connect(function()
     setupCharacter()
 end)
 
---========================================================--
---                 👻 Invisible Logic                    --
---========================================================--
-local function setInvisible(state)
-    invisibleEnabled = state
-    for _, part in ipairs(parts) do
-        part.Transparency = state and 0.5 or 0
-    end
+--============================--
+-- キャラ隠しTPトグル（既存GUI用）
+--============================--
+do
+    local originalCFrame_Hide = nil
+    local originalTransparency = {}
+
+    combatTab:CreateToggle({
+        Name = "キャラ隠しTP",
+        CurrentValue = false,
+        Callback = function(state)
+            local char = player.Character
+            if not char then return end
+            local hrp = GetHRP(char)
+            if not hrp then return end
+
+            if state then
+                -- 元の位置保存
+                originalCFrame_Hide = hrp.CFrame
+                originalTransparency = {}
+                -- 全パーツ透明化
+                for _, part in ipairs(char:GetChildren()) do
+                    if part:IsA("BasePart") then
+                        originalTransparency[part] = part.Transparency
+                        part.Transparency = 1
+                        part.CanCollide = false
+                    end
+                end
+                -- 無敵ゾーンへ
+                hrp.CFrame = CFrame.new(hrp.Position.X, SAFE_Y, hrp.Position.Z)
+            else
+                -- 元の位置に戻す
+                if originalCFrame_Hide then
+                    hrp.CFrame = originalCFrame_Hide
+                end
+                -- 透明度を戻す
+                for part, trans in pairs(originalTransparency) do
+                    if part then
+                        part.Transparency = trans
+                        part.CanCollide = true
+                    end
+                end
+            end
+        end
+    })
 end
-
--- Invisible 移動処理（心臓部）
-RunService.Heartbeat:Connect(function()
-    if not invisibleEnabled then return end
-    if not rootPart then return end
-
-    local cf = rootPart.CFrame
-
-    -- 本体だけ一瞬逃がす（カメラは触らない）
-    rootPart.CFrame = cf * CFrame.new(0, -200000, 0)
-
-    RunService.RenderStepped:Wait()
-
-    rootPart.CFrame = cf
-end)
-
-
--- キー入力
-UIS.InputBegan:Connect(function(input, gp)
-    if gp then return end
-    if not keyToggleEnabled then return end
-    if input.KeyCode == toggleKey then
-        setInvisible(not invisibleEnabled)
-    end
-end)
-
---========================================================--
---                 🎮 Invisible GUI                      --
---========================================================--
-StandTab:CreateToggle({
-    Name = "Invisible",
-    CurrentValue = false,
-    Callback = function(v)
-        setInvisible(v)
-    end
-})
-
-StandTab:CreateToggle({
-    Name = "Invisible Key Toggle",
-    CurrentValue = true,
-    Callback = function(v)
-        keyToggleEnabled = v
-    end
-})
-
-StandTab:CreateKeybind({
-    Name = "Invisible Toggle Key",
-    CurrentKeybind = "G",
-    HoldToInteract = false,
-    Callback = function(key)
-        toggleKey = key
-    end
-})
 
 --========================================================--
 --                 📦 Chest System                       --
