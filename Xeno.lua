@@ -871,7 +871,7 @@ espTab:CreateSlider({
 
 
 --========================================================--
---                     🔥 Combat Tab 完全版                      --
+--                     🔥 Combat Tab 完全版（整理版）             --
 --========================================================--
 
 local Players = game:GetService("Players")
@@ -894,7 +894,7 @@ local SAFE_Y = -200000 -- 無敵ゾーン
 local selectedTarget = nil
 
 local followActive = false
-local followMode = nil -- "normal", "auto", "under", "temp", "underBack"
+local followMode = nil -- "v2", "under"
 local originalPos_Follow = nil
 
 local freeCamActive = false
@@ -902,8 +902,6 @@ local originalPos_FreeCam = nil
 local savedPlatformStand = false
 local camYaw, camPitch = 0,0
 local zoomDist = 8
-local sensitivity = 0.25
-local minZoom, maxZoom = 3,25
 
 local tracerActive = false
 local tracerLine = Drawing.new("Line")
@@ -915,12 +913,8 @@ tracerLine.Color = Color3.fromRGB(0,255,255)
 --============================--
 -- Utility
 --============================--
-local function GetHRP(char)
-    return char and char:FindFirstChild("HumanoidRootPart")
-end
-local function GetHumanoid(char)
-    return char and char:FindFirstChildOfClass("Humanoid")
-end
+local function GetHRP(char) return char and char:FindFirstChild("HumanoidRootPart") end
+local function GetHumanoid(char) return char and char:FindFirstChildOfClass("Humanoid") end
 
 --============================--
 -- プレイヤー選択
@@ -938,40 +932,13 @@ local function EnableFollow(mode)
     if not selectedTarget then return end
     followActive = true
     followMode = mode
-
     local hrp = GetHRP(player.Character)
-    if hrp then
-        originalPos_Follow = hrp.CFrame
-    end
-end
-
-local function EnableTempFollow()
-    if not selectedTarget then return end
-    followActive = true
-    followMode = "temp"
-    local hrp = GetHRP(player.Character)
-    if hrp then
-        originalPos_Follow = hrp.CFrame
-    end
-end
-
-local function EnableUnderBackFollow()
-    if not selectedTarget then return end
-    followActive = true
-    followMode = "underBack"
-    local hrp = GetHRP(player.Character)
-    local hum = GetHumanoid(player.Character)
-    if hrp and hum then
-        originalPos_Follow = hrp.CFrame
-        hum.PlatformStand = true
-        hrp.CFrame = GetHRP(selectedTarget.Character).CFrame * CFrame.new(0,-12,0) * CFrame.Angles(math.rad(180),0,0)
-    end
+    if hrp then originalPos_Follow = hrp.CFrame end
 end
 
 local function DisableFollow()
     followActive = false
     followMode = nil
-
     local hrp = GetHRP(player.Character)
     local hum = GetHumanoid(player.Character)
     if hrp then
@@ -990,36 +957,25 @@ end
 local function EnableFreeCam()
     if not selectedTarget then return end
     freeCamActive = true
-
-    local char = player.Character
-    local hrp = GetHRP(char)
-    local hum = GetHumanoid(char)
+    local hrp = GetHRP(player.Character)
+    local hum = GetHumanoid(player.Character)
     if not hrp or not hum then return end
-
     originalPos_FreeCam = hrp.CFrame
     savedPlatformStand = hum.PlatformStand
-
     hrp.CFrame = CFrame.new(hrp.Position.X, SAFE_Y, hrp.Position.Z)
     hum.PlatformStand = true
     camera.CameraType = Enum.CameraType.Scriptable
-
     camYaw, camPitch = 0,0
 end
 
 local function DisableFreeCam()
     freeCamActive = false
-
-    local char = player.Character
-    local hrp = GetHRP(char)
-    local hum = GetHumanoid(char)
+    local hrp = GetHRP(player.Character)
+    local hum = GetHumanoid(player.Character)
     if not hrp or not hum then return end
-
     camera.CameraType = Enum.CameraType.Custom
     hum.PlatformStand = savedPlatformStand
-
-    if followActive then
-        return -- 張り付き中はターゲット追従
-    elseif originalPos_FreeCam then
+    if not followActive and originalPos_FreeCam then
         hrp.CFrame = originalPos_FreeCam
     end
 end
@@ -1038,11 +994,8 @@ combatTab:CreateButton({
     end
 })
 
-combatTab:CreateToggle({Name="張り付き", Callback=function(v) if v then EnableFollow("normal") else DisableFollow() end end})
-combatTab:CreateToggle({Name="張り付き v2（距離制御）", Callback=function(v) if v then EnableFollow("auto") else DisableFollow() end end})
+combatTab:CreateToggle({Name="張り付き v2（距離制御）", Callback=function(v) if v then EnableFollow("v2") else DisableFollow() end end})
 combatTab:CreateToggle({Name="下向き張り付き", Callback=function(v) if v then EnableFollow("under") else DisableFollow() end end})
-combatTab:CreateToggle({Name="距離接近Follow", Callback=function(v) if v then EnableTempFollow() else DisableFollow() end end})
-combatTab:CreateToggle({Name="下向き仰向けFollow", Callback=function(v) if v then EnableUnderBackFollow() else DisableFollow() end end})
 combatTab:CreateToggle({Name="視点TP(向き固定)", Callback=function(v) if v then EnableFreeCam() else DisableFreeCam() end end})
 combatTab:CreateToggle({Name="ターゲット線", Callback=function(v) tracerActive=v if not v then tracerLine.Visible=false end end})
 
@@ -1103,18 +1056,7 @@ RunService.RenderStepped:Connect(function(dt)
 
     --==== Follow ====
     if followActive then
-        if followMode=="normal" then
-            myHRP.CFrame = targetHRP.CFrame * CFrame.new(0,0,7)
-        elseif followMode=="auto" then
-            local d = targetHRP.Position - myHRP.Position
-            if d.Magnitude > 200 then
-                myHRP.CFrame += d.Unit*300*dt
-            else
-                myHRP.CFrame = targetHRP.CFrame * CFrame.new(0,0,7)
-            end
-        elseif followMode=="under" then
-            myHRP.CFrame = targetHRP.CFrame * CFrame.new(0,-12,0) * CFrame.Angles(math.rad(90),0,0)
-        elseif followMode=="temp" then
+        if followMode=="v2" then
             local dVec = targetHRP.Position - myHRP.Position
             local dist = dVec.Magnitude
             if dist > 200 then
@@ -1122,8 +1064,10 @@ RunService.RenderStepped:Connect(function(dt)
             else
                 myHRP.CFrame = targetHRP.CFrame * CFrame.new(0,0,7)
             end
-        elseif followMode=="underBack" then
+        elseif followMode=="under" then
             myHRP.CFrame = targetHRP.CFrame * CFrame.new(0,-12,0) * CFrame.Angles(math.rad(180),0,0)
+            local hum = GetHumanoid(player.Character)
+            if hum then hum.PlatformStand = true end
         end
     end
 
