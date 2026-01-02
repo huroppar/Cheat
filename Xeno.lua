@@ -947,16 +947,17 @@ combatTab:CreateToggle({
 
 
 --============================
--- ★ 張り付き極限版
+-- ★ 距離制御付き張り付きトグル
 --============================
-local extremeFollowActive = false
-local followOffset = Vector3.new(0,0,7) -- 後ろにずらす距離
+local autoFollowActive = false
+local followDistance = 200      -- 張り付き開始距離
+local slideSpeed = 300          -- 1秒あたり移動スタッド量（スライド速度）
 
 combatTab:CreateToggle({
-    Name = "極限張り付き",
+    Name = "張り付きv2",
     CurrentValue = false,
     Callback = function(state)
-        if not selectedTarget or not selectedTarget.Character then
+        if not selectedTarget then
             RayField:Notify({
                 Title = "エラー",
                 Content = "先にターゲットを選んで！",
@@ -965,12 +966,14 @@ combatTab:CreateToggle({
             return
         end
 
-        extremeFollowActive = state
+        autoFollowActive = state
+        local myHRP = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
+        if not myHRP then return end
 
         if state then
             RayField:Notify({
-                Title = "極限張り付き",
-                Content = selectedTarget.Name.." にほぼ誤差ゼロで張り付く！",
+                Title = "張り付きv2",
+                Content = "200スタッド以内で自動的に張り付き開始",
                 Duration = 3
             })
         else
@@ -984,19 +987,24 @@ combatTab:CreateToggle({
 })
 
 --============================
--- RenderSteppedで毎フレーム追従
+-- RenderSteppedで距離チェック + スライド移動
 --============================
 RunService.RenderStepped:Connect(function(dt)
-    if extremeFollowActive and selectedTarget and selectedTarget.Character and player.Character then
+    if autoFollowActive and selectedTarget and selectedTarget.Character and player.Character then
         local myHRP = player.Character:FindFirstChild("HumanoidRootPart")
         local targetHRP = selectedTarget.Character:FindFirstChild("HumanoidRootPart")
         if myHRP and targetHRP then
-            -- ターゲット速度を少し先読みして補正
-            local futurePos = targetHRP.Position + targetHRP.Velocity * dt
-            local targetCFrame = CFrame.new(futurePos, futurePos + targetHRP.CFrame.LookVector)
+            local dist = (targetHRP.Position - myHRP.Position).Magnitude
 
-            -- 後ろオフセットを適用
-            myHRP.CFrame = targetCFrame * CFrame.new(followOffset)
+            if dist > followDistance then
+                -- ターゲットに向かってスライド移動
+                local dir = (targetHRP.Position - myHRP.Position).Unit
+                myHRP.CFrame = myHRP.CFrame + dir * slideSpeed * dt
+            else
+                -- 距離内なら後ろ張り付き
+                local offset = Vector3.new(0,0,7) -- 後ろオフセット
+                myHRP.CFrame = targetHRP.CFrame * CFrame.new(offset)
+            end
         end
     end
 end)
