@@ -993,43 +993,9 @@ local function DisableFollow()
     end
 end
 
---============================--
--- Noclip（壁貫通）
---============================--
-local function enableNoclip()
-    if noclipConn then return end
-    local char = player.Character
-    if not char then return end
-    for _,p in ipairs(char:GetDescendants()) do
-        if p:IsA("BasePart") then
-            originalCanCollide[p] = p.CanCollide
-        end
-    end
-    noclipConn = RunService.Stepped:Connect(function()
-        local char = player.Character
-        if not char then return end
-        for _,p in ipairs(char:GetDescendants()) do
-            if p:IsA("BasePart") then
-                p.CanCollide = false
-            end
-        end
-    end)
-end
 
-local function disableNoclip()
-    if noclipConn then
-        noclipConn:Disconnect()
-        noclipConn = nil
-    end
-    local char = player.Character
-    if not char then return end
-    for p,canCollide in pairs(originalCanCollide) do
-        if p and p.Parent then
-            p.CanCollide = canCollide
-        end
-    end
-    originalCanCollide = {}
-end
+
+
 
 --============================--
 -- GUIボタン/トグル設定
@@ -1079,15 +1045,6 @@ combatTab:CreateInput({
         else
             RayField:Notify({Title="エラー", Content="無効なキー名です", Duration=3})
         end
-    end
-})
-
-combatTab:CreateToggle({
-    Name = "壁貫通",
-    CurrentValue = false,
-    Callback = function(v)
-        noclipEnabled = v
-        if v then enableNoclip() else disableNoclip() end
     end
 })
 
@@ -1182,7 +1139,7 @@ RunService.RenderStepped:Connect(function(dt)
                     hum.UseJumpPower = false
                     hum.Jump = false
                 end
-                local goalCF = targetHRP.CFrame * CFrame.new(0,-12,0) * CFrame.Angles(math.rad(90),0,0)
+                local goalCF = targetHRP.CFrame * CFrame.new(0,-9,0) * CFrame.Angles(math.rad(90),0,0)
                 myHRP.CFrame = myHRP.CFrame:Lerp(goalCF, 0.3)
             end
         end
