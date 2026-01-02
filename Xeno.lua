@@ -1090,50 +1090,81 @@ RunService.RenderStepped:Connect(function(dt)
 end)
 
 --========================================================--
--- プレイヤー一覧（Label方式）
+-- プレイヤー一覧（Button方式・安定版）
 --========================================================--
-
 
 combatTab:CreateSection("プレイヤー一覧")
 
--- 先にLabelを1回だけ作る
-local playerListLabel = combatTab:CreateLabel("読み込み中...")
+local playerButtons = {}
 
--- 更新関数
-local function updatePlayerList()
-    local lines = {}
-
-    for _, p in ipairs(Players:GetPlayers()) do
-        if p ~= player and p.Character then
-            local hum = p.Character:FindFirstChildOfClass("Humanoid")
-            if hum then
-                table.insert(
-                    lines,
-                    string.format(
-                        "%s [%d / %d]",
-                        p.Name,
-                        math.floor(hum.Health),
-                        math.floor(hum.MaxHealth)
-                    )
-                )
-            end
+local function getHP(plr)
+    if plr.Character then
+        local hum = plr.Character:FindFirstChildOfClass("Humanoid")
+        if hum then
+            return math.floor(hum.Health), math.floor(hum.MaxHealth)
         end
     end
+    return 0, 0
+end
 
-    if #lines == 0 then
-        playerListLabel:Set("プレイヤーなし")
-    else
-        playerListLabel:Set(table.concat(lines, "\n"))
+local function createButton(plr)
+    local hp, maxhp = getHP(plr)
+
+    local btn = combatTab:CreateButton({
+        Name = plr.Name .. " [" .. hp .. "/" .. maxhp .. "]",
+        Callback = function()
+            selectedTarget = plr
+            RayField:Notify({
+                Title = "ターゲット選択",
+                Content = plr.Name .. " を選択した",
+                Duration = 2
+            })
+        end
+    })
+
+    playerButtons[plr] = btn
+end
+
+-- 初期生成（1回だけ）
+for _, plr in ipairs(Players:GetPlayers()) do
+    if plr ~= player then
+        createButton(plr)
     end
 end
 
--- 0.5秒ごとに更新（軽い＆安定）
+-- 途中参加（追加のみ）
+Players.PlayerAdded:Connect(function(plr)
+    if plr ~= player then
+        task.wait(0.3)
+        createButton(plr)
+    end
+end)
+
+-- 抜けたら名前だけ変更（削除しない）
+Players.PlayerRemoving:Connect(function(plr)
+    local btn = playerButtons[plr]
+    if btn then
+        pcall(function()
+            btn:Set(plr.Name .. " [LEFT]")
+        end)
+    end
+end)
+
+-- HP更新（0.5秒に1回）
 task.spawn(function()
     while true do
-        updatePlayerList()
+        for plr, btn in pairs(playerButtons) do
+            if btn then
+                local hp, maxhp = getHP(plr)
+                pcall(function()
+                    btn:Set(plr.Name .. " [" .. hp .. "/" .. maxhp .. "]")
+                end)
+            end
+        end
         task.wait(0.5)
     end
 end)
+
 
 
 
