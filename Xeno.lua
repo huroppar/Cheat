@@ -1251,115 +1251,197 @@ end)
 
 
 --========================================================--
---                     🔥 World Of Stand                    --
+--                 🔥 World Of Stand                     --
 --========================================================--
 
---================= サービス =================
+--================= Services =================
 local Players = game:GetService("Players")
-local LocalPlayer = Players.LocalPlayer
+local RunService = game:GetService("RunService")
+local UIS = game:GetService("UserInputService")
 local Workspace = game:GetService("Workspace")
 
---================= GUI =================
---================= GUI =================
-local StandTab = Window:CreateTab("スタンドの世界")
+local LocalPlayer = Players.LocalPlayer
+local humanoid, rootPart
+local parts = {}
 
--- チェスト管理
+--================= Invisible State =================
+local invisibleEnabled = false
+local keyToggleEnabled = true
+local toggleKey = Enum.KeyCode.G
+
+--================= GUI =================
+local StandTab = Window:CreateTab("スタンドの世界", 4483362458)
+
+--========================================================--
+--                 🔒 Character Setup                    --
+--========================================================--
+local function setupCharacter()
+    local char = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
+    humanoid = char:WaitForChild("Humanoid")
+    rootPart = char:WaitForChild("HumanoidRootPart")
+
+    parts = {}
+    for _, v in ipairs(char:GetDescendants()) do
+        if v:IsA("BasePart") then
+            table.insert(parts, v)
+        end
+    end
+end
+
+setupCharacter()
+LocalPlayer.CharacterAdded:Connect(function()
+    invisibleEnabled = false
+    setupCharacter()
+end)
+
+--========================================================--
+--                 👻 Invisible Logic                    --
+--========================================================--
+local function setInvisible(state)
+    invisibleEnabled = state
+    for _, part in ipairs(parts) do
+        part.Transparency = state and 0.5 or 0
+    end
+end
+
+-- Invisible 移動処理（心臓部）
+RunService.Heartbeat:Connect(function()
+    if not invisibleEnabled then return end
+    if not rootPart or not humanoid then return end
+
+    local cf = rootPart.CFrame
+    local cam = humanoid.CameraOffset
+
+    rootPart.CFrame = cf * CFrame.new(0, -200000, 0)
+    humanoid.CameraOffset = Vector3.new(0, -200000, 0)
+
+    RunService.RenderStepped:Wait()
+
+    rootPart.CFrame = cf
+    humanoid.CameraOffset = cam
+end)
+
+-- キー入力
+UIS.InputBegan:Connect(function(input, gp)
+    if gp then return end
+    if not keyToggleEnabled then return end
+    if input.KeyCode == toggleKey then
+        setInvisible(not invisibleEnabled)
+    end
+end)
+
+--========================================================--
+--                 🎮 Invisible GUI                      --
+--========================================================--
+StandTab:CreateToggle({
+    Name = "Invisible",
+    CurrentValue = false,
+    Callback = function(v)
+        setInvisible(v)
+    end
+})
+
+StandTab:CreateToggle({
+    Name = "Invisible Key Toggle",
+    CurrentValue = true,
+    Callback = function(v)
+        keyToggleEnabled = v
+    end
+})
+
+StandTab:CreateKeybind({
+    Name = "Invisible Toggle Key",
+    CurrentKeybind = "G",
+    HoldToInteract = false,
+    Callback = function(key)
+        toggleKey = key
+    end
+})
+
+--========================================================--
+--                 📦 Chest System                       --
+--========================================================--
 local currentChest = 0
 local maxChest = 54
 
--- 全チェスト番号リスト
 local availableChests = {}
 for i = 1, maxChest do
     table.insert(availableChests, tostring(i))
 end
 
--- 現在のチェスト表示ラベル
 local chestLabel = StandTab:CreateLabel("現在のチェスト: 0")
 
---================= Dropdown でチェスト選択 =================
-local isDropdownInitialized = false -- 初期読み込みフラグ
+--================= Dropdown =================
+local isDropdownInitialized = false
 
 local chestDropdown = StandTab:CreateDropdown({
     Name = "開くチェストを選択",
     Options = availableChests,
     CurrentOption = {availableChests[1]},
     MultipleOptions = false,
-    Flag = "ChestDropdown",
     Callback = function(option)
-        if not isDropdownInitialized then return end -- 初回無視
+        if not isDropdownInitialized then return end
         local number = tonumber(option[1])
         if not number then return end
 
         local chest = Workspace:FindFirstChild(tostring(number))
         if chest and chest.PrimaryPart then
+            setInvisible(false)
             LocalPlayer.Character:SetPrimaryPartCFrame(
-                CFrame.new(chest.PrimaryPart.Position + Vector3.new(0,7,0))
+                CFrame.new(chest.PrimaryPart.Position + Vector3.new(0, 7, 0))
             )
             currentChest = number
             chestLabel:Set("現在のチェスト: " .. number)
-            print("テレポート: " .. number)
-        else
-            print("チェストが見つかりませんでした")
         end
-    end,
+    end
 })
 
-isDropdownInitialized = true -- 初期化完了
+isDropdownInitialized = true
 
---================= Input で番号指定TP =================
-local chestInput = StandTab:CreateInput({
+--================= Input =================
+StandTab:CreateInput({
     Name = "チェスト番号入力",
     PlaceholderText = "1〜" .. maxChest,
     RemoveTextAfterFocusLost = false,
     Callback = function(text)
         local number = tonumber(text)
-        if not number or number < 1 or number > maxChest then
-            print("1〜" .. maxChest .. "の番号を入力してください")
-            return
-        end
+        if not number or number < 1 or number > maxChest then return end
 
         local chest = Workspace:FindFirstChild(tostring(number))
         if chest and chest.PrimaryPart then
+            setInvisible(false)
             LocalPlayer.Character:SetPrimaryPartCFrame(
-                CFrame.new(chest.PrimaryPart.Position + Vector3.new(0,7,0))
+                CFrame.new(chest.PrimaryPart.Position + Vector3.new(0, 7, 0))
             )
             currentChest = number
             chestLabel:Set("現在のチェスト: " .. number)
-            print("テレポート: " .. number)
-        else
-            print("チェストが見つかりませんでした")
-        end
-    end,
-})
-
---================= 順番にTPボタン =================
-StandTab:CreateButton({
-    Name = "次のチェストにTP",
-    Callback = function()
-        currentChest = currentChest + 1
-        if currentChest > maxChest then currentChest = 1 end
-
-        local chest = Workspace:FindFirstChild(tostring(currentChest))
-        if chest and chest.PrimaryPart then
-            LocalPlayer.Character:SetPrimaryPartCFrame(
-                CFrame.new(chest.PrimaryPart.Position + Vector3.new(0,7,0))
-            )
-            chestLabel:Set("現在のチェスト: " .. currentChest)
-            print("テレポート: " .. currentChest)
-        else
-            print("チェストが見つかりませんでした")
         end
     end
 })
 
---================= 定期的にチェストリストを更新 =================
-local RunService = game:GetService("RunService")
+--================= Next Chest =================
+StandTab:CreateButton({
+    Name = "次のチェストにTP",
+    Callback = function()
+        currentChest += 1
+        if currentChest > maxChest then currentChest = 1 end
 
+        local chest = Workspace:FindFirstChild(tostring(currentChest))
+        if chest and chest.PrimaryPart then
+            setInvisible(false)
+            LocalPlayer.Character:SetPrimaryPartCFrame(
+                CFrame.new(chest.PrimaryPart.Position + Vector3.new(0, 7, 0))
+            )
+            chestLabel:Set("現在のチェスト: " .. currentChest)
+        end
+    end
+})
+
+--================= Chest Auto Update =================
 RunService.RenderStepped:Connect(function()
     local changed = false
     for i = #availableChests, 1, -1 do
-        local chestName = availableChests[i]
-        if not Workspace:FindFirstChild(chestName) then
+        if not Workspace:FindFirstChild(availableChests[i]) then
             table.remove(availableChests, i)
             changed = true
         end
@@ -1368,7 +1450,6 @@ RunService.RenderStepped:Connect(function()
         chestDropdown:Refresh(availableChests)
     end
 end)
-
 
 
 --========================================================--
