@@ -1092,21 +1092,46 @@ end)
 --========================================================--
 -- プレイヤー一覧（Label方式）
 --========================================================--
-combatTab:CreateLabel("プレイヤー一覧")
-local labels = {}
 
-RunService.Heartbeat:Connect(function()
-    local text = ""
-    for _,p in ipairs(Players:GetPlayers()) do
-        if p ~= player and p.Character and p.Character:FindFirstChild("Humanoid") then
-            local h = p.Character.Humanoid
-            text ..= p.Name.." ["..math.floor(h.Health).."/"..math.floor(h.MaxHealth).."]\n"
+
+combatTab:CreateSection("プレイヤー一覧")
+
+-- 先にLabelを1回だけ作る
+local playerListLabel = combatTab:CreateLabel("読み込み中...")
+
+-- 更新関数
+local function updatePlayerList()
+    local lines = {}
+
+    for _, p in ipairs(Players:GetPlayers()) do
+        if p ~= player and p.Character then
+            local hum = p.Character:FindFirstChildOfClass("Humanoid")
+            if hum then
+                table.insert(
+                    lines,
+                    string.format(
+                        "%s [%d / %d]",
+                        p.Name,
+                        math.floor(hum.Health),
+                        math.floor(hum.MaxHealth)
+                    )
+                )
+            end
         end
     end
-    if not labels.main then
-        labels.main = combatTab:CreateLabel(text)
+
+    if #lines == 0 then
+        playerListLabel:Set("プレイヤーなし")
     else
-        labels.main:Set(text)
+        playerListLabel:Set(table.concat(lines, "\n"))
+    end
+end
+
+-- 0.5秒ごとに更新（軽い＆安定）
+task.spawn(function()
+    while true do
+        updatePlayerList()
+        task.wait(0.5)
     end
 end)
 
