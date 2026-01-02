@@ -871,7 +871,7 @@ espTab:CreateSlider({
 
 
 --========================================================--
---                     🔥 Combat Tab 完全版（CreateKeybind版）           --
+--                     🔥 Combat Tab 完全版（CreateInput版）           --
 --========================================================--
 
 local Players = game:GetService("Players")
@@ -1015,14 +1015,19 @@ combatTab:CreateToggle({
     end
 })
 
--- RayField 用 CreateKeybind 方式
-combatTab:CreateKeybind({
+-- CreateInput 方式でキー設定
+combatTab:CreateInput({
     Name = "Invisible キー設定",
-    Default = Enum.KeyCode.G,
-    Hold = false, -- 押したらトグル
-    Callback = function(key)
-        invisibleKey = key
-        RayField:Notify({Title="設定完了", Content="Invisibleキーを "..tostring(key).." に設定しました", Duration=3})
+    PlaceholderText = "例: G",
+    RemoveTextAfterFocusLost = true,
+    Callback = function(text)
+        local success, kc = pcall(function() return Enum.KeyCode[text:upper()] end)
+        if success and kc then
+            invisibleKey = kc
+            RayField:Notify({Title="設定完了", Content="Invisibleキーを "..text:upper().." に設定しました", Duration=3})
+        else
+            RayField:Notify({Title="エラー", Content="無効なキー名です", Duration=3})
+        end
     end
 })
 
