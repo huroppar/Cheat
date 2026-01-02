@@ -941,6 +941,12 @@ player.CharacterAdded:Connect(function()
     setupCharacter()
     invisible = false
 end)
+player.CharacterAdded:Connect(function()
+    setupCharacter() -- 新しいキャラのパーツを取得
+    if invisible then
+        setInvisible(true) -- ONなら透明化適用
+    end
+end)
 
 --============================--
 -- Invisible関数
@@ -1148,6 +1154,10 @@ RunService.RenderStepped:Connect(function(dt)
         if noclipEnabled then disableNoclip() end
         if hum then hum.PlatformStand = false end
     end
+
+		if followMode=="under" and not originalPos_Follow then
+    originalPos_Follow = myHRP.CFrame -- 下向き開始時に保存
+end
 
     --==== Tracer ====
     if tracerActive and selectedTarget and selectedTarget.Character then
