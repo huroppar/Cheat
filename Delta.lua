@@ -511,21 +511,9 @@ playerTab:CreateToggle({
 
 
 
---========================================================--
---         位置記録（1つだけ上書き）＆テレポート        --
---========================================================--
-
-local Players = game:GetService("Players")
-local player = Players.LocalPlayer
 local savedCFrame = nil  -- ← 常に1つだけ保存する
-
--- ★ ここを書き換えて → 君が使ってる既存のタブ名に合わせて
-local tab = Window:CreateTab("Teleport", 4483362458)
--- 例：playerTab なら  local tab = playerTab
-
-
 -- 位置記録ボタン
-tab:CreateButton({
+playerTab:CreateButton({
     Name = "位置記録を記録",
     Callback = function()
         local char = player.Character
@@ -550,7 +538,7 @@ tab:CreateButton({
 
 
 -- TPボタン
-tab:CreateButton({
+playerTab:CreateButton({
     Name = "記録位置にTP",
     Callback = function()
         local char = player.Character
@@ -574,7 +562,7 @@ tab:CreateButton({
 })
 
 --=============================
--- Fly機能（スマホスティック対応・重力のみ無効）
+-- Fly機能（スマホ対応・船OK・重力のみ無効）
 --=============================
 local flyActive = false
 local flySpeed = 50
@@ -588,6 +576,7 @@ playerTab:CreateToggle({
         flyActive = state
         local _, hum, root = getCharacter()
         if not hum or not root then return end
+
         root.AssemblyLinearVelocity = Vector3.zero
         root.AssemblyAngularVelocity = Vector3.zero
     end
@@ -605,30 +594,41 @@ playerTab:CreateSlider({
     end
 })
 
--- 仮想スティック方向取得用関数
--- ゲームの移動スティックモジュールに合わせて書き換え
-local function getStickDirection()
-    -- 例: Vector3(x, y, z)を返す
-    -- yは上下（ジャンプ/降下）対応
-    -- x, zは前後左右
-    -- 実際はゲームのMobileInputManagerやTouchModuleから取得
-    return Vector3.zero
-end
-
--- Fly制御
+--=============================
+-- Fly制御（スマホ）
+--=============================
 RunService.RenderStepped:Connect(function(dt)
     if not flyActive then return end
+
     local _, hum, root = getCharacter()
     if not hum or not root then return end
 
-    -- 落下防止（重力キャンセル）
+    -- 🔒 重力キャンセル（船でも安定）
     root.AssemblyLinearVelocity = Vector3.zero
 
-    local move = getStickDirection() -- スティックの方向
+    local cam = workspace.CurrentCamera
+    local moveDir = hum.MoveDirection
+
+    if moveDir.Magnitude == 0 then return end
+
+    -- 📱 スティック方向をカメラ基準に変換
+    local forward = cam.CFrame.LookVector
+    local right = cam.CFrame.RightVector
+
+    local move =
+        (right * moveDir.X) +
+        (forward * moveDir.Z)
+
+    -- 上下（ジャンプボタン対応）
+    if hum.Jump then
+        move += Vector3.new(0, 1, 0)
+    end
+
     if move.Magnitude > 0 then
         root.CFrame = root.CFrame + (move.Unit * flySpeed * dt)
     end
 end)
+
 
 -- キャラリスポーン時のジャンプ設定
 player.CharacterAdded:Connect(function()
