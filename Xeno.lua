@@ -1002,7 +1002,9 @@ local function EnableFollow(mode)
     followActive = true
     followMode = mode
     local hrp = GetHRP(player.Character)
-    if hrp then originalPos_Follow = hrp.CFrame end
+    if hrp and not originalPos_Follow then
+        originalPos_Follow = hrp.CFrame -- 下向き張り付き前の位置を保存
+    end
 end
 
 local function ReturnToOriginalPosition()
@@ -1010,30 +1012,16 @@ local function ReturnToOriginalPosition()
     local hum = GetHumanoid(player.Character)
     if not hrp or not originalPos_Follow then return end
 
-    -- 元の位置の上にRaycastを飛ばして地面のY座標を取得
-    local rayOrigin = originalPos_Follow.Position + Vector3.new(0, 5, 0)
-    local rayDir = Vector3.new(0, -50, 0)
-    local rayParams = RaycastParams.new()
-    rayParams.FilterDescendantsInstances = {player.Character}
-    rayParams.FilterType = Enum.RaycastFilterType.Blacklist
-
-    local rayResult = workspace:Raycast(rayOrigin, rayDir, rayParams)
-    if rayResult then
-        hrp.CFrame = CFrame.new(rayResult.Position + Vector3.new(0, hum.HipHeight + 1, 0))
-    else
-        hrp.CFrame = originalPos_Follow
-    end
-
+    hrp.CFrame = originalPos_Follow
     hum.PlatformStand = false
+    disableNoclip()
+    noclipEnabled = false
+    originalPos_Follow = nil
 end
 
 local function DisableFollow()
     followActive = false
     followMode = nil
-    if noclipEnabled then
-        disableNoclip()
-        noclipEnabled = false
-    end
     ReturnToOriginalPosition()
 end
 
@@ -1183,18 +1171,21 @@ RunService.RenderStepped:Connect(function(dt)
                     rootPart.CFrame = rootPart.CFrame:Lerp(targetHRP.CFrame * CFrame.new(0,0,7), 0.2)
                 end
             elseif followMode=="under" then
-    if not noclipEnabled then
-        enableNoclip()
-        noclipEnabled = true  -- ← これが必要
-    end
-    humanoid.PlatformStand = true
-
+                if not noclipEnabled then
+                    enableNoclip()
+                    noclipEnabled = true
+                end
+                humanoid.PlatformStand = true
                 local goalCF = targetHRP.CFrame * CFrame.new(0,-12,0) * CFrame.Angles(math.rad(90),0,0)
                 rootPart.CFrame = rootPart.CFrame:Lerp(goalCF, 0.3)
             end
         end
     else
         humanoid.PlatformStand = false
+        if noclipEnabled then
+            disableNoclip()
+            noclipEnabled = false
+        end
     end
 
     -- ==== Tracer ====
@@ -1203,12 +1194,10 @@ RunService.RenderStepped:Connect(function(dt)
         if targetHRP then
             local p1,v1 = camera:WorldToViewportPoint(rootPart.Position)
             local p2,v2 = camera:WorldToViewportPoint(targetHRP.Position)
+            tracerLine.Visible = v1 and v2
             if v1 and v2 then
                 tracerLine.From = Vector2.new(p1.X,p1.Y)
                 tracerLine.To   = Vector2.new(p2.X,p2.Y)
-                tracerLine.Visible = true
-            else
-                tracerLine.Visible = false
             end
         else
             tracerLine.Visible = false
@@ -1217,7 +1206,6 @@ RunService.RenderStepped:Connect(function(dt)
         tracerLine.Visible = false
     end
 end)
-
 --============================--
 -- HP更新
 --============================--
