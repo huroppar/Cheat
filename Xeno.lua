@@ -1049,7 +1049,7 @@ combatTab:CreateButton({
 })
 
 combatTab:CreateToggle({Name="普通の張り付き", Callback=function(v) if v then EnableFollow("normal") else DisableFollow() end end})
-combatTab:CreateToggle({Name="張り付き v2（距離制御）", Callback=function(v) if v then EnableFollow("v2") else DisableFollow() end end})
+combatTab:CreateToggle({Name="張り付きv2（BloxFruit使用可）", Callback=function(v) if v then EnableFollow("v2") else DisableFollow() end end})
 combatTab:CreateToggle({Name="下向き張り付き", Callback=function(v) if v then EnableFollow("under") else DisableFollow() end end})
 combatTab:CreateToggle({Name="ターゲット線", Callback=function(v) tracerActive=v if not v then tracerLine.Visible=false end end})
 
