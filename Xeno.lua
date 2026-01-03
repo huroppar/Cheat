@@ -1054,7 +1054,7 @@ combatTab:CreateToggle({Name="下向き張り付き", Callback=function(v) if v 
 combatTab:CreateToggle({Name="ターゲット線", Callback=function(v) tracerActive=v if not v then tracerLine.Visible=false end end})
 
 combatTab:CreateToggle({
-    Name = "Invisible",
+    Name = "Invisible(ゲームによっては使用不可)",
     CurrentValue = false,
     Callback = function(v) setInvisible(v) end
 })
