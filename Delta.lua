@@ -1011,6 +1011,10 @@ espTab:CreateToggle({
 --================================
 -- HitBox
 --================================
+-- HitBox倍率
+local hitboxScale = 1
+
+-- HitBoxトグル
 espTab:CreateToggle({
     Name = "HitBox表示",
     CurrentValue = false,
@@ -1025,7 +1029,11 @@ espTab:CreateToggle({
                         if not originalSize[plr] then
                             originalSize[plr] = hrp.Size
                         end
-                        hrp.Size = Vector3.new(8,8,8)
+
+                        -- キャラサイズに応じてHitBoxを拡大
+                        local baseScale = math.max(hrp.Size.X, hrp.Size.Y, hrp.Size.Z) / 2
+                        local newSize = Vector3.new(baseScale*2, baseScale*2, baseScale*2) * hitboxScale
+                        hrp.Size = newSize
                         hrp.Transparency = 0.5
                         hrp.CanCollide = false
                         hrp.Color = isEnemy(plr) and Color3.new(1,0,0) or Color3.new(1,1,1)
@@ -1041,41 +1049,84 @@ espTab:CreateToggle({
     end
 })
 
+-- HitBoxスライダー
+espTab:CreateSlider({
+    Name = "HitBox倍率",
+    Range = {1, 20}, -- 1倍～10倍まで
+    Increment = 0.1,
+    Suffix = "倍",
+    CurrentValue = 1,
+    Callback = function(v)
+        hitboxScale = v
+
+        -- HitBox有効時は即反映
+        if hitboxEnabled then
+            for _, plr in ipairs(Players:GetPlayers()) do
+                if plr ~= LocalPlayer and plr.Character then
+                    local hrp = plr.Character:FindFirstChild("HumanoidRootPart")
+                    if hrp and originalSize[plr] then
+                        local baseScale = math.max(originalSize[plr].X, originalSize[plr].Y, originalSize[plr].Z) / 2
+                        hrp.Size = Vector3.new(baseScale*2, baseScale*2, baseScale*2) * hitboxScale
+                        hrp.Transparency = 0.5
+                    end
+                end
+            end
+        end
+    end
+})
+--================================
+-- 自分の攻撃HitBox拡大
+--================================
+-- 元サイズ保存用
+local originalSize = nil
+local hitboxScale = 1
+
+-- HitBox拡大用スライダー
+espTab:CreateSlider({
+    Name = "攻撃範囲倍率",
+    Range = {1, 10},
+    Increment = 0.1,
+    Suffix = "倍",
+    CurrentValue = 1,
+    Callback = function(v)
+        hitboxScale = v
+
+        local char = LocalPlayer.Character
+        if char then
+            local hrp = char:FindFirstChild("HumanoidRootPart")
+            if hrp then
+                if not originalSize then
+                    originalSize = hrp.Size -- 元サイズを保存
+                end
+                -- 倍率に応じてサイズ変更
+                hrp.Size = originalSize * hitboxScale
+            end
+        end
+    end
+})
+
 
 --========================================================--
---                     🔥 Combat Tab 完全版                      --
+--                     🔥 Combat Tab + Invisible 完全統合版（地面補正付き）
 --========================================================--
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
-local UIS = game:GetService("UserInputService")
-
 local player = Players.LocalPlayer
 local camera = workspace.CurrentCamera
+
+
 
 local combatTab = Window:CreateTab("戦闘", 4483362458)
 
 --============================--
--- 定数
---============================--
-local SAFE_Y = -200000 -- 無敵ゾーン
-
---============================--
 -- 状態変数
 --============================--
+local SAFE_Y = -200000
 local selectedTarget = nil
-
 local followActive = false
-local followMode = nil -- "normal", "auto", "under"
+local followMode = nil -- "normal", "v2", "under"
 local originalPos_Follow = nil
-
-local freeCamActive = false
-local originalPos_FreeCam = nil
-local savedPlatformStand = false
-local camYaw, camPitch = 0,0
-local zoomDist = 8
-local sensitivity = 0.25
-local minZoom, maxZoom = 3,25
 
 local tracerActive = false
 local tracerLine = Drawing.new("Line")
@@ -1084,14 +1135,53 @@ tracerLine.Thickness = 2
 tracerLine.Transparency = 1
 tracerLine.Color = Color3.fromRGB(0,255,255)
 
+local noclipConn = nil
+local noclipEnabled = false
+local originalCanCollide = {}
+
 --============================--
--- Utility
+-- Invisible 用
 --============================--
-local function GetHRP(char)
-    return char and char:FindFirstChild("HumanoidRootPart")
+local invisible = false
+local parts = {}
+local invisibleKey = Enum.KeyCode.G
+local keybindEnabled = true
+local character, humanoid, rootPart
+
+local function setupCharacter()
+    character = player.Character or player.CharacterAdded:Wait()
+    humanoid = character:WaitForChild("Humanoid")
+    rootPart = character:WaitForChild("HumanoidRootPart")
+    parts = {}
+    for _, obj in pairs(character:GetDescendants()) do
+        if obj:IsA("BasePart") and obj.Transparency == 0 then
+            table.insert(parts, obj)
+        end
+    end
 end
-local function GetHumanoid(char)
-    return char and char:FindFirstChildOfClass("Humanoid")
+
+setupCharacter()
+player.CharacterAdded:Connect(function()
+    setupCharacter()
+    if invisible then
+        for _, part in pairs(parts) do
+            part.Transparency = 0.5
+        end
+    end
+end)
+
+local function setInvisible(value)
+    invisible = value
+    for _, part in pairs(parts) do
+        part.Transparency = invisible and 0.5 or 0
+    end
+
+    -- 画面通知
+    Rayfield:Notify({
+        Title = "Invisible",
+        Content = invisible and "透明化 ON" or "透明化 OFF",
+        Duration = 3
+    })
 end
 
 --============================--
@@ -1104,75 +1194,77 @@ _G.SetTarget = function(tar)
 end
 
 --============================--
+-- Noclip
+--============================--
+local function enableNoclip()
+    if noclipConn then return end
+    if not character then return end
+    for _,p in ipairs(character:GetDescendants()) do
+        if p:IsA("BasePart") then
+            originalCanCollide[p] = p.CanCollide
+        end
+    end
+    noclipConn = RunService.Stepped:Connect(function()
+        if not character then return end
+        for _,p in ipairs(character:GetDescendants()) do
+            if p:IsA("BasePart") then
+                p.CanCollide = false
+            end
+        end
+    end)
+end
+
+local function disableNoclip()
+    if noclipConn then
+        noclipConn:Disconnect()
+        noclipConn = nil
+    end
+    if not character then return end
+    for p,canCollide in pairs(originalCanCollide) do
+        if p and p.Parent then
+            p.CanCollide = canCollide
+        end
+    end
+    originalCanCollide = {}
+end
+
+--============================--
 -- Follow系
 --============================--
+local function GetHRP(char) return char and char:FindFirstChild("HumanoidRootPart") end
+local function GetHumanoid(char) return char and char:FindFirstChildOfClass("Humanoid") end
+
 local function EnableFollow(mode)
     if not selectedTarget then return end
     followActive = true
     followMode = mode
-
     local hrp = GetHRP(player.Character)
-    if hrp then
-        originalPos_Follow = hrp.CFrame
+    if hrp and not originalPos_Follow then
+        originalPos_Follow = hrp.CFrame -- 下向き張り付き前の位置を保存
     end
+end
+
+local function ReturnToOriginalPosition()
+    local hrp = GetHRP(player.Character)
+    local hum = GetHumanoid(player.Character)
+    if not hrp or not originalPos_Follow then return end
+
+    hrp.CFrame = originalPos_Follow
+    hum.PlatformStand = false
+    disableNoclip()
+    noclipEnabled = false
+    originalPos_Follow = nil
 end
 
 local function DisableFollow()
     followActive = false
     followMode = nil
-
-    local hrp = GetHRP(player.Character)
-    if hrp then
-        if freeCamActive then
-            hrp.CFrame = CFrame.new(hrp.Position.X, SAFE_Y, hrp.Position.Z)
-        elseif originalPos_Follow then
-            hrp.CFrame = originalPos_Follow
-        end
-    end
+    ReturnToOriginalPosition()
 end
 
---============================--
--- FreeCam系
---============================--
-local function EnableFreeCam()
-    if not selectedTarget then return end
-    freeCamActive = true
-
-    local char = player.Character
-    local hrp = GetHRP(char)
-    local hum = GetHumanoid(char)
-    if not hrp or not hum then return end
-
-    originalPos_FreeCam = hrp.CFrame
-    savedPlatformStand = hum.PlatformStand
-
-    hrp.CFrame = CFrame.new(hrp.Position.X, SAFE_Y, hrp.Position.Z)
-    hum.PlatformStand = true
-    camera.CameraType = Enum.CameraType.Scriptable
-
-    camYaw, camPitch = 0,0
-end
-
-local function DisableFreeCam()
-    freeCamActive = false
-
-    local char = player.Character
-    local hrp = GetHRP(char)
-    local hum = GetHumanoid(char)
-    if not hrp or not hum then return end
-
-    camera.CameraType = Enum.CameraType.Custom
-    hum.PlatformStand = savedPlatformStand
-
-    if followActive then
-        return -- 張り付き中はターゲット追従
-    elseif originalPos_FreeCam then
-        hrp.CFrame = originalPos_FreeCam
-    end
-end
 
 --============================--
--- UI作成
+-- GUI設定
 --============================--
 combatTab:CreateButton({
     Name = "選択中のプレイヤーへ TP",
@@ -1185,11 +1277,39 @@ combatTab:CreateButton({
     end
 })
 
-combatTab:CreateToggle({Name="張り付き", Callback=function(v) if v then EnableFollow("normal") else DisableFollow() end end})
-combatTab:CreateToggle({Name="張り付き v2（距離制御）", Callback=function(v) if v then EnableFollow("auto") else DisableFollow() end end})
+combatTab:CreateToggle({Name="普通の張り付き", Callback=function(v) if v then EnableFollow("normal") else DisableFollow() end end})
+combatTab:CreateToggle({Name="張り付きv2（BloxFruit使用可）", Callback=function(v) if v then EnableFollow("v2") else DisableFollow() end end})
 combatTab:CreateToggle({Name="下向き張り付き", Callback=function(v) if v then EnableFollow("under") else DisableFollow() end end})
-combatTab:CreateToggle({Name="視点TP(向き固定)", Callback=function(v) if v then EnableFreeCam() else DisableFreeCam() end end})
 combatTab:CreateToggle({Name="ターゲット線", Callback=function(v) tracerActive=v if not v then tracerLine.Visible=false end end})
+
+combatTab:CreateToggle({
+    Name = "Invisible(ゲームによっては使用不可)",
+    CurrentValue = false,
+    Callback = function(v) setInvisible(v) end
+})
+
+combatTab:CreateToggle({
+    Name = "キーで切替有効",
+    CurrentValue = true,
+    Callback = function(v) keybindEnabled = v end
+})
+
+combatTab:CreateInput({
+    Name = "Invisible キー設定",
+    PlaceholderText = "例: G",
+    RemoveTextAfterFocusLost = true,
+    Callback = function(text)
+        local success, kc = pcall(function() return Enum.KeyCode[text:upper()] end)
+        if success and kc then
+            invisibleKey = kc
+            RayField:Notify({Title="設定完了", Content="Invisibleキーを "..text:upper().." に設定しました", Duration=3})
+        else
+            RayField:Notify({Title="エラー", Content="無効なキー名です", Duration=3})
+        end
+    end
+})
+
+
 
 --============================--
 -- プレイヤー一覧 + HP
@@ -1236,60 +1356,86 @@ Players.PlayerAdded:Connect(UpdatePlayerList)
 Players.PlayerRemoving:Connect(UpdatePlayerList)
 
 --============================--
--- RenderStepped + Heartbeat
+-- キー入力で Invisible 切替
+--============================--
+player:GetMouse().KeyDown:Connect(function(key)
+    if not keybindEnabled then return end
+    if key:upper() == tostring(invisibleKey):gsub("Enum.KeyCode.","") then
+        setInvisible(not invisible)
+    end
+end)
+
+--============================--
+-- Heartbeat: Invisible 本体下移動（元仕様通り）
+--============================--
+RunService.Heartbeat:Connect(function()
+    if invisible and rootPart and humanoid then
+        local cf = rootPart.CFrame
+        local camOffset = humanoid.CameraOffset
+        local hidden = cf * CFrame.new(0, -SAFE_Y, 0)
+        rootPart.CFrame = hidden
+        humanoid.CameraOffset = hidden:ToObjectSpace(CFrame.new(cf.Position)).Position
+        game:GetService("RunService").RenderStepped:Wait()
+        rootPart.CFrame = cf
+        humanoid.CameraOffset = camOffset
+    end
+end)
+
+--============================--
+-- RenderStepped: Follow + Tracer
 --============================--
 RunService.RenderStepped:Connect(function(dt)
-    local char = player.Character
-    if not char or not selectedTarget or not selectedTarget.Character then return end
+    if not character or not humanoid or not rootPart then return end
 
-    local myHRP = GetHRP(char)
-    local targetHRP = GetHRP(selectedTarget.Character)
-    if not myHRP or not targetHRP then return end
-
-    --==== Follow ====
+    -- 張り付き中は物理制御で重力無効
     if followActive then
-        if followMode=="normal" then
-            myHRP.CFrame = targetHRP.CFrame * CFrame.new(0,0,7)
-        elseif followMode=="auto" then
-            local d = targetHRP.Position - myHRP.Position
-            if d.Magnitude > 200 then
-                myHRP.CFrame += d.Unit*300*dt
-            else
-                myHRP.CFrame = targetHRP.CFrame * CFrame.new(0,0,7)
+        rootPart.AssemblyLinearVelocity = Vector3.new(0,0,0)
+    end
+
+    -- ==== Follow ====
+    if followActive and selectedTarget and selectedTarget.Character then
+        local targetHRP = GetHRP(selectedTarget.Character)
+        if targetHRP then
+            if followMode=="normal" then
+                rootPart.CFrame = targetHRP.CFrame * CFrame.new(0,0,7)
+            elseif followMode=="v2" then
+                local dVec = targetHRP.Position - rootPart.Position
+                local dist = dVec.Magnitude
+                local speed = 300
+                if dist > 200 then
+                    rootPart.CFrame = rootPart.CFrame:Lerp(CFrame.new(rootPart.Position + dVec.Unit * speed * dt), 1)
+                else
+                    rootPart.CFrame = rootPart.CFrame:Lerp(targetHRP.CFrame * CFrame.new(0,0,7), 0.2)
+                end
+            elseif followMode=="under" then
+                if not noclipEnabled then
+                    enableNoclip()
+                    noclipEnabled = true
+                end
+                humanoid.PlatformStand = true
+                local goalCF = targetHRP.CFrame * CFrame.new(0,-12,0) * CFrame.Angles(math.rad(90),0,0)
+                rootPart.CFrame = rootPart.CFrame:Lerp(goalCF, 0.3)
             end
-        elseif followMode=="under" then
-            myHRP.CFrame = targetHRP.CFrame * CFrame.new(0,-12,0) * CFrame.Angles(math.rad(90),0,0)
+        end
+    else
+        humanoid.PlatformStand = false
+        if noclipEnabled then
+            disableNoclip()
+            noclipEnabled = false
         end
     end
 
-    --==== FreeCam ====
-    if freeCamActive then
-        local head = selectedTarget.Character:FindFirstChild("Head")
-        if head then
-            local yaw = math.rad(camYaw)
-            local pitch = math.rad(camPitch)
-            local lookDir = Vector3.new(
-                math.cos(pitch)*math.sin(yaw),
-                math.sin(pitch),
-                math.cos(pitch)*math.cos(yaw)
-            )
-            local camPos = head.Position - lookDir * zoomDist
-            camera.CFrame = CFrame.new(camPos, head.Position)
-
-            if not followActive then
-                myHRP.CFrame = CFrame.new(myHRP.Position.X, SAFE_Y, myHRP.Position.Z)
+    -- ==== Tracer ====
+    if tracerActive and selectedTarget and selectedTarget.Character then
+        local targetHRP = GetHRP(selectedTarget.Character)
+        if targetHRP then
+            local p1,v1 = camera:WorldToViewportPoint(rootPart.Position)
+            local p2,v2 = camera:WorldToViewportPoint(targetHRP.Position)
+            tracerLine.Visible = v1 and v2
+            if v1 and v2 then
+                tracerLine.From = Vector2.new(p1.X,p1.Y)
+                tracerLine.To   = Vector2.new(p2.X,p2.Y)
             end
-        end
-    end
-
-    --==== Tracer ====
-    if tracerActive then
-        local p1,v1 = camera:WorldToViewportPoint(myHRP.Position)
-        local p2,v2 = camera:WorldToViewportPoint(targetHRP.Position)
-        if v1 and v2 then
-            tracerLine.From = Vector2.new(p1.X,p1.Y)
-            tracerLine.To   = Vector2.new(p2.X,p2.Y)
-            tracerLine.Visible = true
         else
             tracerLine.Visible = false
         end
@@ -1297,127 +1443,151 @@ RunService.RenderStepped:Connect(function(dt)
         tracerLine.Visible = false
     end
 end)
-
+--============================--
 -- HP更新
+--============================--
 RunService.Heartbeat:Connect(function()
     for plr, btn in pairs(playerButtons) do
-        if btn and plr.Character then
+        if btn then
+            local name = plr.Name or "Unknown"
             local hp,maxhp = GetHP(plr)
-            pcall(function() btn:Set(plr.Name.." ["..hp.."/"..maxhp.."]") end)
+            hp = hp or 0
+            maxhp = maxhp or 0
+            pcall(function()
+                btn:Set(name.." ["..hp.."/"..maxhp.."]")
+            end)
         end
     end
 end)
 
+
+
 --========================================================--
---                     🔥 World Of Stand                    --
+--                 🔥 World Of Stand                     --
 --========================================================--
 
---================= サービス =================
+--================= Services =================
 local Players = game:GetService("Players")
-local LocalPlayer = Players.LocalPlayer
+local RunService = game:GetService("RunService")
+local UIS = game:GetService("UserInputService")
 local Workspace = game:GetService("Workspace")
 
---================= GUI =================
---================= GUI =================
-local StandTab = Window:CreateTab("スタンドの世界")
+local LocalPlayer = Players.LocalPlayer
+local humanoid, rootPart
+local parts = {}
 
--- チェスト管理
+
+
+--================= GUI =================
+local StandTab = Window:CreateTab("スタンドの世界", 4483362458)
+
+--========================================================--
+--                 🔒 Character Setup                    --
+--========================================================--
+local function setupCharacter()
+    local char = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
+    humanoid = char:WaitForChild("Humanoid")
+    rootPart = char:WaitForChild("HumanoidRootPart")
+
+    parts = {}
+    for _, v in ipairs(char:GetDescendants()) do
+        if v:IsA("BasePart") then
+            table.insert(parts, v)
+        end
+    end
+end
+
+setupCharacter()
+LocalPlayer.CharacterAdded:Connect(function()
+    invisibleEnabled = false
+    setupCharacter()
+end)
+
+
+--========================================================--
+--                 📦 Chest System                       --
+--========================================================--
 local currentChest = 0
 local maxChest = 54
 
--- 全チェスト番号リスト
 local availableChests = {}
 for i = 1, maxChest do
     table.insert(availableChests, tostring(i))
 end
 
--- 現在のチェスト表示ラベル
 local chestLabel = StandTab:CreateLabel("現在のチェスト: 0")
 
---================= Dropdown でチェスト選択 =================
-local isDropdownInitialized = false -- 初期読み込みフラグ
+--================= Dropdown =================
+local isDropdownInitialized = false
 
 local chestDropdown = StandTab:CreateDropdown({
     Name = "開くチェストを選択",
     Options = availableChests,
     CurrentOption = {availableChests[1]},
     MultipleOptions = false,
-    Flag = "ChestDropdown",
     Callback = function(option)
-        if not isDropdownInitialized then return end -- 初回無視
+        if not isDropdownInitialized then return end
         local number = tonumber(option[1])
         if not number then return end
 
         local chest = Workspace:FindFirstChild(tostring(number))
         if chest and chest.PrimaryPart then
+            setInvisible(false)
             LocalPlayer.Character:SetPrimaryPartCFrame(
-                CFrame.new(chest.PrimaryPart.Position + Vector3.new(0,7,0))
+                CFrame.new(chest.PrimaryPart.Position + Vector3.new(0, 7, 0))
             )
             currentChest = number
             chestLabel:Set("現在のチェスト: " .. number)
-            print("テレポート: " .. number)
-        else
-            print("チェストが見つかりませんでした")
         end
-    end,
+    end
 })
 
-isDropdownInitialized = true -- 初期化完了
+isDropdownInitialized = true
 
---================= Input で番号指定TP =================
-local chestInput = StandTab:CreateInput({
+--================= Input =================
+StandTab:CreateInput({
     Name = "チェスト番号入力",
     PlaceholderText = "1〜" .. maxChest,
     RemoveTextAfterFocusLost = false,
     Callback = function(text)
         local number = tonumber(text)
-        if not number or number < 1 or number > maxChest then
-            print("1〜" .. maxChest .. "の番号を入力してください")
-            return
-        end
+        if not number or number < 1 or number > maxChest then return end
 
         local chest = Workspace:FindFirstChild(tostring(number))
         if chest and chest.PrimaryPart then
+            setInvisible(false)
             LocalPlayer.Character:SetPrimaryPartCFrame(
-                CFrame.new(chest.PrimaryPart.Position + Vector3.new(0,7,0))
+                CFrame.new(chest.PrimaryPart.Position + Vector3.new(0, 7, 0))
             )
             currentChest = number
             chestLabel:Set("現在のチェスト: " .. number)
-            print("テレポート: " .. number)
-        else
-            print("チェストが見つかりませんでした")
-        end
-    end,
-})
-
---================= 順番にTPボタン =================
-StandTab:CreateButton({
-    Name = "次のチェストにTP",
-    Callback = function()
-        currentChest = currentChest + 1
-        if currentChest > maxChest then currentChest = 1 end
-
-        local chest = Workspace:FindFirstChild(tostring(currentChest))
-        if chest and chest.PrimaryPart then
-            LocalPlayer.Character:SetPrimaryPartCFrame(
-                CFrame.new(chest.PrimaryPart.Position + Vector3.new(0,7,0))
-            )
-            chestLabel:Set("現在のチェスト: " .. currentChest)
-            print("テレポート: " .. currentChest)
-        else
-            print("チェストが見つかりませんでした")
         end
     end
 })
 
---================= 定期的にチェストリストを更新 =================
-local RunService = game:GetService("RunService")
+--================= Next Chest =================
+StandTab:CreateButton({
+    Name = "次のチェストにTP",
+    Callback = function()
+        currentChest += 1
+        if currentChest > maxChest then currentChest = 1 end
 
+        local chest = Workspace:FindFirstChild(tostring(currentChest))
+        if chest and chest.PrimaryPart then
+            setInvisible(false)
+            LocalPlayer.Character:SetPrimaryPartCFrame(
+                CFrame.new(chest.PrimaryPart.Position + Vector3.new(0, 7, 0))
+            )
+            chestLabel:Set("現在のチェスト: " .. currentChest)
+        end
+    end
+})
+
+--================= Chest Auto Update =================
 RunService.RenderStepped:Connect(function()
     local changed = false
     for i = #availableChests, 1, -1 do
-        local chestName = availableChests[i]
-        if not Workspace:FindFirstChild(chestName) then
+        if not Workspace:FindFirstChild(availableChests[i]) then
             table.remove(availableChests, i)
             changed = true
         end
@@ -1426,8 +1596,6 @@ RunService.RenderStepped:Connect(function()
         chestDropdown:Refresh(availableChests)
     end
 end)
-
-
 
 
 --========================================================--
@@ -1709,6 +1877,74 @@ autoAimTab:CreateToggle({
         print("[FruitTP]", v and "ON" or "OFF")
     end
 })
+
+
+
+--================================
+-- Enemy Head HitBox
+--================================
+
+local headHitboxEnabled = false
+local headScale = 1
+local originalHeadSize = {}
+
+-- 敵Head拡大トグル
+autoAimTab:CreateToggle({
+    Name = "敵Head拡大",
+    CurrentValue = false,
+    Callback = function(v)
+        headHitboxEnabled = v
+
+        for _, plr in ipairs(Players:GetPlayers()) do
+            if plr ~= LocalPlayer and isEnemy(plr) and plr.Character then
+                local head = plr.Character:FindFirstChild("Head")
+                if head then
+                    if v then
+                        if not originalHeadSize[plr] then
+                            originalHeadSize[plr] = head.Size
+                        end
+
+                        head.Size = originalHeadSize[plr] * headScale
+                        head.Transparency = 0.5
+                        head.CanCollide = false
+                        head.Massless = true
+                    else
+                        if originalHeadSize[plr] then
+                            head.Size = originalHeadSize[plr]
+                        end
+                        head.Transparency = 0
+                    end
+                end
+            end
+        end
+    end
+})
+
+-- 敵Head倍率スライダー
+autoAimTab:CreateSlider({
+    Name = "敵Head倍率",
+    Range = {1, 15000},
+    Increment = 0.1,
+    Suffix = "倍",
+    CurrentValue = 1,
+    Callback = function(v)
+        headScale = v
+
+        if headHitboxEnabled then
+            for _, plr in ipairs(Players:GetPlayers()) do
+                if plr ~= LocalPlayer and isEnemy(plr) and plr.Character then
+                    local head = plr.Character:FindFirstChild("Head")
+                    if head and originalHeadSize[plr] then
+                        head.Size = originalHeadSize[plr] * headScale
+                        head.Transparency = 0.5
+                    end
+                end
+            end
+        end
+    end
+})
+
+
 
 --============================
 -- 設定値
@@ -2021,5 +2257,181 @@ RunService.RenderStepped:Connect(function(dt)
                 end
             end
         end
+    end
+end)
+
+
+
+--================================
+-- Services
+--================================
+local Players = game:GetService("Players")
+local TeleportService = game:GetService("TeleportService")
+local HttpService = game:GetService("HttpService")
+local UserInputService = game:GetService("UserInputService")
+local GuiService = game:GetService("GuiService")
+local RunService = game:GetService("RunService")
+local Stats = game:GetService("Stats")
+
+local LocalPlayer = Players.LocalPlayer
+local PlaceId = game.PlaceId
+local JobId = game.JobId
+
+
+local autoRejoinEnabled = false
+local rejoinHotkeyEnabled = false
+local rejoinKey = Enum.KeyCode.F6
+
+local lastPrivateServerCode = nil
+local privateServerLink = ""
+
+local Network = Stats:WaitForChild("Network")
+
+
+local serverTab = Window:CreateTab("Server", 4483362458)
+
+local pingLabel = serverTab:CreateLabel("Ping: -- ms")
+
+RunService.RenderStepped:Connect(function()
+    local pingItem = Network.ServerStatsItem:FindFirstChild("Data Ping")
+    if pingItem then
+        local ping = math.floor(pingItem:GetValue())
+        pingLabel:Set("Ping: " .. ping .. " ms")
+    end
+end)
+
+
+serverTab:CreateButton({
+    Name = "Rejoin Server",
+    Callback = function()
+        TeleportService:Teleport(PlaceId, LocalPlayer)
+    end
+})
+
+
+serverTab:CreateToggle({
+    Name = "Rejoin Hotkey (F6)",
+    CurrentValue = false,
+    Callback = function(v)
+        rejoinHotkeyEnabled = v
+    end
+})
+
+UserInputService.InputBegan:Connect(function(input, gpe)
+    if gpe then return end
+    if rejoinHotkeyEnabled and input.KeyCode == rejoinKey then
+        TeleportService:Teleport(PlaceId, LocalPlayer)
+    end
+end)
+
+
+serverTab:CreateInput({
+    Name = "Private Server Link",
+    PlaceholderText = "...privateServerLinkCode=XXXX",
+    RemoveTextAfterFocusLost = false,
+    Callback = function(text)
+        privateServerLink = text
+    end
+})
+
+serverTab:CreateButton({
+    Name = "Join Private Server",
+    Callback = function()
+        local code = privateServerLink:match("privateServerLinkCode=([%w%-]+)")
+        if not code then return end
+
+        lastPrivateServerCode = code
+
+        TeleportService:TeleportToPrivateServer(
+            PlaceId,
+            code,
+            { LocalPlayer }
+        )
+    end
+})
+
+
+serverTab:CreateButton({
+    Name = "Join Random Server",
+    Callback = function()
+        TeleportService:Teleport(PlaceId, LocalPlayer)
+    end
+})
+
+
+
+serverTab:CreateButton({
+    Name = "Join Low Player Server",
+    Callback = function()
+        local servers = {}
+        local cursor = ""
+
+        repeat
+            local url = string.format(
+                "https://games.roblox.com/v1/games/%d/servers/Public?sortOrder=Asc&limit=100%s",
+                PlaceId,
+                cursor ~= "" and "&cursor=" .. cursor or ""
+            )
+
+            local res = HttpService:JSONDecode(game:HttpGet(url))
+            for _, s in ipairs(res.data) do
+                if s.playing < s.maxPlayers and s.id ~= JobId then
+                    table.insert(servers, s.id)
+                end
+            end
+
+            cursor = res.nextPageCursor or ""
+        until #servers > 0 or cursor == ""
+
+        if #servers > 0 then
+            TeleportService:TeleportToPlaceInstance(
+                PlaceId,
+                servers[math.random(#servers)],
+                LocalPlayer
+            )
+        end
+    end
+})
+
+
+serverTab:CreateButton({
+    Name = "Join Friend Server",
+    Callback = function()
+        local pages = Players:GetFriendsAsync(LocalPlayer.UserId)
+        for _, friend in ipairs(pages:GetCurrentPage()) do
+            if friend.IsOnline and friend.PlaceId == PlaceId then
+                TeleportService:TeleportToPlaceInstance(
+                    PlaceId,
+                    friend.GameId,
+                    LocalPlayer
+                )
+                break
+            end
+        end
+    end
+})
+
+
+serverTab:CreateToggle({
+    Name = "Auto Rejoin (Kick対応)",
+    CurrentValue = false,
+    Callback = function(v)
+        autoRejoinEnabled = v
+    end
+})
+
+GuiService.ErrorMessageChanged:Connect(function(msg)
+    if not autoRejoinEnabled then return end
+
+    task.wait(2)
+
+    if lastPrivateServerCode then
+        TeleportService:TeleportToPrivateServer(
+            PlaceId,
+            lastPrivateServerCode,
+            { LocalPlayer }
+        )
+    else
+        TeleportService:Teleport(PlaceId, LocalPlayer)
     end
 end)
