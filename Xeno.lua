@@ -1641,6 +1641,74 @@ autoAimTab:CreateToggle({
     end
 })
 
+
+
+--================================
+-- Enemy Head HitBox
+--================================
+
+local headHitboxEnabled = false
+local headScale = 1
+local originalHeadSize = {}
+
+-- 敵Head拡大トグル
+autoAimTab:CreateToggle({
+    Name = "敵Head拡大",
+    CurrentValue = false,
+    Callback = function(v)
+        headHitboxEnabled = v
+
+        for _, plr in ipairs(Players:GetPlayers()) do
+            if plr ~= LocalPlayer and isEnemy(plr) and plr.Character then
+                local head = plr.Character:FindFirstChild("Head")
+                if head then
+                    if v then
+                        if not originalHeadSize[plr] then
+                            originalHeadSize[plr] = head.Size
+                        end
+
+                        head.Size = originalHeadSize[plr] * headScale
+                        head.Transparency = 0.5
+                        head.CanCollide = false
+                        head.Massless = true
+                    else
+                        if originalHeadSize[plr] then
+                            head.Size = originalHeadSize[plr]
+                        end
+                        head.Transparency = 0
+                    end
+                end
+            end
+        end
+    end
+})
+
+-- 敵Head倍率スライダー
+autoAimTab:CreateSlider({
+    Name = "敵Head倍率",
+    Range = {1, 15000},
+    Increment = 0.1,
+    Suffix = "倍",
+    CurrentValue = 1,
+    Callback = function(v)
+        headScale = v
+
+        if headHitboxEnabled then
+            for _, plr in ipairs(Players:GetPlayers()) do
+                if plr ~= LocalPlayer and isEnemy(plr) and plr.Character then
+                    local head = plr.Character:FindFirstChild("Head")
+                    if head and originalHeadSize[plr] then
+                        head.Size = originalHeadSize[plr] * headScale
+                        head.Transparency = 0.5
+                    end
+                end
+            end
+        end
+    end
+})
+
+
+
 --============================
 -- 設定値
 --============================
@@ -1952,5 +2020,181 @@ RunService.RenderStepped:Connect(function(dt)
                 end
             end
         end
+    end
+end)
+
+
+
+--================================
+-- Services
+--================================
+local Players = game:GetService("Players")
+local TeleportService = game:GetService("TeleportService")
+local HttpService = game:GetService("HttpService")
+local UserInputService = game:GetService("UserInputService")
+local GuiService = game:GetService("GuiService")
+local RunService = game:GetService("RunService")
+local Stats = game:GetService("Stats")
+
+local LocalPlayer = Players.LocalPlayer
+local PlaceId = game.PlaceId
+local JobId = game.JobId
+
+
+local autoRejoinEnabled = false
+local rejoinHotkeyEnabled = false
+local rejoinKey = Enum.KeyCode.F6
+
+local lastPrivateServerCode = nil
+local privateServerLink = ""
+
+local Network = Stats:WaitForChild("Network")
+
+
+local serverTab = Window:CreateTab("Server", 4483362458)
+
+local pingLabel = serverTab:CreateLabel("Ping: -- ms")
+
+RunService.RenderStepped:Connect(function()
+    local pingItem = Network.ServerStatsItem:FindFirstChild("Data Ping")
+    if pingItem then
+        local ping = math.floor(pingItem:GetValue())
+        pingLabel:Set("Ping: " .. ping .. " ms")
+    end
+end)
+
+
+serverTab:CreateButton({
+    Name = "Rejoin Server",
+    Callback = function()
+        TeleportService:Teleport(PlaceId, LocalPlayer)
+    end
+})
+
+
+serverTab:CreateToggle({
+    Name = "Rejoin Hotkey (F6)",
+    CurrentValue = false,
+    Callback = function(v)
+        rejoinHotkeyEnabled = v
+    end
+})
+
+UserInputService.InputBegan:Connect(function(input, gpe)
+    if gpe then return end
+    if rejoinHotkeyEnabled and input.KeyCode == rejoinKey then
+        TeleportService:Teleport(PlaceId, LocalPlayer)
+    end
+end)
+
+
+serverTab:CreateInput({
+    Name = "Private Server Link",
+    PlaceholderText = "...privateServerLinkCode=XXXX",
+    RemoveTextAfterFocusLost = false,
+    Callback = function(text)
+        privateServerLink = text
+    end
+})
+
+serverTab:CreateButton({
+    Name = "Join Private Server",
+    Callback = function()
+        local code = privateServerLink:match("privateServerLinkCode=([%w%-]+)")
+        if not code then return end
+
+        lastPrivateServerCode = code
+
+        TeleportService:TeleportToPrivateServer(
+            PlaceId,
+            code,
+            { LocalPlayer }
+        )
+    end
+})
+
+
+serverTab:CreateButton({
+    Name = "Join Random Server",
+    Callback = function()
+        TeleportService:Teleport(PlaceId, LocalPlayer)
+    end
+})
+
+
+
+serverTab:CreateButton({
+    Name = "Join Low Player Server",
+    Callback = function()
+        local servers = {}
+        local cursor = ""
+
+        repeat
+            local url = string.format(
+                "https://games.roblox.com/v1/games/%d/servers/Public?sortOrder=Asc&limit=100%s",
+                PlaceId,
+                cursor ~= "" and "&cursor=" .. cursor or ""
+            )
+
+            local res = HttpService:JSONDecode(game:HttpGet(url))
+            for _, s in ipairs(res.data) do
+                if s.playing < s.maxPlayers and s.id ~= JobId then
+                    table.insert(servers, s.id)
+                end
+            end
+
+            cursor = res.nextPageCursor or ""
+        until #servers > 0 or cursor == ""
+
+        if #servers > 0 then
+            TeleportService:TeleportToPlaceInstance(
+                PlaceId,
+                servers[math.random(#servers)],
+                LocalPlayer
+            )
+        end
+    end
+})
+
+
+serverTab:CreateButton({
+    Name = "Join Friend Server",
+    Callback = function()
+        local pages = Players:GetFriendsAsync(LocalPlayer.UserId)
+        for _, friend in ipairs(pages:GetCurrentPage()) do
+            if friend.IsOnline and friend.PlaceId == PlaceId then
+                TeleportService:TeleportToPlaceInstance(
+                    PlaceId,
+                    friend.GameId,
+                    LocalPlayer
+                )
+                break
+            end
+        end
+    end
+})
+
+
+serverTab:CreateToggle({
+    Name = "Auto Rejoin (Kick対応)",
+    CurrentValue = false,
+    Callback = function(v)
+        autoRejoinEnabled = v
+    end
+})
+
+GuiService.ErrorMessageChanged:Connect(function(msg)
+    if not autoRejoinEnabled then return end
+
+    task.wait(2)
+
+    if lastPrivateServerCode then
+        TeleportService:TeleportToPrivateServer(
+            PlaceId,
+            lastPrivateServerCode,
+            { LocalPlayer }
+        )
+    else
+        TeleportService:Teleport(PlaceId, LocalPlayer)
     end
 end)
