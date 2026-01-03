@@ -562,71 +562,111 @@ playerTab:CreateButton({
 })
 
 --=============================
--- Fly機能（スマホ対応・船OK・重力のみ無効）
+-- Fly機能（PC + スマホ対応・重力のみ無効）
 --=============================
 local flyActive = false
 local flySpeed = 50
 
+local flyKeys = {
+	W = false,
+	A = false,
+	S = false,
+	D = false,
+	Space = false,
+	LeftShift = false
+}
+
 -- Fly ON / OFF
 playerTab:CreateToggle({
-    Name = "Fly",
-    CurrentValue = false,
-    Flag = "FlyToggle",
-    Callback = function(state)
-        flyActive = state
-        local _, hum, root = getCharacter()
-        if not hum or not root then return end
+	Name = "Fly",
+	CurrentValue = false,
+	Flag = "FlyToggle",
+	Callback = function(state)
+		flyActive = state
+		local _, hum, root = getCharacter()
+		if not hum or not root then return end
 
-        root.AssemblyLinearVelocity = Vector3.zero
-        root.AssemblyAngularVelocity = Vector3.zero
-    end
+		root.AssemblyLinearVelocity = Vector3.zero
+		root.AssemblyAngularVelocity = Vector3.zero
+	end
 })
 
 -- Fly速度
 playerTab:CreateSlider({
-    Name = "Fly速度",
-    Range = {10, 2000},
-    Increment = 5,
-    CurrentValue = flySpeed,
-    Flag = "FlySpeedSlider",
-    Callback = function(val)
-        flySpeed = val
-    end
+	Name = "Fly速度",
+	Range = {10, 2000},
+	Increment = 5,
+	CurrentValue = flySpeed,
+	Flag = "FlySpeedSlider",
+	Callback = function(val)
+		flySpeed = val
+	end
 })
 
 --=============================
--- Fly制御（スマホ）
+-- キー入力（PC）
+--=============================
+UserInputService.InputBegan:Connect(function(input, gpe)
+	if gpe then return end
+	if input.UserInputType == Enum.UserInputType.Keyboard then
+		if flyKeys[input.KeyCode.Name] ~= nil then
+			flyKeys[input.KeyCode.Name] = true
+		end
+	end
+end)
+
+UserInputService.InputEnded:Connect(function(input, gpe)
+	if gpe then return end
+	if input.UserInputType == Enum.UserInputType.Keyboard then
+		if flyKeys[input.KeyCode.Name] ~= nil then
+			flyKeys[input.KeyCode.Name] = false
+		end
+	end
+end)
+
+--=============================
+-- Fly制御（PC + スマホ）
 --=============================
 RunService.RenderStepped:Connect(function(dt)
-    if not flyActive then return end
+	if not flyActive then return end
 
-    local _, hum, root = getCharacter()
-    if not hum or not root then return end
+	local _, hum, root = getCharacter()
+	if not hum or not root then return end
 
-    -- 🔒 重力キャンセル（船でも安定）
-    root.AssemblyLinearVelocity = Vector3.zero
+	-- 🔒 重力キャンセル（船OK）
+	root.AssemblyLinearVelocity = Vector3.zero
 
-    local cam = workspace.CurrentCamera
-    local moveDir = hum.MoveDirection
+	local cam = workspace.CurrentCamera
+	local move = Vector3.zero
 
-    if moveDir.Magnitude == 0 then return end
+	-- ========= PC入力 =========
+	if flyKeys.W then move += cam.CFrame.LookVector end
+	if flyKeys.S then move -= cam.CFrame.LookVector end
+	if flyKeys.A then move -= cam.CFrame.RightVector end
+	if flyKeys.D then move += cam.CFrame.RightVector end
+	if flyKeys.Space then move += Vector3.new(0, 1, 0) end
+	if flyKeys.LeftShift then move -= Vector3.new(0, 1, 0) end
 
-    -- 📱 スティック方向をカメラ基準に変換
-    local forward = cam.CFrame.LookVector
-    local right = cam.CFrame.RightVector
+	-- ========= スマホ入力 =========
+	if UserInputService.TouchEnabled then
+		local dir = hum.MoveDirection
+		if dir.Magnitude > 0 then
+			move +=
+				(cam.CFrame.RightVector * dir.X) +
+				(cam.CFrame.LookVector * dir.Z)
+		end
 
-    local move =
-        (right * moveDir.X) +
-        (forward * moveDir.Z)
+		-- ジャンプボタン対応
+		if hum.Jump then
+			move += Vector3.new(0, 1, 0)
+		end
+	end
 
-    -- 上下（ジャンプボタン対応）
-    if hum.Jump then
-        move += Vector3.new(0, 1, 0)
-    end
-
-    if move.Magnitude > 0 then
-root.CFrame = root.CFrame + (move * flySpeed * dt)
-    end
+	-- ========= 移動 =========
+	if move.Magnitude > 0 then
+		-- Unit化しない（スマホ速度殺さない）
+		root.CFrame = root.CFrame + (move * flySpeed * dt)
+	end
 end)
 
 
