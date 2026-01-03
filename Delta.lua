@@ -625,7 +625,7 @@ RunService.RenderStepped:Connect(function(dt)
     end
 
     if move.Magnitude > 0 then
-        root.CFrame = root.CFrame + (move.Unit * flySpeed * dt)
+root.CFrame = root.CFrame + (move * flySpeed * dt)
     end
 end)
 
