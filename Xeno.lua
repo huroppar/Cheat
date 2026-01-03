@@ -1080,14 +1080,7 @@ combatTab:CreateInput({
     end
 })
 
-combatTab:CreateToggle({
-    Name = "壁貫通",
-    CurrentValue = false,
-    Callback = function(v)
-        noclipEnabled = v
-        if v then enableNoclip() else disableNoclip() end
-    end
-})
+
 
 --============================--
 -- プレイヤー一覧 + HP
