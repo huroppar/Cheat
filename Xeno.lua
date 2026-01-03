@@ -1030,9 +1030,13 @@ end
 local function DisableFollow()
     followActive = false
     followMode = nil
-    if noclipEnabled then disableNoclip() end
+    if noclipEnabled then
+        disableNoclip()
+        noclipEnabled = false
+    end
     ReturnToOriginalPosition()
 end
+
 
 --============================--
 -- GUI設定
@@ -1179,8 +1183,12 @@ RunService.RenderStepped:Connect(function(dt)
                     rootPart.CFrame = rootPart.CFrame:Lerp(targetHRP.CFrame * CFrame.new(0,0,7), 0.2)
                 end
             elseif followMode=="under" then
-                if not noclipEnabled then enableNoclip() end
-                humanoid.PlatformStand = true
+    if not noclipEnabled then
+        enableNoclip()
+        noclipEnabled = true  -- ← これが必要
+    end
+    humanoid.PlatformStand = true
+
                 local goalCF = targetHRP.CFrame * CFrame.new(0,-12,0) * CFrame.Angles(math.rad(90),0,0)
                 rootPart.CFrame = rootPart.CFrame:Lerp(goalCF, 0.3)
             end
