@@ -870,7 +870,7 @@ espTab:CreateSlider({
 
 
 --========================================================--
---                     🔥 Combat Tab 完全版（張り付き改良版） --
+--                     🔥 Combat Tab + Invisible 完全統合版（地面補正付き）
 --========================================================--
 
 local Players = game:GetService("Players")
@@ -878,16 +878,14 @@ local RunService = game:GetService("RunService")
 local player = Players.LocalPlayer
 local camera = workspace.CurrentCamera
 
-local combatTab = Window:CreateTab("戦闘", 4483362458)
 
---============================--
--- 定数
---============================--
-local SAFE_Y = -200000
+
+local combatTab = Window:CreateTab("戦闘", 4483362458)
 
 --============================--
 -- 状態変数
 --============================--
+local SAFE_Y = -200000
 local selectedTarget = nil
 local followActive = false
 local followMode = nil -- "normal", "v2", "under"
@@ -900,36 +898,25 @@ tracerLine.Thickness = 2
 tracerLine.Transparency = 1
 tracerLine.Color = Color3.fromRGB(0,255,255)
 
--- Invisible
-local invisible = false
-local parts = {}
-local invisibleKey = Enum.KeyCode.G
-local keybindEnabled = true
-
--- Noclip
 local noclipConn = nil
 local noclipEnabled = false
 local originalCanCollide = {}
 
 --============================--
--- Utility
+-- Invisible 用
 --============================--
-local function GetHRP(char)
-    return char and char:FindFirstChild("HumanoidRootPart")
-end
+local invisible = false
+local parts = {}
+local invisibleKey = Enum.KeyCode.G
+local keybindEnabled = true
+local character, humanoid, rootPart
 
-local function GetHumanoid(char)
-    return char and char:FindFirstChildOfClass("Humanoid")
-end
-
---============================--
--- キャラクターセットアップ（Invisible用パーツ取得）
---============================--
 local function setupCharacter()
-    local char = player.Character
-    if not char then return end
+    character = player.Character or player.CharacterAdded:Wait()
+    humanoid = character:WaitForChild("Humanoid")
+    rootPart = character:WaitForChild("HumanoidRootPart")
     parts = {}
-    for _, obj in pairs(char:GetDescendants()) do
+    for _, obj in pairs(character:GetDescendants()) do
         if obj:IsA("BasePart") and obj.Transparency == 0 then
             table.insert(parts, obj)
         end
@@ -939,7 +926,6 @@ end
 setupCharacter()
 player.CharacterAdded:Connect(function()
     setupCharacter()
-    -- 死後もInvisible ONなら再適用
     if invisible then
         for _, part in pairs(parts) do
             part.Transparency = 0.5
@@ -947,14 +933,18 @@ player.CharacterAdded:Connect(function()
     end
 end)
 
---============================--
--- Invisible関数
---============================--
 local function setInvisible(value)
     invisible = value
     for _, part in pairs(parts) do
         part.Transparency = invisible and 0.5 or 0
     end
+
+    -- 画面通知
+    Rayfield:Notify({
+        Title = "Invisible",
+        Content = invisible and "透明化 ON" or "透明化 OFF",
+        Duration = 3
+    })
 end
 
 --============================--
@@ -967,21 +957,19 @@ _G.SetTarget = function(tar)
 end
 
 --============================--
--- Noclip（壁貫通）
+-- Noclip
 --============================--
 local function enableNoclip()
     if noclipConn then return end
-    local char = player.Character
-    if not char then return end
-    for _,p in ipairs(char:GetDescendants()) do
+    if not character then return end
+    for _,p in ipairs(character:GetDescendants()) do
         if p:IsA("BasePart") then
             originalCanCollide[p] = p.CanCollide
         end
     end
     noclipConn = RunService.Stepped:Connect(function()
-        local char = player.Character
-        if not char then return end
-        for _,p in ipairs(char:GetDescendants()) do
+        if not character then return end
+        for _,p in ipairs(character:GetDescendants()) do
             if p:IsA("BasePart") then
                 p.CanCollide = false
             end
@@ -994,8 +982,7 @@ local function disableNoclip()
         noclipConn:Disconnect()
         noclipConn = nil
     end
-    local char = player.Character
-    if not char then return end
+    if not character then return end
     for p,canCollide in pairs(originalCanCollide) do
         if p and p.Parent then
             p.CanCollide = canCollide
@@ -1007,6 +994,9 @@ end
 --============================--
 -- Follow系
 --============================--
+local function GetHRP(char) return char and char:FindFirstChild("HumanoidRootPart") end
+local function GetHumanoid(char) return char and char:FindFirstChildOfClass("Humanoid") end
+
 local function EnableFollow(mode)
     if not selectedTarget then return end
     followActive = true
@@ -1015,21 +1005,37 @@ local function EnableFollow(mode)
     if hrp then originalPos_Follow = hrp.CFrame end
 end
 
+local function ReturnToOriginalPosition()
+    local hrp = GetHRP(player.Character)
+    local hum = GetHumanoid(player.Character)
+    if not hrp or not originalPos_Follow then return end
+
+    -- 元の位置の上にRaycastを飛ばして地面のY座標を取得
+    local rayOrigin = originalPos_Follow.Position + Vector3.new(0, 5, 0)
+    local rayDir = Vector3.new(0, -50, 0)
+    local rayParams = RaycastParams.new()
+    rayParams.FilterDescendantsInstances = {player.Character}
+    rayParams.FilterType = Enum.RaycastFilterType.Blacklist
+
+    local rayResult = workspace:Raycast(rayOrigin, rayDir, rayParams)
+    if rayResult then
+        hrp.CFrame = CFrame.new(rayResult.Position + Vector3.new(0, hum.HipHeight + 1, 0))
+    else
+        hrp.CFrame = originalPos_Follow
+    end
+
+    hum.PlatformStand = false
+end
+
 local function DisableFollow()
     followActive = false
     followMode = nil
-    local hrp = GetHRP(player.Character)
-    local hum = GetHumanoid(player.Character)
-    if hrp and originalPos_Follow then
-        hrp.CFrame = originalPos_Follow
-        if hum then hum.PlatformStand = false hum.Gravity = 196.2 end
-    end
-    -- 下向き用の壁貫通解除
     if noclipEnabled then disableNoclip() end
+    ReturnToOriginalPosition()
 end
 
 --============================--
--- GUIボタン/トグル設定
+-- GUI設定
 --============================--
 combatTab:CreateButton({
     Name = "選択中のプレイヤーへ TP",
@@ -1050,17 +1056,13 @@ combatTab:CreateToggle({Name="ターゲット線", Callback=function(v) tracerAc
 combatTab:CreateToggle({
     Name = "Invisible",
     CurrentValue = false,
-    Callback = function(v)
-        setInvisible(v)
-    end
+    Callback = function(v) setInvisible(v) end
 })
 
 combatTab:CreateToggle({
     Name = "キーで切替有効",
     CurrentValue = true,
-    Callback = function(v)
-        keybindEnabled = v
-    end
+    Callback = function(v) keybindEnabled = v end
 })
 
 combatTab:CreateInput({
@@ -1142,53 +1144,63 @@ player:GetMouse().KeyDown:Connect(function(key)
 end)
 
 --============================--
--- RenderStepped: Follow + Tracer + Invisible
+-- Heartbeat: Invisible 本体下移動（元仕様通り）
+--============================--
+RunService.Heartbeat:Connect(function()
+    if invisible and rootPart and humanoid then
+        local cf = rootPart.CFrame
+        local camOffset = humanoid.CameraOffset
+        local hidden = cf * CFrame.new(0, -SAFE_Y, 0)
+        rootPart.CFrame = hidden
+        humanoid.CameraOffset = hidden:ToObjectSpace(CFrame.new(cf.Position)).Position
+        game:GetService("RunService").RenderStepped:Wait()
+        rootPart.CFrame = cf
+        humanoid.CameraOffset = camOffset
+    end
+end)
+
+--============================--
+-- RenderStepped: Follow + Tracer
 --============================--
 RunService.RenderStepped:Connect(function(dt)
-    local char = player.Character
-    if not char then return end
-    local myHRP = GetHRP(char)
-    if not myHRP then return end
-    local hum = GetHumanoid(char)
-    if not hum then return end
+    if not character or not humanoid or not rootPart then return end
 
-    -- 張り付き中は重力無効
-    hum.Gravity = 0
+    -- 張り付き中は物理制御で重力無効
+    if followActive then
+        rootPart.AssemblyLinearVelocity = Vector3.new(0,0,0)
+    end
 
-    --==== Follow ====
+    -- ==== Follow ====
     if followActive and selectedTarget and selectedTarget.Character then
         local targetHRP = GetHRP(selectedTarget.Character)
         if targetHRP then
             if followMode=="normal" then
-                myHRP.CFrame = targetHRP.CFrame * CFrame.new(0,0,7)
+                rootPart.CFrame = targetHRP.CFrame * CFrame.new(0,0,7)
             elseif followMode=="v2" then
-                local dVec = targetHRP.Position - myHRP.Position
+                local dVec = targetHRP.Position - rootPart.Position
                 local dist = dVec.Magnitude
                 local speed = 300
                 if dist > 200 then
-                    myHRP.CFrame = myHRP.CFrame:Lerp(CFrame.new(myHRP.Position + dVec.Unit * speed * dt), 1)
+                    rootPart.CFrame = rootPart.CFrame:Lerp(CFrame.new(rootPart.Position + dVec.Unit * speed * dt), 1)
                 else
-                    myHRP.CFrame = myHRP.CFrame:Lerp(targetHRP.CFrame * CFrame.new(0,0,7), 0.2)
+                    rootPart.CFrame = rootPart.CFrame:Lerp(targetHRP.CFrame * CFrame.new(0,0,7), 0.2)
                 end
             elseif followMode=="under" then
                 if not noclipEnabled then enableNoclip() end
-                hum.PlatformStand = true
+                humanoid.PlatformStand = true
                 local goalCF = targetHRP.CFrame * CFrame.new(0,-12,0) * CFrame.Angles(math.rad(90),0,0)
-                myHRP.CFrame = myHRP.CFrame:Lerp(goalCF, 0.3)
+                rootPart.CFrame = rootPart.CFrame:Lerp(goalCF, 0.3)
             end
         end
     else
-        if not followActive then
-            hum.Gravity = 196.2 -- 元に戻す
-            hum.PlatformStand = false
-        end
+        humanoid.PlatformStand = false
     end
 
-    --==== Tracer ====
+    -- ==== Tracer ====
     if tracerActive and selectedTarget and selectedTarget.Character then
         local targetHRP = GetHRP(selectedTarget.Character)
         if targetHRP then
-            local p1,v1 = camera:WorldToViewportPoint(myHRP.Position)
+            local p1,v1 = camera:WorldToViewportPoint(rootPart.Position)
             local p2,v2 = camera:WorldToViewportPoint(targetHRP.Position)
             if v1 and v2 then
                 tracerLine.From = Vector2.new(p1.X,p1.Y)
@@ -1202,17 +1214,6 @@ RunService.RenderStepped:Connect(function(dt)
         end
     else
         tracerLine.Visible = false
-    end
-
-    --==== Invisible ====
-    if invisible and parts then
-        for _, part in pairs(parts) do
-            part.Transparency = 0.5
-        end
-    elseif parts then
-        for _, part in pairs(parts) do
-            part.Transparency = 0
-        end
     end
 end)
 
