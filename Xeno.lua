@@ -901,6 +901,7 @@ tracerLine.Color = Color3.fromRGB(0,255,255)
 local noclipConn = nil
 local noclipEnabled = false
 local originalCanCollide = {}
+local UserInputService = game:GetService("UserInputService")
 
 --============================--
 -- Invisible 用
@@ -1119,11 +1120,14 @@ Players.PlayerAdded:Connect(UpdatePlayerList)
 Players.PlayerRemoving:Connect(UpdatePlayerList)
 
 --============================--
--- キー入力で Invisible 切替
+-- キー入力で Invisible 切替（修正版）
 --============================--
-player:GetMouse().KeyDown:Connect(function(key)
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+    if gameProcessed then return end
     if not keybindEnabled then return end
-    if key:upper() == tostring(invisibleKey):gsub("Enum.KeyCode.","") then
+
+    if input.UserInputType == Enum.UserInputType.Keyboard
+    and input.KeyCode == invisibleKey then
         setInvisible(not invisible)
     end
 end)
