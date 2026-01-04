@@ -419,9 +419,11 @@ local espTab = Window:CreateTab("ESP", 4483362458)
 --================================
 -- Services（ESP専用で再定義）
 --================================
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
 local Lighting = game:GetService("Lighting")
 local Camera = workspace.CurrentCamera
-
+local LocalPlayer = Players.LocalPlayer
 
 --================================
 -- 設定フラグ
@@ -438,14 +440,13 @@ local chestHighlight = false
 local hitboxEnabled = false
 local worldXrayAlpha = 0.6
 local playerXrayAlpha = 0.6
-
+local clockGuiEnabled = true
 
 --================================
 -- 管理テーブル
 --================================
 local highlights = {}
 local drawings = {}
-local hitboxes = {}
 local lineDrawings = {}
 local chestHighlights = {}
 local originalSize = {}
@@ -454,107 +455,172 @@ local originalSize = {}
 -- ユーティリティ
 --================================
 local function isEnemy(player)
-    -- チーム判定（無いゲームでも動く）
-    if not LocalPlayer.Team or not player.Team then
-        return player ~= LocalPlayer
-    end
-    return player.Team ~= LocalPlayer.Team
+	if not LocalPlayer.Team or not player.Team then
+		return player ~= LocalPlayer
+	end
+	return player.Team ~= LocalPlayer.Team
 end
 
---================================
--- ハイライト生成
---================================
 local function createHighlight(char, color)
-    if highlights[char] then return end
-    local hl = Instance.new("Highlight")
-    hl.FillColor = color
-    hl.OutlineColor = Color3.new(1,1,1)
-    hl.FillTransparency = 0.5
-    hl.Parent = char
-    highlights[char] = hl
+	if highlights[char] then return end
+	local hl = Instance.new("Highlight")
+	hl.FillColor = color
+	hl.OutlineColor = Color3.new(1,1,1)
+	hl.FillTransparency = 0.5
+	hl.Parent = char
+	highlights[char] = hl
 end
 
 local function removeHighlight(char)
-    if highlights[char] then
-        highlights[char]:Destroy()
-        highlights[char] = nil
-    end
+	if highlights[char] then
+		highlights[char]:Destroy()
+		highlights[char] = nil
+	end
 end
 
 --================================
--- Name ESP & Line ESP
+-- Name & Line ESP
 --================================
 RunService.RenderStepped:Connect(function()
-    for _, plr in ipairs(Players:GetPlayers()) do
-        if plr ~= LocalPlayer then
-            local char = plr.Character
-            local hrp = char and char:FindFirstChild("HumanoidRootPart")
-            if hrp then
-                local pos, onScreen = Camera:WorldToViewportPoint(hrp.Position)
-
-                -- Name ESP
-                if showNameESP and onScreen then
-                    if not drawings[plr] then
-                        local text = Drawing.new("Text")
-                        text.Center = true
-                        text.Outline = true
-                        text.Size = 16
-                        drawings[plr] = text
-                    end
-
-                    local dist = math.floor((Camera.CFrame.Position - hrp.Position).Magnitude)
-                    drawings[plr].Visible = true
-                    drawings[plr].Text = plr.Name .. " | " .. dist .. "m"
-                    drawings[plr].Position = Vector2.new(pos.X, pos.Y - 25)
-                    drawings[plr].Color = isEnemy(plr) and Color3.new(1,0,0) or Color3.new(0,1,0)
-                elseif drawings[plr] then
-                    drawings[plr].Visible = false
-                end
-
-                -- Line ESP
-                if showLineESP and onScreen then
-                    if not lineDrawings[plr] then
-                        local line = Drawing.new("Line")
-                        line.Thickness = 1.5
-                        lineDrawings[plr] = line
-                    end
-
-                    local line = lineDrawings[plr]
-                    line.Visible = true
-                    line.From = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y)
-                    line.To = Vector2.new(pos.X, pos.Y)
-                    line.Color = Color3.new(1, 0, 0)
-                elseif lineDrawings[plr] then
-                    lineDrawings[plr].Visible = false
-                end
-            end
-        end
-    end
+	for _, plr in ipairs(Players:GetPlayers()) do
+		if plr ~= LocalPlayer then
+			local char = plr.Character
+			local hrp = char and char:FindFirstChild("HumanoidRootPart")
+			if hrp then
+				local pos, onScreen = Camera:WorldToViewportPoint(hrp.Position)
+				-- Name ESP
+				if showNameESP and onScreen then
+					if not drawings[plr] then
+						local text = Drawing.new("Text")
+						text.Center = true
+						text.Outline = true
+						text.Size = 16
+						drawings[plr] = text
+					end
+					local dist = math.floor((Camera.CFrame.Position - hrp.Position).Magnitude)
+					drawings[plr].Visible = true
+					drawings[plr].Text = plr.Name .. " | " .. dist .. "m"
+					drawings[plr].Position = Vector2.new(pos.X, pos.Y - 25)
+					drawings[plr].Color = isEnemy(plr) and Color3.new(1,0,0) or Color3.new(0,1,0)
+				elseif drawings[plr] then
+					drawings[plr].Visible = false
+				end
+				-- Line ESP
+				if showLineESP and onScreen then
+					if not lineDrawings[plr] then
+						local line = Drawing.new("Line")
+						line.Thickness = 1.5
+						lineDrawings[plr] = line
+					end
+					local line = lineDrawings[plr]
+					line.Visible = true
+					line.From = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y)
+					line.To = Vector2.new(pos.X, pos.Y)
+					line.Color = Color3.new(1, 0, 0)
+				elseif lineDrawings[plr] then
+					lineDrawings[plr].Visible = false
+				end
+			end
+		end
+	end
 end)
-
 
 Players.PlayerRemoving:Connect(function(plr)
-    -- Name ESP
-    if drawings[plr] then
-        drawings[plr]:Remove()
-        drawings[plr] = nil
-    end
-
-    -- Line ESP
-    if lineDrawings[plr] then
-        lineDrawings[plr]:Remove()
-        lineDrawings[plr] = nil
-    end
-
-    -- Highlight
-    if plr.Character then
-        removeHighlight(plr.Character)
-    end
-
-    -- HitBoxサイズ記録
-    originalSize[plr] = nil
+	if drawings[plr] then
+		drawings[plr]:Remove()
+		drawings[plr] = nil
+	end
+	if lineDrawings[plr] then
+		lineDrawings[plr]:Remove()
+		lineDrawings[plr] = nil
+	end
+	if plr.Character then
+		removeHighlight(plr.Character)
+	end
+	originalSize[plr] = nil
 end)
 
+--================================
+-- Clock（ESPラベル + 自作GUI）
+--================================
+local ClockLabel = espTab:CreateLabel("Time: --:--")
+
+-- 自作GUI
+local clockGui = Instance.new("ScreenGui")
+clockGui.Name = "ClockGui"
+clockGui.ResetOnSpawn = false
+clockGui.Parent = game.CoreGui
+
+local clockFrame = Instance.new("Frame")
+clockFrame.Size = UDim2.new(0, 220, 0, 60)
+clockFrame.Position = UDim2.new(0.5, -110, 0, 40)
+clockFrame.BackgroundColor3 = Color3.fromRGB(15,15,15)
+clockFrame.BackgroundTransparency = 0.15
+clockFrame.Parent = clockGui
+
+local corner = Instance.new("UICorner")
+corner.CornerRadius = UDim.new(0, 12)
+corner.Parent = clockFrame
+
+local clockLabelGui = Instance.new("TextLabel")
+clockLabelGui.Size = UDim2.new(1, -10, 1, -10)
+clockLabelGui.Position = UDim2.new(0, 5, 0, 5)
+clockLabelGui.BackgroundTransparency = 1
+clockLabelGui.Font = Enum.Font.GothamBold
+clockLabelGui.TextScaled = true
+clockLabelGui.TextColor3 = Color3.fromRGB(255,255,255)
+clockLabelGui.Text = "--:--"
+clockLabelGui.Parent = clockFrame
+
+local NIGHT_START = 18
+local MORNING_START = 7
+
+local function isNight(t)
+	return t >= NIGHT_START or t < MORNING_START
+end
+local function formatTime(t)
+	local h = math.floor(t)
+	local m = math.floor((t - h) * 60)
+	return string.format("%02d:%02d", h, m)
+end
+
+RunService.Heartbeat:Connect(function()
+	local t = Lighting.ClockTime
+	local timeText = formatTime(t)
+	local state = isNight(t) and "Night" or "Morning"
+	if ClockLabel then
+		ClockLabel:Set("Time: " .. timeText .. " (" .. state .. ")")
+	end
+	if clockGuiEnabled and clockLabelGui then
+		clockLabelGui.Text = timeText .. " (" .. state .. ")"
+	end
+end)
+
+espTab:CreateToggle({
+	Name = "Clock GUI 表示",
+	CurrentValue = true,
+	Callback = function(v)
+		clockGuiEnabled = v
+		if clockGui then
+			clockGui.Enabled = v
+		end
+	end
+})
+
+--================================
+-- Position ESPラベル
+--================================
+local positionLabel = espTab:CreateLabel("Position: --, --, --")
+RunService.RenderStepped:Connect(function()
+	local char = LocalPlayer.Character
+	local hrp = char and char:FindFirstChild("HumanoidRootPart")
+	if hrp then
+		local pos = hrp.Position
+		positionLabel:Set(string.format("Position: X %.1f | Y %.1f | Z %.1f", pos.X, pos.Y, pos.Z))
+	else
+		positionLabel:Set("Position: Loading...")
+	end
+end)
 
 --================================
 -- FullBright
@@ -565,30 +631,93 @@ local originalLighting = {
     ClockTime = Lighting.ClockTime,
     FogEnd = Lighting.FogEnd
 }
-
 espTab:CreateToggle({
-    Name = "FullBright",
-    CurrentValue = false,
-    Callback = function(v)
-        if v then
-            if fullBrightConn then fullBrightConn:Disconnect() end
-            fullBrightConn = RunService.RenderStepped:Connect(function()
-                Lighting.Brightness = 5
-                Lighting.ClockTime = 12
-                Lighting.FogEnd = 1e9
-            end)
-        else
-            if fullBrightConn then
-                fullBrightConn:Disconnect()
-                fullBrightConn = nil
-            end
-            Lighting.Brightness = originalLighting.Brightness
-            Lighting.ClockTime = originalLighting.ClockTime
-            Lighting.FogEnd = originalLighting.FogEnd
-        end
-    end
+	Name = "FullBright",
+	CurrentValue = false,
+	Callback = function(v)
+		if v then
+			if fullBrightConn then fullBrightConn:Disconnect() end
+			fullBrightConn = RunService.RenderStepped:Connect(function()
+				Lighting.Brightness = 5
+				Lighting.ClockTime = 12
+				Lighting.FogEnd = 1e9
+			end)
+		else
+			if fullBrightConn then
+				fullBrightConn:Disconnect()
+				fullBrightConn = nil
+			end
+			Lighting.Brightness = originalLighting.Brightness
+			Lighting.ClockTime = originalLighting.ClockTime
+			Lighting.FogEnd = originalLighting.FogEnd
+		end
+	end
 })
 
+--================================
+-- Fog / Atmosphere Toggle
+--================================
+local fogEnabled = false
+local fogConn
+local originalFogStart = Lighting.FogStart
+local originalFogEnd = Lighting.FogEnd
+
+local savedAtmospheres = {}
+for _,v in ipairs(Lighting:GetChildren()) do
+	if v:IsA("Atmosphere") then
+		table.insert(savedAtmospheres, v:Clone())
+	end
+end
+
+local savedEffects = {}
+for _,v in ipairs(Lighting:GetChildren()) do
+	if v:IsA("BloomEffect") or v:IsA("ColorCorrectionEffect") or v:IsA("DepthOfFieldEffect") or v:IsA("SunRaysEffect") then
+		savedEffects[v] = v.Enabled
+	end
+end
+
+local function removeFog()
+	Lighting.FogStart = 1e9
+	Lighting.FogEnd = 1e9
+	for _,v in ipairs(Lighting:GetChildren()) do
+		if v:IsA("Atmosphere") then
+			v:Destroy()
+		elseif savedEffects[v] ~= nil then
+			v.Enabled = false
+		end
+	end
+end
+
+local function FogON()
+	if fogEnabled then return end
+	fogEnabled = true
+	removeFog()
+	fogConn = RunService.Heartbeat:Connect(function()
+		if fogEnabled then removeFog() end
+	end)
+end
+
+local function FogOFF()
+	fogEnabled = false
+	if fogConn then fogConn:Disconnect(); fogConn=nil end
+	Lighting.FogStart = originalFogStart
+	Lighting.FogEnd = originalFogEnd
+	for _,v in ipairs(Lighting:GetChildren()) do
+		if v:IsA("Atmosphere") then v:Destroy() end
+	end
+	for _,a in ipairs(savedAtmospheres) do a:Clone().Parent = Lighting end
+	for eff,enabled in pairs(savedEffects) do
+		if eff and eff.Parent then eff.Enabled = enabled end
+	end
+end
+
+espTab:CreateToggle({
+	Name = "Fog / Atmosphere 無効化",
+	CurrentValue = false,
+	Callback = function(v)
+		if v then FogON() else FogOFF() end
+	end
+})
 
 --================================
 -- プレイヤー Highlight
