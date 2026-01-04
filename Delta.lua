@@ -2342,7 +2342,7 @@ end)
 
 
 serverTab:CreateButton({
-    Name = "Rejoin Server",
+    Name = "サーバー入りなおし",
     Callback = function()
         TeleportService:Teleport(PlaceId, LocalPlayer)
     end
@@ -2350,7 +2350,7 @@ serverTab:CreateButton({
 
 
 serverTab:CreateToggle({
-    Name = "Rejoin Hotkey (F6)",
+    Name = "入りなおしキー (F6)",
     CurrentValue = false,
     Callback = function(v)
         rejoinHotkeyEnabled = v
@@ -2366,7 +2366,7 @@ end)
 
 
 serverTab:CreateInput({
-    Name = "Private Server Link",
+    Name = "プライベートサーバーリンク",
     PlaceholderText = "...privateServerLinkCode=XXXX",
     RemoveTextAfterFocusLost = false,
     Callback = function(text)
@@ -2375,7 +2375,7 @@ serverTab:CreateInput({
 })
 
 serverTab:CreateButton({
-    Name = "Join Private Server",
+    Name = "プライベートサーバーに参加(リンク必須)",
     Callback = function()
         local code = privateServerLink:match("privateServerLinkCode=([%w%-]+)")
         if not code then return end
@@ -2392,7 +2392,7 @@ serverTab:CreateButton({
 
 
 serverTab:CreateButton({
-    Name = "Join Random Server",
+    Name = "サーバーに参加(ランダム)",
     Callback = function()
         TeleportService:Teleport(PlaceId, LocalPlayer)
     end
@@ -2401,7 +2401,7 @@ serverTab:CreateButton({
 
 
 serverTab:CreateButton({
-    Name = "Join Low Player Server",
+    Name = "人数が少ないサーバーに参加",
     Callback = function()
         local servers = {}
         local cursor = ""
@@ -2435,7 +2435,7 @@ serverTab:CreateButton({
 
 
 serverTab:CreateButton({
-    Name = "Join Friend Server",
+    Name = "フレンドのいるサーバーに参加",
     Callback = function()
         local pages = Players:GetFriendsAsync(LocalPlayer.UserId)
         for _, friend in ipairs(pages:GetCurrentPage()) do
@@ -2453,7 +2453,7 @@ serverTab:CreateButton({
 
 
 serverTab:CreateToggle({
-    Name = "Auto Rejoin (Kick対応)",
+    Name = "キック時に自動参加",
     CurrentValue = false,
     Callback = function(v)
         autoRejoinEnabled = v
