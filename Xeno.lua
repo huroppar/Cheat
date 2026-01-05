@@ -410,7 +410,55 @@ RunService.RenderStepped:Connect(function()
 end)
 
 
+local savedCFrame = nil  -- ← 常に1つだけ保存する
+-- 位置記録ボタン
+playerTab:CreateButton({
+    Name = "位置記録を記録",
+    Callback = function()
+        local char = player.Character
+        local hrp = char and char:FindFirstChild("HumanoidRootPart")
 
+        if hrp then
+            savedCFrame = hrp.CFrame  -- ← 上書き保存
+            RayField:Notify({
+                Title = "位置記録",
+                Content = "現在位置を保存したよ！（前のデータは削除）",
+                Duration = 2
+            })
+        else
+            RayField:Notify({
+                Title = "エラー",
+                Content = "キャラが見つからないよ！",
+                Duration = 2
+            })
+        end
+    end
+})
+
+
+-- TPボタン
+playerTab:CreateButton({
+    Name = "記録位置にTP",
+    Callback = function()
+        local char = player.Character
+        local hrp = char and char:FindFirstChild("HumanoidRootPart")
+
+        if savedCFrame and hrp then
+            hrp.CFrame = savedCFrame
+            RayField:Notify({
+                Title = "テレポート",
+                Content = "保存した場所へTPしたよ！",
+                Duration = 2
+            })
+        else
+            RayField:Notify({
+                Title = "エラー",
+                Content = "保存された位置がないよ！",
+                Duration = 2
+            })
+        end
+    end
+})
 --================================
 -- ESP TAB
 --================================
