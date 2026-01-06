@@ -1834,13 +1834,13 @@ local originalHeadSize = {}
 
 -- 敵Head拡大トグル
 autoAimTab:CreateToggle({
-    Name = "敵Head拡大",
+    Name = "Head拡大（全員）",
     CurrentValue = false,
     Callback = function(v)
         headHitboxEnabled = v
 
         for _, plr in ipairs(Players:GetPlayers()) do
-            if plr ~= LocalPlayer and isEnemy(plr) and plr.Character then
+            if plr ~= localPlayer and plr.Character then
                 local head = plr.Character:FindFirstChild("Head")
                 if head then
                     if v then
@@ -1864,9 +1864,10 @@ autoAimTab:CreateToggle({
     end
 })
 
+
 -- 敵Head倍率スライダー
-autoAimTab:CreateSlider({
-    Name = "敵Head倍率",
+aautoAimTab:CreateSlider({
+    Name = "Head倍率",
     Range = {1, 15000},
     Increment = 0.1,
     Suffix = "倍",
@@ -1876,7 +1877,7 @@ autoAimTab:CreateSlider({
 
         if headHitboxEnabled then
             for _, plr in ipairs(Players:GetPlayers()) do
-                if plr ~= LocalPlayer and isEnemy(plr) and plr.Character then
+                if plr ~= localPlayer and plr.Character then
                     local head = plr.Character:FindFirstChild("Head")
                     if head and originalHeadSize[plr] then
                         head.Size = originalHeadSize[plr] * headScale
@@ -1887,6 +1888,7 @@ autoAimTab:CreateSlider({
         end
     end
 })
+
 
 
 
