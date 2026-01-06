@@ -417,7 +417,7 @@ local savedCFrame = nil
 
 -- 現在地を保存
 playerTab:CreateButton({
-    Name = "現在地を保存）",
+    Name = "現在地を保存",
     Callback = function()
         local plr = game.Players.LocalPlayer
         local char = plr.Character or plr.CharacterAdded:Wait()
