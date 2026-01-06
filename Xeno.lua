@@ -410,55 +410,42 @@ RunService.RenderStepped:Connect(function()
 end)
 
 
-local savedCFrame = nil  -- ← 常に1つだけ保存する
--- 位置記録ボタン
-playerTab:CreateButton({
-    Name = "位置記録を記録",
-    Callback = function()
-        local char = player.Character
-        local hrp = char and char:FindFirstChild("HumanoidRootPart")
+--========================
+-- 位置保存 / TP（1スロット）
+--========================
+local savedCFrame = nil
 
-        if hrp then
-            savedCFrame = hrp.CFrame  -- ← 上書き保存
-            RayField:Notify({
-                Title = "位置記録",
-                Content = "現在位置を保存したよ！（前のデータは削除）",
-                Duration = 2
-            })
-        else
-            RayField:Notify({
-                Title = "エラー",
-                Content = "キャラが見つからないよ！",
-                Duration = 2
-            })
-        end
+-- 現在地を保存
+autoAimTab:CreateButton({
+    Name = "現在地を保存）",
+    Callback = function()
+        local plr = game.Players.LocalPlayer
+        local char = plr.Character or plr.CharacterAdded:Wait()
+        local hrp = char:WaitForChild("HumanoidRootPart")
+
+        savedCFrame = hrp.CFrame
+        warn("位置を保存した（前のは消えた）")
     end
 })
 
-
--- TPボタン
-playerTab:CreateButton({
-    Name = "記録位置にTP",
+-- 保存地点にTP
+autoAimTab:CreateButton({
+    Name = "保存地点にTP",
     Callback = function()
-        local char = player.Character
-        local hrp = char and char:FindFirstChild("HumanoidRootPart")
-
-        if savedCFrame and hrp then
-            hrp.CFrame = savedCFrame
-            RayField:Notify({
-                Title = "テレポート",
-                Content = "保存した場所へTPしたよ！",
-                Duration = 2
-            })
-        else
-            RayField:Notify({
-                Title = "エラー",
-                Content = "保存された位置がないよ！",
-                Duration = 2
-            })
+        if not savedCFrame then
+            warn("まだ位置が保存されてない")
+            return
         end
+
+        local plr = game.Players.LocalPlayer
+        local char = plr.Character or plr.CharacterAdded:Wait()
+        local hrp = char:WaitForChild("HumanoidRootPart")
+
+        hrp.Anchored = false
+        hrp.CFrame = savedCFrame
     end
 })
+
 --================================
 -- ESP TAB
 --================================
