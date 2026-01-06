@@ -1890,7 +1890,116 @@ autoAimTab:CreateSlider({
 })
 
 
+local enemyHeadEnabled = false
+local HEAD_SCALE = 6
+local UPDATE_INTERVAL = 1
 
+local originalHeadSize = {} -- [Head] = Vector3
+local EnemiesFolder = Workspace:FindFirstChild("Enemies")
+
+-- BOT判定（プレイヤー除外）
+local function isEnemyBot(model)
+	if Players:GetPlayerFromCharacter(model) then
+		return false
+	end
+	if not model:IsA("Model") then return false end
+
+	local hum = model:FindFirstChildOfClass("Humanoid")
+	local head = model:FindFirstChild("Head")
+	local hrp = model:FindFirstChild("HumanoidRootPart")
+
+	return hum and head and hrp and hum.Health > 0
+end
+
+-- Head適用
+local function applyHead(head)
+	if not originalHeadSize[head] then
+		originalHeadSize[head] = head.Size
+	end
+
+	head.Size = originalHeadSize[head] * HEAD_SCALE
+	head.Transparency = 0.5
+	head.CanCollide = false
+	head.Massless = true
+end
+
+-- すべて即反映
+local function refreshAllHeads()
+	for head, size in pairs(originalHeadSize) do
+		if head and head.Parent then
+			head.Size = size * HEAD_SCALE
+			head.Transparency = 0.5
+			head.CanCollide = false
+			head.Massless = true
+		end
+	end
+end
+
+-- 元に戻す
+local function resetAllHeads()
+	for head, size in pairs(originalHeadSize) do
+		if head and head.Parent then
+			head.Size = size
+			head.Transparency = 0
+		end
+	end
+end
+
+-- 1秒更新ループ
+task.spawn(function()
+	while true do
+		task.wait(UPDATE_INTERVAL)
+
+		if not enemyHeadEnabled then continue end
+		if not EnemiesFolder then continue end
+
+		for _, npc in ipairs(EnemiesFolder:GetChildren()) do
+			if isEnemyBot(npc) then
+				local head = npc:FindFirstChild("Head")
+				if head and head:IsA("BasePart") then
+					if not originalHeadSize[head] then
+						applyHead(head)
+					end
+				end
+			end
+		end
+	end
+end)
+
+--====================
+-- GUI（既存autoAimTab）
+--====================
+
+-- ON / OFF
+autoAimTab:CreateToggle({
+	Name = "敵BOT Head拡大",
+	CurrentValue = false,
+	Flag = "EnemyBotHeadHitbox",
+	Callback = function(v)
+		enemyHeadEnabled = v
+		if v then
+			refreshAllHeads()
+		else
+			resetAllHeads()
+		end
+	end
+})
+
+-- サイズ調整
+autoAimTab:CreateSlider({
+	Name = "敵BOT Head倍率",
+	Range = {1, 20},
+	Increment = 0.5,
+	Suffix = "倍",
+	CurrentValue = HEAD_SCALE,
+	Flag = "EnemyBotHeadScale",
+	Callback = function(v)
+		HEAD_SCALE = v
+		if enemyHeadEnabled then
+			refreshAllHeads()
+		end
+	end
+})
 
 
 --============================
