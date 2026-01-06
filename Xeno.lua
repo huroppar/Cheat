@@ -1840,21 +1840,23 @@ autoAimTab:CreateToggle({
         headHitboxEnabled = v
 
         for _, plr in ipairs(Players:GetPlayers()) do
-            if plr ~= localPlayer and plr.Character then
-                local head = plr.Character:FindFirstChild("Head")
-                if head then
+            if plr ~= localPlayer then
+                local char = plr.Character
+                local head = char and char:FindFirstChild("Head")
+
+                if head and head:IsA("BasePart") then
                     if v then
-                        if not originalHeadSize[plr] then
-                            originalHeadSize[plr] = head.Size
+                        if not originalHeadSize[head] then
+                            originalHeadSize[head] = head.Size
                         end
 
-                        head.Size = originalHeadSize[plr] * headScale
+                        head.Size = originalHeadSize[head] * headScale
                         head.Transparency = 0.5
                         head.CanCollide = false
                         head.Massless = true
                     else
-                        if originalHeadSize[plr] then
-                            head.Size = originalHeadSize[plr]
+                        if originalHeadSize[head] then
+                            head.Size = originalHeadSize[head]
                         end
                         head.Transparency = 0
                     end
@@ -1865,10 +1867,11 @@ autoAimTab:CreateToggle({
 })
 
 
+
 -- 敵Head倍率スライダー
 autoAimTab:CreateSlider({
     Name = "Head倍率",
-    Range = {1, 1500},
+    Range = {1, 2000},
     Increment = 0.1,
     Suffix = "倍",
     CurrentValue = 1,
@@ -1876,18 +1879,16 @@ autoAimTab:CreateSlider({
         headScale = v
 
         if headHitboxEnabled then
-            for _, plr in ipairs(Players:GetPlayers()) do
-                if plr ~= localPlayer and plr.Character then
-                    local head = plr.Character:FindFirstChild("Head")
-                    if head and originalHeadSize[plr] then
-                        head.Size = originalHeadSize[plr] * headScale
-                        head.Transparency = 0.5
-                    end
+            for head, size in pairs(originalHeadSize) do
+                if head and head.Parent then
+                    head.Size = size * headScale
+                    head.Transparency = 0.5
                 end
             end
         end
     end
 })
+
 
 
 
