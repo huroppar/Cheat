@@ -1866,7 +1866,7 @@ autoAimTab:CreateToggle({
 
 
 -- 敵Head倍率スライダー
-aautoAimTab:CreateSlider({
+autoAimTab:CreateSlider({
     Name = "Head倍率",
     Range = {1, 15000},
     Increment = 0.1,
