@@ -1036,16 +1036,9 @@ espTab:CreateSlider({
 --========================================================--
 --                     🔥 Combat Tab + Invisible 完全統合版（地面補正付き）
 --========================================================--
-
-local Players = game:GetService("Players")
-local RunService = game:GetService("RunService")
-local player = Players.LocalPlayer
-local camera = workspace.CurrentCamera
-
-
-
 local combatTab = Window:CreateTab("戦闘", 4483362458)
-
+local camera = workspace.CurrentCamera
+local player = Players.LocalPlayer
 --============================--
 -- 状態変数
 --============================--
@@ -1398,12 +1391,9 @@ end)
 --========================================================--
 
 --================= Services =================
-local Players = game:GetService("Players")
-local RunService = game:GetService("RunService")
 local UIS = game:GetService("UserInputService")
 local Workspace = game:GetService("Workspace")
 
-local LocalPlayer = Players.LocalPlayer
 local humanoid, rootPart
 local parts = {}
 
@@ -1532,22 +1522,17 @@ end)
 --========================================================--
 --                🎯 Auto Aim Tab (Tab2)                 --
 --========================================================--
-
-local Players = game:GetService("Players")
-local RunService = game:GetService("RunService")
-local UIS = game:GetService("UserInputService")
-
-local localPlayer = Players.LocalPlayer
-local camera = workspace.CurrentCamera
-
---====================
--- 設定
---====================
-local autoAimEnabled = false
-local lockedPart = nil
-local FOV_RADIUS = 160
-local AIM_PART = "HumanoidRootPart"
-local AIM_STRENGTH = 0.35
+local Players = game:GetService("Players") 
+local RunService = game:GetService("RunService") 
+local UIS = game:GetService("UserInputService") 
+local localPlayer = Players.LocalPlayer 
+local camera = workspace.CurrentCamera 
+--==================== -- 設定 --==================== 
+local autoAimEnabled = false 
+local lockedPart = nil 
+local FOV_RADIUS = 160 
+local AIM_PART = "HumanoidRootPart" 
+local AIM_STRENGTH = 0.35 
 local showFOV = true
 
 --====================
@@ -1809,6 +1794,36 @@ autoAimTab:CreateToggle({
     end
 })
 
+-- DropDown用テーブル
+local fruitList = {}
+
+-- DropDown作成
+local fruitDropDown = autoAimTab:CreateDropdown({
+    Name = "Fruit 一覧",
+    Options = fruitList,
+    CurrentOption = nil,
+    Callback = function(selected)
+        print("選択されたFruit:", selected)
+    end
+})
+
+-- 更新ボタン
+autoAimTab:CreateButton({
+    Name = "更新",
+    Callback = function()
+        -- Fruitリスト更新
+        fruitList = {}
+        for _, obj in ipairs(workspace:GetDescendants()) do
+            if string.lower(obj.Name) == "fruit" then
+                table.insert(fruitList, obj:GetFullName())
+            end
+        end
+
+        -- DropDown更新
+        fruitDropDown:Refresh(fruitList)
+        print("Fruitリスト更新完了")
+    end
+})
 
 
 --================================
@@ -1919,7 +1934,6 @@ local RadiusSlider = EnemyTab:CreateSlider({
 --============================
 -- 敵吸引処理
 --============================
-local player = game.Players.LocalPlayer
 local run = game:GetService("RunService")
 local enemyFolder = workspace:FindFirstChild("Enemies") -- 存在しない場合は nil
 
@@ -1949,11 +1963,7 @@ end)
 --=============================
 -- ハンティ・ゾンビタブ（敵ESP統合）
 --=============================
-local Players = game:GetService("Players")
-local RunService = game:GetService("RunService")
-local Workspace = game:GetService("Workspace")
 
-local player = Players.LocalPlayer
 local huntTab = Window:CreateTab("ハンティ・ゾンビ", 4483362458)
 
 --=============================
