@@ -424,7 +424,7 @@ playerTab:CreateButton({
         local hrp = char:WaitForChild("HumanoidRootPart")
 
         savedCFrame = hrp.CFrame
-        warn("位置を保存した（前のは消えた）")
+        warn("位置を保存した")
     end
 })
 
