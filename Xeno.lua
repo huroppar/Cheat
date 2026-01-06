@@ -416,7 +416,7 @@ end)
 local savedCFrame = nil
 
 -- 現在地を保存
-autoAimTab:CreateButton({
+playerTab:CreateButton({
     Name = "現在地を保存）",
     Callback = function()
         local plr = game.Players.LocalPlayer
@@ -429,7 +429,7 @@ autoAimTab:CreateButton({
 })
 
 -- 保存地点にTP
-autoAimTab:CreateButton({
+playerTab:CreateButton({
     Name = "保存地点にTP",
     Callback = function()
         if not savedCFrame then
