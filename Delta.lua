@@ -511,56 +511,6 @@ playerTab:CreateToggle({
 
 
 
-local savedCFrame = nil  -- ← 常に1つだけ保存する
--- 位置記録ボタン
-playerTab:CreateButton({
-    Name = "位置記録を記録",
-    Callback = function()
-        local char = player.Character
-        local hrp = char and char:FindFirstChild("HumanoidRootPart")
-
-        if hrp then
-            savedCFrame = hrp.CFrame  -- ← 上書き保存
-            RayField:Notify({
-                Title = "位置記録",
-                Content = "現在位置を保存したよ！（前のデータは削除）",
-                Duration = 2
-            })
-        else
-            RayField:Notify({
-                Title = "エラー",
-                Content = "キャラが見つからないよ！",
-                Duration = 2
-            })
-        end
-    end
-})
-
-
--- TPボタン
-playerTab:CreateButton({
-    Name = "記録位置にTP",
-    Callback = function()
-        local char = player.Character
-        local hrp = char and char:FindFirstChild("HumanoidRootPart")
-
-        if savedCFrame and hrp then
-            hrp.CFrame = savedCFrame
-            RayField:Notify({
-                Title = "テレポート",
-                Content = "保存した場所へTPしたよ！",
-                Duration = 2
-            })
-        else
-            RayField:Notify({
-                Title = "エラー",
-                Content = "保存された位置がないよ！",
-                Duration = 2
-            })
-        end
-    end
-})
-
 --=============================
 -- Fly機能（PC + スマホ対応・重力のみ無効）
 --=============================
@@ -687,6 +637,42 @@ end)
 
 
 
+
+--========================
+-- 位置保存 / TP（1スロット）
+--========================
+local savedCFrame = nil
+
+-- 現在地を保存
+playerTab:CreateButton({
+    Name = "現在地を保存",
+    Callback = function()
+        local plr = game.Players.LocalPlayer
+        local char = plr.Character or plr.CharacterAdded:Wait()
+        local hrp = char:WaitForChild("HumanoidRootPart")
+
+        savedCFrame = hrp.CFrame
+        warn("位置を保存した")
+    end
+})
+
+-- 保存地点にTP
+playerTab:CreateButton({
+    Name = "保存地点にTP",
+    Callback = function()
+        if not savedCFrame then
+            warn("まだ位置が保存されてない")
+            return
+        end
+
+        local plr = game.Players.LocalPlayer
+        local char = plr.Character or plr.CharacterAdded:Wait()
+        local hrp = char:WaitForChild("HumanoidRootPart")
+
+        hrp.Anchored = false
+        hrp.CFrame = savedCFrame
+    end
+})
 
 --================================
 -- ESP TAB
@@ -2063,27 +2049,29 @@ local originalHeadSize = {}
 
 -- 敵Head拡大トグル
 autoAimTab:CreateToggle({
-    Name = "敵Head拡大",
+    Name = "Head拡大（全員）",
     CurrentValue = false,
     Callback = function(v)
         headHitboxEnabled = v
 
         for _, plr in ipairs(Players:GetPlayers()) do
-            if plr ~= LocalPlayer and isEnemy(plr) and plr.Character then
-                local head = plr.Character:FindFirstChild("Head")
-                if head then
+            if plr ~= localPlayer then
+                local char = plr.Character
+                local head = char and char:FindFirstChild("Head")
+
+                if head and head:IsA("BasePart") then
                     if v then
-                        if not originalHeadSize[plr] then
-                            originalHeadSize[plr] = head.Size
+                        if not originalHeadSize[head] then
+                            originalHeadSize[head] = head.Size
                         end
 
-                        head.Size = originalHeadSize[plr] * headScale
+                        head.Size = originalHeadSize[head] * headScale
                         head.Transparency = 0.5
                         head.CanCollide = false
                         head.Massless = true
                     else
-                        if originalHeadSize[plr] then
-                            head.Size = originalHeadSize[plr]
+                        if originalHeadSize[head] then
+                            head.Size = originalHeadSize[head]
                         end
                         head.Transparency = 0
                     end
@@ -2093,10 +2081,12 @@ autoAimTab:CreateToggle({
     end
 })
 
+
+
 -- 敵Head倍率スライダー
 autoAimTab:CreateSlider({
-    Name = "敵Head倍率",
-    Range = {1, 15000},
+    Name = "Head倍率",
+    Range = {1, 2000},
     Increment = 0.1,
     Suffix = "倍",
     CurrentValue = 1,
@@ -2104,18 +2094,16 @@ autoAimTab:CreateSlider({
         headScale = v
 
         if headHitboxEnabled then
-            for _, plr in ipairs(Players:GetPlayers()) do
-                if plr ~= LocalPlayer and isEnemy(plr) and plr.Character then
-                    local head = plr.Character:FindFirstChild("Head")
-                    if head and originalHeadSize[plr] then
-                        head.Size = originalHeadSize[plr] * headScale
-                        head.Transparency = 0.5
-                    end
+            for head, size in pairs(originalHeadSize) do
+                if head and head.Parent then
+                    head.Size = size * headScale
+                    head.Transparency = 0.5
                 end
             end
         end
     end
 })
+
 
 
 
