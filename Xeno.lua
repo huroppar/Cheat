@@ -633,7 +633,7 @@ end)
 
 espTab:CreateToggle({
 	Name = "Clock GUI 表示",
-	CurrentValue = true,
+	CurrentValue = false,
 	Callback = function(v)
 		clockGuiEnabled = v
 		if clockGui then
@@ -1211,7 +1211,7 @@ combatTab:CreateToggle({
 
 combatTab:CreateToggle({
     Name = "キーで切替有効",
-    CurrentValue = true,
+    CurrentValue = false,
     Callback = function(v) keybindEnabled = v end
 })
 
