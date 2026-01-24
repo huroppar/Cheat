@@ -579,11 +579,13 @@ end)
 -- Clock（ESPラベル + 自作GUI）
 --================================
 local ClockLabel = espTab:CreateLabel("Time: --:--")
+local clockGuiEnabled = false
 
 -- 自作GUI
 local clockGui = Instance.new("ScreenGui")
 clockGui.Name = "ClockGui"
 clockGui.ResetOnSpawn = false
+clockGui.Enabled = false
 clockGui.Parent = game.CoreGui
 
 local clockFrame = Instance.new("Frame")
