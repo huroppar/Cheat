@@ -475,7 +475,7 @@ local chestHighlight = false
 local hitboxEnabled = false
 local worldXrayAlpha = 0.6
 local playerXrayAlpha = 0.6
-local clockGuiEnabled = true
+local clockGuiEnabled = false
 
 --================================
 -- 管理テーブル
@@ -1066,7 +1066,7 @@ local UserInputService = game:GetService("UserInputService")
 local invisible = false
 local parts = {}
 local invisibleKey = Enum.KeyCode.G
-local keybindEnabled = true
+local keybindEnabled = false
 local character, humanoid, rootPart
 
 local function setupCharacter()
@@ -1250,11 +1250,16 @@ local function CreatePlayerButton(plr)
         Name = plr.Name.." ["..hp.."/"..maxhp.."]",
         Callback = function()
             selectedTarget = plr
-            RayField:Notify({Title="選択", Content=plr.Name.." をターゲットにしたよ！", Duration=3})
+            Rayfield:Notify({
+				Title = "選択", 
+				Content = plr.Name.." をターゲットにしたよ！", 
+				Duration = 3 
+			})
         end
     })
     playerButtons[plr] = btn
 end
+
 
 local function UpdatePlayerList()
     local current = {}
