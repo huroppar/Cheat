@@ -1033,7 +1033,133 @@ espTab:CreateSlider({
         end
     end
 })
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
 
+local player = Players.LocalPlayer
+--------------------------------------------------
+-- 状態
+--------------------------------------------------
+local VFXEnabled = false          -- FruitVFXColor
+local RainbowEnabled = false     -- Rainbow
+local SelectedColor = Color3.fromRGB(255, 0, 0)
+
+local hue = 0
+local RAINBOW_SPEED = 0.12
+local HUE_OFFSET = 0.08
+
+--------------------------------------------------
+-- VFX 自動検出
+--------------------------------------------------
+local function scanVFX()
+    local results = {}
+
+    for _, vfx in ipairs(player:GetChildren()) do
+        if vfx:IsA("Folder") and vfx.Name:find("FruitVFXColor") then
+            local container =
+                vfx:FindFirstChild("Shifted")
+                or vfx:FindFirstChild("Default")
+
+            if container then
+                local attrs = {}
+                for name, val in pairs(container:GetAttributes()) do
+                    if typeof(val) == "Color3" then
+                        table.insert(attrs, name)
+                    end
+                end
+
+                if #attrs > 0 then
+                    table.insert(results, {
+                        folder = container,
+                        attrs = attrs
+                    })
+                end
+            end
+        end
+    end
+
+    return results
+end
+
+--------------------------------------------------
+-- 色適用（唯一の出口）
+--------------------------------------------------
+local function ApplyVFXColor()
+    if not VFXEnabled and not RainbowEnabled then return end
+
+    local targets = scanVFX()
+    if #targets == 0 then return end
+
+    -- 🌈 Rainbow が最優先
+    if RainbowEnabled then
+        hue = (hue + RAINBOW_SPEED) % 1
+
+        for _, data in ipairs(targets) do
+            for i, attr in ipairs(data.attrs) do
+                local h = (hue + (i - 1) * HUE_OFFSET) % 1
+                data.folder:SetAttribute(
+                    attr,
+                    Color3.fromHSV(h, 1, 1)
+                )
+            end
+        end
+
+    -- 🎨 単色
+    elseif VFXEnabled then
+        for _, data in ipairs(targets) do
+            for _, attr in ipairs(data.attrs) do
+                data.folder:SetAttribute(attr, SelectedColor)
+            end
+        end
+    end
+end
+
+--------------------------------------------------
+-- 更新ループ（軽量）
+--------------------------------------------------
+task.spawn(function()
+    while true do
+        task.wait(0.6)
+        ApplyVFXColor()
+    end
+end)
+
+--------------------------------------------------
+-- ===== Rayfield GUI（espTab）=====
+--------------------------------------------------
+
+-- FruitVFXColor ON / OFF
+espTab:CreateToggle({
+    Name = "Fruit VFX Color",
+    CurrentValue = false,
+    Callback = function(v)
+        VFXEnabled = v
+        ApplyVFXColor()
+    end
+})
+
+-- Rainbow ON / OFF（独立）
+espTab:CreateToggle({
+    Name = "Rainbow VFX",
+    CurrentValue = false,
+    Callback = function(v)
+        RainbowEnabled = v
+        ApplyVFXColor()
+    end
+})
+
+-- Color Picker（Rainbow OFF 時のみ有効）
+espTab:CreateColorPicker({
+    Name = "VFX Color",
+    Color = SelectedColor,
+    Flag = "FruitVFXColor",
+    Callback = function(c)
+        SelectedColor = c
+        if VFXEnabled and not RainbowEnabled then
+            ApplyVFXColor()
+        end
+    end
+})
 
 --========================================================--
 --                     🔥 Combat Tab + Invisible 完全統合版（地面補正付き）
