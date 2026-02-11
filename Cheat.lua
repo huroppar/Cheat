@@ -78,7 +78,7 @@ end
 -- PC ボタン
 local PCButton = CreateButton(Frame, "PC", 0.05, Color3.fromRGB(0,200,255))
 -- Mobile ボタン
-local MobileButton = CreateButton(Frame, "IOSまたはAndroid", 0.5, Color3.fromRGB(255,0,255))
+local MobileButton = CreateButton(Frame, "IOSまたはAndroid(停止中)", 0.5, Color3.fromRGB(255,0,255))
 
 --================= ボタンクリック処理 =================--
 PCButton.MouseButton1Click:Connect(function()
