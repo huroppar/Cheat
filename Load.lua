@@ -2,7 +2,7 @@
 --           🔑 自前作成 Key GUI (近未来風)            --
 --========================================================--
 
-local VALID_KEY = "RobloxCheatScriptVer2"
+local VALID_KEY = "FRP"
 local ScreenGui = Instance.new("ScreenGui")
 ScreenGui.Name = "FutureKeyGUI"
 ScreenGui.ResetOnSpawn = false
