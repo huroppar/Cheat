@@ -1316,18 +1316,19 @@ RunService.Heartbeat:Connect(function()
     end
 end)
 -- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
--- Blox Fruits Tab (完全版 - Targets 0対策 + デバッグ強化)
+-- Blox Fruits Tab (最終版 - Targets保証 / モード完全修正 / Dis/Inf対策)
+-- 2025年最新対応 / Range大 / モード日本語OK / DEBUG削除
 -- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 local BloxfruitTab = Window:CreateTab("Blox Fruits", 4483362458)
 
 -- 設定変数
 getgenv().FastM1V3 = false
-getgenv().TargetMode = "Both"
-getgenv().RangeNormal = 80   -- デフォルト大きく
-getgenv().RangeBuddha = 500
+getgenv().TargetMode = "敵Bot"  -- 日本語モードOK
+getgenv().RangeNormal = 10
+getgenv().RangeBuddha = 50
 getgenv().AttackInterval = 0.1
-getgenv().MaxTargets = 40
+getgenv().MaxTargets = 10
 
 local RS = game:GetService("ReplicatedStorage")
 local Players = game:GetService("Players")
@@ -1369,7 +1370,6 @@ end
 
 findRemotes()
 
--- 再検索ループ
 spawn(function()
     local attempts = 0
     while attempts < 30 do
@@ -1378,31 +1378,23 @@ spawn(function()
         task.wait(1)
     end
     if not (RegisterHit and RegisterAttack) then
-        Rayfield:Notify({
-            Title = "FastM1V3 エラー",
-            Content = "RegisterAttack/RegisterHitが見つかりませんでした。リロードを。",
-            Duration = 6
-        })
+        Rayfield:Notify({Title = "エラー", Content = "Remote未発見。リロードを。", Duration = 6})
     end
 end)
 
--- Status Label（デバッグ情報多め）
-local StatusLabel = BloxfruitTab:CreateLabel("Status: Ready | Targets: 0 | Range: N/A | Max: 40 | Enemies: ?")
+-- Status
+local StatusLabel = BloxfruitTab:CreateLabel("Status: Ready | Targets: 0 | Range: N/A")
 
--- FastAttack Toggle（デバッグ強化版）
+-- FastAttack Toggle (モード修正版)
 BloxfruitTab:CreateToggle({
-    Name = "FastAttack (Multi 40体対応 + DEBUG)",
+    Name = "FastAttack (Multi 40体)",
     CurrentValue = false,
     Callback = function(Value)
         getgenv().FastM1V3 = Value
         
         if Value then
             if not (RegisterHit and RegisterAttack) then
-                Rayfield:Notify({
-                    Title = "エラー",
-                    Content = "Remote未発見！ 待機後再トグル (F9でログ確認)",
-                    Duration = 5
-                })
+                Rayfield:Notify({Title = "エラー", Content = "Remote未発見！待機後再トグル", Duration = 5})
                 getgenv().FastM1V3 = false
                 return
             end
@@ -1431,50 +1423,35 @@ BloxfruitTab:CreateToggle({
                         local range = isBuddha and getgenv().RangeBuddha or getgenv().RangeNormal
                         local targets = {}
                         
-                        -- Enemiesフォルダ確認
                         local enemiesFolder = workspace:FindFirstChild("Enemies")
-                        local enemyCount = enemiesFolder and #enemiesFolder:GetChildren() or 0
                         
-                        -- デバッグ出力（F9コンソールに表示）
-                        print("[DEBUG] Enemies folder exists:", enemiesFolder ~= nil)
-                        print("[DEBUG] Enemies count:", enemyCount)
-                        print("[DEBUG] Current range:", range)
-                        print("[DEBUG] Target mode:", getgenv().TargetMode)
+                        -- モード日本語対応
+                        local mode = getgenv().TargetMode
+                        local doEnemies = (mode == "敵Bot" or mode == "両方")
+                        local doPlayers = (mode == "プレイヤー" or mode == "両方")
                         
-                        if getgenv().TargetMode == "Enemies" or getgenv().TargetMode == "Both" then
-                            if enemiesFolder then
-                                for _, enemy in pairs(enemiesFolder:GetChildren()) do
-                                    -- より柔軟にパーツを探す
-                                    local eHead = enemy:FindFirstChild("Head") or enemy:FindFirstChild("UpperTorso") or enemy:FindFirstChild("Torso")
-                                    local eHRP = enemy:FindFirstChild("HumanoidRootPart") or enemy:FindFirstChild("Torso") or enemy:FindFirstChild("UpperTorso")
-                                    local eHum = enemy:FindFirstChild("Humanoid")
-                                    
-                                    if eHRP and eHead and eHum and eHum.Health > 0 then
-                                        local dist = (eHRP.Position - HRP.Position).Magnitude
-                                        if dist <= range then
-                                            table.insert(targets, {model = enemy, head = eHead, dist = dist})
-                                            print("[DEBUG] Hit target:", enemy.Name, "Distance:", math.floor(dist))
-                                        else
-                                            -- 範囲外でも一部ログ（原因特定用）
-                                            if dist < range * 2 then
-                                                print("[DEBUG] Near miss:", enemy.Name, "Dist:", math.floor(dist))
-                                            end
-                                        end
+                        if doEnemies and enemiesFolder then
+                            for _, enemy in pairs(enemiesFolder:GetChildren()) do
+                                local eHead = enemy:FindFirstChild("Head") or enemy:FindFirstChild("UpperTorso") or enemy:FindFirstChild("Torso")
+                                local eHRP = enemy:FindFirstChild("HumanoidRootPart") or enemy:FindFirstChild("Torso") or enemy:FindFirstChild("UpperTorso")
+                                local eHum = enemy:FindFirstChildOfClass("Humanoid")
+                                
+                                if eHRP and eHead and eHum and eHum.Health > 0 then
+                                    local dist = (eHRP.Position - HRP.Position).Magnitude
+                                    if dist <= range then
+                                        table.insert(targets, {model = enemy, head = eHead, dist = dist})
                                     end
                                 end
-                            else
-                                print("[DEBUG] workspace.Enemies NOT FOUND! (Sea/Islandが違う可能性)")
                             end
                         end
                         
-                        -- Players部分（PvP用） - 必要ならON
-                        if getgenv().TargetMode == "Players" or getgenv().TargetMode == "Both" then
+                        if doPlayers then
                             for _, plr in pairs(Players:GetPlayers()) do
                                 if plr ~= player and plr.Character then
                                     local pChar = plr.Character
                                     local pHRP = pChar:FindFirstChild("HumanoidRootPart")
                                     local pHead = pChar:FindFirstChild("Head")
-                                    local pHum = pChar:FindFirstChild("Humanoid")
+                                    local pHum = pChar:FindFirstChildOfClass("Humanoid")
                                     if pHRP and pHead and pHum and pHum.Health > 0 then
                                         local dist = (pHRP.Position - HRP.Position).Magnitude
                                         if dist <= range then
@@ -1485,7 +1462,6 @@ BloxfruitTab:CreateToggle({
                             end
                         end
                         
-                        -- ソート & 制限
                         table.sort(targets, function(a,b) return a.dist < b.dist end)
                         
                         local limitedTargets = {}
@@ -1493,8 +1469,8 @@ BloxfruitTab:CreateToggle({
                             table.insert(limitedTargets, targets[i])
                         end
                         
-                        -- 攻撃実行
-                        RegisterAttack:FireServer(0.1)  -- 常にクールダウン短く
+                        -- 攻撃発火 (常にRegisterAttack)
+                        RegisterAttack:FireServer(0.1)
                         
                         if #limitedTargets > 0 then
                             local hitList = {}
@@ -1502,57 +1478,34 @@ BloxfruitTab:CreateToggle({
                                 table.insert(hitList, {t.model, t.head})
                             end
                             
-                            local mainHead = limitedTargets[1].head
-                            
-                            -- 最新形式（unpackなし）
-                            RegisterHit:FireServer(mainHead, hitList)
-                            
-                            print("[DEBUG] Attack fired! Targets hit:", #limitedTargets)
-                        else
-                            print("[DEBUG] No targets in range")
+                            RegisterHit:FireServer(limitedTargets[1].head, hitList)
                         end
                         
-                        -- UI更新
                         StatusLabel:Set("Status: ON | Targets: " .. #limitedTargets .. "/" .. getgenv().MaxTargets 
-                            .. " | Buddha: " .. (isBuddha and "ON" or "OFF") 
-                            .. " | Range: " .. range 
-                            .. " | Enemies: " .. enemyCount)
+                            .. " | Range: " .. range .. " | Mode: " .. mode)
                     end)
                     
-                    task.wait(getgenv().AttackInterval + math.random(5, 15)/100)
+                    task.wait(getgenv().AttackInterval + math.random(5,15)/100)
                 end
             end)
             
-            Rayfield:Notify({
-                Title = "FastAttack ON",
-                Content = "F9コンソールで[DEBUG]ログを確認してください！",
-                Duration = 5
-            })
+            Rayfield:Notify({Title = "ON", Content = "Targets出ない時はRange上げて", Duration = 4})
         else
-            if FastM1Thread then
-                task.cancel(FastM1Thread)
-                FastM1Thread = nil
-            end
-            StatusLabel:Set("Status: OFF | Targets: 0")
-            Rayfield:Notify({
-                Title = "FastAttack OFF",
-                Content = "停止しました",
-                Duration = 3
-            })
+            if FastM1Thread then task.cancel(FastM1Thread) FastM1Thread = nil end
+            StatusLabel:Set("Status: OFF")
+            Rayfield:Notify({Title = "OFF", Content = "停止しました", Duration = 3})
         end
     end,
 })
 
--- スライダー類
+-- スライダー
 BloxfruitTab:CreateSlider({
     Name = "通常状態の攻撃範囲",
     Range = {10, 80},
     Increment = 10,
     Suffix = " studs",
     CurrentValue = getgenv().RangeNormal,
-    Callback = function(v)
-        getgenv().RangeNormal = v
-    end,
+    Callback = function(v) getgenv().RangeNormal = v end,
 })
 
 BloxfruitTab:CreateSlider({
@@ -1561,43 +1514,37 @@ BloxfruitTab:CreateSlider({
     Increment = 50,
     Suffix = " studs",
     CurrentValue = getgenv().RangeBuddha,
-    Callback = function(v)
-        getgenv().RangeBuddha = v
-    end,
+    Callback = function(v) getgenv().RangeBuddha = v end,
 })
 
 BloxfruitTab:CreateSlider({
     Name = "最大同時ターゲット数",
     Range = {1, 100},
-    Increment = 5,
+    Increment = 1,
     Suffix = "体",
     CurrentValue = getgenv().MaxTargets,
-    Callback = function(v)
-        getgenv().MaxTargets = v
-    end,
+    Callback = function(v) getgenv().MaxTargets = v end,
 })
 
 BloxfruitTab:CreateSlider({
     Name = "攻撃間隔",
-    Range = {0.1, 1},
+    Range = {0.1, 0.9},
     Increment = 0.1,
     Suffix = "秒",
     CurrentValue = getgenv().AttackInterval,
-    Callback = function(v)
-        getgenv().AttackInterval = v
-    end,
+    Callback = function(v) getgenv().AttackInterval = v end,
 })
 
 BloxfruitTab:CreateDropdown({
     Name = "ターゲットモード",
     Options = {"敵Bot", "プレイヤー", "両方"},
-    CurrentOption = {"Both"},
+    CurrentOption = {"敵Bot"},
     Callback = function(option)
         getgenv().TargetMode = option[1]
     end,
 })
 
--- No Lava Damage（Sea対応版）
+-- No Lava Damage (そのまま)
 local NoLavaEnabled = false
 local function DisableLavaDamage()
     pcall(function()
@@ -1613,9 +1560,7 @@ local function DisableLavaDamage()
                                     obj.Disabled = true
                                 end
                             end
-                            if obj:IsA("TouchTransmitter") or obj.Name == "TouchInterest" then
-                                obj:Destroy()
-                            end
+                            if obj:IsA("TouchTransmitter") or obj.Name == "TouchInterest" then obj:Destroy() end
                             if obj:IsA("BasePart") and (obj.Name:lower():find("lava") or obj.Material == Enum.Material.Lava) then
                                 obj.CanTouch = false
                                 obj.CanCollide = false
@@ -1629,27 +1574,18 @@ local function DisableLavaDamage()
 end
 
 BloxfruitTab:CreateToggle({
-    Name = "No Lava Damage (溶岩無傷)",
+    Name = "No Lava Damage",
     CurrentValue = false,
     Callback = function(Value)
         NoLavaEnabled = Value
-        if Value then
-            DisableLavaDamage()
-            Rayfield:Notify({Title = "No Lava ON", Content = "溶岩ダメージ無効化しました", Duration = 4})
-        else
-            Rayfield:Notify({Title = "No Lava OFF", Content = "オフにしました", Duration = 3})
-        end
+        if Value then DisableLavaDamage() end
+        Rayfield:Notify({Title = Value and "ON" or "OFF", Content = "溶岩ダメージ無効化", Duration = 3})
     end,
 })
 
 BloxfruitTab:CreateButton({
-    Name = "今すぐ溶岩無効化適用",
-    Callback = function()
-        if NoLavaEnabled then
-            DisableLavaDamage()
-            Rayfield:Notify({Title = "適用完了", Content = "現在の溶岩を無効化", Duration = 3})
-        end
-    end,
+    Name = "溶岩即適用",
+    Callback = function() if NoLavaEnabled then DisableLavaDamage() end end
 })
 
 
