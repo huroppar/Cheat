@@ -1324,8 +1324,8 @@ local BloxfruitTab = Window:CreateTab("Blox Fruits", 4483362458)
 -- 設定変数
 getgenv().FastM1V3 = false
 getgenv().TargetMode = "Both"
-getgenv().RangeNormal = 1000   -- デフォルト大きく
-getgenv().RangeBuddha = 1500
+getgenv().RangeNormal = 80   -- デフォルト大きく
+getgenv().RangeBuddha = 500
 getgenv().AttackInterval = 0.1
 getgenv().MaxTargets = 40
 
@@ -1546,8 +1546,8 @@ BloxfruitTab:CreateToggle({
 -- スライダー類
 BloxfruitTab:CreateSlider({
     Name = "通常状態の攻撃範囲",
-    Range = {100, 2000},
-    Increment = 50,
+    Range = {10, 80},
+    Increment = 10,
     Suffix = " studs",
     CurrentValue = getgenv().RangeNormal,
     Callback = function(v)
@@ -1557,7 +1557,7 @@ BloxfruitTab:CreateSlider({
 
 BloxfruitTab:CreateSlider({
     Name = "大仏状態の攻撃範囲",
-    Range = {100, 2500},
+    Range = {50, 500},
     Increment = 50,
     Suffix = " studs",
     CurrentValue = getgenv().RangeBuddha,
@@ -1568,7 +1568,7 @@ BloxfruitTab:CreateSlider({
 
 BloxfruitTab:CreateSlider({
     Name = "最大同時ターゲット数",
-    Range = {5, 40},
+    Range = {1, 100},
     Increment = 5,
     Suffix = "体",
     CurrentValue = getgenv().MaxTargets,
@@ -1579,8 +1579,8 @@ BloxfruitTab:CreateSlider({
 
 BloxfruitTab:CreateSlider({
     Name = "攻撃間隔",
-    Range = {0.05, 0.5},
-    Increment = 0.01,
+    Range = {0.1, 1},
+    Increment = 0.1,
     Suffix = "秒",
     CurrentValue = getgenv().AttackInterval,
     Callback = function(v)
