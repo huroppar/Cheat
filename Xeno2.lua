@@ -1452,11 +1452,12 @@ RunService.Heartbeat:Connect(function()
         end)
     end
 end)
+
+
 -- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 -- Blox Fruits Tab (FastM1V3 完全統合版) - Rayfield対応
 -- 途中で切れてた部分を最後まで完成させたバージョン
 -- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
 local BloxfruitTab = Window:CreateTab("Blox Fruits", 4483362458)
 
 -- getgenv設定
@@ -1470,7 +1471,7 @@ local RS = game:GetService("ReplicatedStorage")
 local Players = game:GetService("Players")
 local player = Players.LocalPlayer
 local RegisterAttack, RegisterHit = nil, nil
-local FastM1Thread = nil  -- ループ制御用
+local FastM1Thread = nil -- ループ制御用
 
 -- findRemotes関数
 local function findRemotes()
@@ -1482,7 +1483,6 @@ local function findRemotes()
                 RegisterAttack = Net:FindFirstChild("RE/RegisterAttack") or Net["RE/RegisterAttack"]
                 RegisterHit = Net:FindFirstChild("RE/RegisterHit") or Net["RE/RegisterHit"]
                 if RegisterHit and RegisterAttack then
-                    print("✅ Net['RE/Register*'] 発見！")
                     return true
                 end
                 
@@ -1491,7 +1491,6 @@ local function findRemotes()
                     RegisterAttack = RE:FindFirstChild("RegisterAttack")
                     RegisterHit = RE:FindFirstChild("RegisterHit")
                     if RegisterHit and RegisterAttack then
-                        print("✅ Net.RE.Register* 発見！")
                         return true
                     end
                 end
@@ -1506,7 +1505,6 @@ local function findRemotes()
         end
         
         if RegisterHit and RegisterAttack then
-            print("✅ Fallbackで発見！")
             return true
         end
     end)
@@ -1522,7 +1520,6 @@ spawn(function()
         if findRemotes() then break end
         attempts = attempts + 1
         task.wait(1)
-        print("🔍 Remote検索中... (" .. attempts .. "/30)")
     end
     if not (RegisterHit and RegisterAttack) then
         Rayfield:Notify({
@@ -1530,8 +1527,6 @@ spawn(function()
             Content = "RegisterAttack/RegisterHitが見つかりませんでした。リロードを。",
             Duration = 6
         })
-    else
-        print("🚀 FastM1V3 準備完了！")
     end
 end)
 
@@ -1598,7 +1593,7 @@ BloxfruitTab:CreateToggle({
                         if getgenv().TargetMode == "Enemies" or getgenv().TargetMode == "Both" then
                             for _, enemy in pairs(workspace.Enemies:GetChildren()) do
                                 local eHRP = enemy:FindFirstChild("HumanoidRootPart")
-                                if eHRP and (eHRP.Position - HRP.Position).Magnitude <= range 
+                                if eHRP and (eHRP.Position - HRP.Position).Magnitude <= range
                                    and enemy:FindFirstChild("Humanoid") and enemy.Humanoid.Health > 0 then
                                     table.insert(targets, enemy)
                                 end
@@ -1630,8 +1625,6 @@ BloxfruitTab:CreateToggle({
                                     RegisterHit:FireServer(part, {}, nil, session)
                                 end
                             end
-                            
-                            print("💥 攻撃: " .. #targets .. "体 | Range: " .. range)
                         end
                         
                         -- Status更新
