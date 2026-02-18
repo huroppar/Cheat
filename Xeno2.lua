@@ -1325,10 +1325,10 @@ local BloxfruitTab = Window:CreateTab("Blox Fruits", 4483362458)
 -- 設定変数
 getgenv().FastM1V3 = false
 getgenv().TargetMode = "敵Bot"  -- 日本語モードOK
-getgenv().RangeNormal = 500     -- Targets出やすくデフォ大
-getgenv().RangeBuddha = 1000
+getgenv().RangeNormal = 10     -- Targets出やすくデフォ大
+getgenv().RangeBuddha = 500
 getgenv().AttackInterval = 0.1
-getgenv().MaxTargets = 40
+getgenv().MaxTargets = 50
 
 local RS = game:GetService("ReplicatedStorage")
 local Players = game:GetService("Players")
@@ -1537,8 +1537,8 @@ end)
 -- スライダー
 BloxfruitTab:CreateSlider({
     Name = "通常状態の攻撃範囲",
-    Range = {100, 2000},
-    Increment = 50,
+    Range = {10, 80},
+    Increment = 10,
     Suffix = " studs",
     CurrentValue = getgenv().RangeNormal,
     Callback = function(v) getgenv().RangeNormal = v end,
@@ -1546,7 +1546,7 @@ BloxfruitTab:CreateSlider({
 
 BloxfruitTab:CreateSlider({
     Name = "大仏状態の攻撃範囲",
-    Range = {200, 2500},
+    Range = {50, 500},
     Increment = 50,
     Suffix = " studs",
     CurrentValue = getgenv().RangeBuddha,
@@ -1556,7 +1556,7 @@ BloxfruitTab:CreateSlider({
 BloxfruitTab:CreateSlider({
     Name = "最大同時ターゲット数",
     Range = {1, 100},
-    Increment = 5,
+    Increment = 1,
     Suffix = "体",
     CurrentValue = getgenv().MaxTargets,
     Callback = function(v) getgenv().MaxTargets = v end,
@@ -1564,8 +1564,8 @@ BloxfruitTab:CreateSlider({
 
 BloxfruitTab:CreateSlider({
     Name = "攻撃間隔",
-    Range = {0.05, 0.5},
-    Increment = 0.01,
+    Range = {0.1, 0.5},
+    Increment = 0.1,
     Suffix = "秒",
     CurrentValue = getgenv().AttackInterval,
     Callback = function(v) getgenv().AttackInterval = v end,
