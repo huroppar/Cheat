@@ -1,6 +1,3 @@
---// Furo Hub - Cleaned & Organized Version
---// 2025-2026 Rewrite & Cleanup
-
 local Rayfield = loadstring(game:HttpGet("https://sirius.menu/rayfield"))()
 
 --━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -1455,6 +1452,258 @@ RunService.Heartbeat:Connect(function()
         end)
     end
 end)
+-- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+-- Blox Fruits Tab (FastM1V3 完全統合版) - Rayfield対応
+-- 途中で切れてた部分を最後まで完成させたバージョン
+-- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+local BloxfruitTab = Window:CreateTab("Blox Fruits", 4483362458)
+
+-- getgenv設定
+getgenv().FastM1V3 = false
+getgenv().TargetMode = "Both"
+getgenv().RangeNormal = 200
+getgenv().RangeBuddha = 500
+getgenv().AttackInterval = 0.2
+
+local RS = game:GetService("ReplicatedStorage")
+local Players = game:GetService("Players")
+local player = Players.LocalPlayer
+local RegisterAttack, RegisterHit = nil, nil
+local FastM1Thread = nil  -- ループ制御用
+
+-- findRemotes関数
+local function findRemotes()
+    pcall(function()
+        local Modules = RS:FindFirstChild("Modules")
+        if Modules then
+            local Net = Modules:FindFirstChild("Net")
+            if Net then
+                RegisterAttack = Net:FindFirstChild("RE/RegisterAttack") or Net["RE/RegisterAttack"]
+                RegisterHit = Net:FindFirstChild("RE/RegisterHit") or Net["RE/RegisterHit"]
+                if RegisterHit and RegisterAttack then
+                    print("✅ Net['RE/Register*'] 発見！")
+                    return true
+                end
+                
+                local RE = Net:FindFirstChild("RE")
+                if RE then
+                    RegisterAttack = RE:FindFirstChild("RegisterAttack")
+                    RegisterHit = RE:FindFirstChild("RegisterHit")
+                    if RegisterHit and RegisterAttack then
+                        print("✅ Net.RE.Register* 発見！")
+                        return true
+                    end
+                end
+            end
+        end
+        
+        for _, obj in pairs(RS:GetDescendants()) do
+            if obj:IsA("RemoteEvent") then
+                if obj.Name:find("RegisterAttack") then RegisterAttack = obj end
+                if obj.Name:find("RegisterHit") then RegisterHit = obj end
+            end
+        end
+        
+        if RegisterHit and RegisterAttack then
+            print("✅ Fallbackで発見！")
+            return true
+        end
+    end)
+    return false
+end
+
+findRemotes()
+
+-- バックグラウンド再検索
+spawn(function()
+    local attempts = 0
+    while attempts < 30 do
+        if findRemotes() then break end
+        attempts = attempts + 1
+        task.wait(1)
+        print("🔍 Remote検索中... (" .. attempts .. "/30)")
+    end
+    if not (RegisterHit and RegisterAttack) then
+        Rayfield:Notify({
+            Title = "FastM1V3 エラー",
+            Content = "RegisterAttack/RegisterHitが見つかりませんでした。リロードを。",
+            Duration = 6
+        })
+    else
+        print("🚀 FastM1V3 準備完了！")
+    end
+end)
+
+-- SessionID関数
+local function getSessionID()
+    local _G = getrenv()._G
+    if _G.SendHitsToServer then
+        local upvals = getupvalues(_G.SendHitsToServer)
+        local thread = upvals[1] or upvals[2]
+        if thread then
+            return tostring(player.UserId):sub(2,4) .. tostring(thread):sub(11,15)
+        end
+    end
+    return math.random(10000,99999)
+end
+
+-- Status Label
+local StatusLabel = BloxfruitTab:CreateLabel("Status: Ready | Targets: 0 | Range: N/A")
+
+-- ON/OFF Toggle
+BloxfruitTab:CreateToggle({
+    Name = "FastAttack",
+    CurrentValue = false,
+    Callback = function(Value)
+        getgenv().FastM1V3 = Value
+        
+        if Value then
+            if not (RegisterHit and RegisterAttack) then
+                Rayfield:Notify({
+                    Title = "エラー",
+                    Content = "Remote未発見！ 待機後再トグル",
+                    Duration = 5
+                })
+                getgenv().FastM1V3 = false
+                return
+            end
+            
+            -- 独立ループ開始
+            FastM1Thread = task.spawn(function()
+                while getgenv().FastM1V3 do
+                    pcall(function()
+                        local char = player.Character
+                        if not char or not char:FindFirstChild("HumanoidRootPart") or char.Humanoid.Health <= 0 then
+                            task.wait(0.1)
+                            return
+                        end
+                        
+                        local HRP = char.HumanoidRootPart
+                        local isBuddha = HRP.Size.Y > 12
+                        local bodyEffects = char:FindFirstChild("BodyEffects")
+                        if bodyEffects then
+                            for _, v in pairs(bodyEffects:GetChildren()) do
+                                if v.Name:lower():find("buddha") or v.Name:lower():find("transform") then
+                                    isBuddha = true
+                                    break
+                                end
+                            end
+                        end
+                        
+                        local range = isBuddha and getgenv().RangeBuddha or getgenv().RangeNormal
+                        local targets = {}
+                        
+                        -- Enemies
+                        if getgenv().TargetMode == "Enemies" or getgenv().TargetMode == "Both" then
+                            for _, enemy in pairs(workspace.Enemies:GetChildren()) do
+                                local eHRP = enemy:FindFirstChild("HumanoidRootPart")
+                                if eHRP and (eHRP.Position - HRP.Position).Magnitude <= range 
+                                   and enemy:FindFirstChild("Humanoid") and enemy.Humanoid.Health > 0 then
+                                    table.insert(targets, enemy)
+                                end
+                            end
+                        end
+                        
+                        -- Players
+                        if getgenv().TargetMode == "Players" or getgenv().TargetMode == "Both" then
+                            for _, plr in pairs(Players:GetPlayers()) do
+                                if plr ~= player and plr.Character then
+                                    local pChar = plr.Character
+                                    local pHRP = pChar:FindFirstChild("HumanoidRootPart")
+                                    local pHum = pChar:FindFirstChild("Humanoid")
+                                    if pHRP and pHum and pHum.Health > 0 and (pHRP.Position - HRP.Position).Magnitude <= range then
+                                        table.insert(targets, pChar)
+                                    end
+                                end
+                            end
+                        end
+                        
+                        if #targets > 0 then
+                            local session = getSessionID()
+                            for _, target in ipairs(targets) do
+                                RegisterAttack:FireServer(0.5)
+                                task.wait(0.02)
+                                
+                                local part = target:FindFirstChild("Head")
+                                if part then
+                                    RegisterHit:FireServer(part, {}, nil, session)
+                                end
+                            end
+                            
+                            print("💥 攻撃: " .. #targets .. "体 | Range: " .. range)
+                        end
+                        
+                        -- Status更新
+                        StatusLabel:Set("Status: ON | Targets: " .. #targets .. " | Buddha: " .. (isBuddha and "ON" or "OFF") .. " | Range: " .. range)
+                    end)
+                    
+                    task.wait(getgenv().AttackInterval)
+                end
+            end)
+            
+            Rayfield:Notify({
+                Title = "FastM1V3 ON",
+                Content = "自動攻撃開始！",
+                Duration = 3
+            })
+        else
+            if FastM1Thread then
+                task.cancel(FastM1Thread)
+                FastM1Thread = nil
+            end
+            StatusLabel:Set("Status: OFF | Targets: 0")
+            Rayfield:Notify({
+                Title = "FastM1V3 OFF",
+                Content = "停止",
+                Duration = 2
+            })
+        end
+    end,
+})
+
+-- スライダー設定
+BloxfruitTab:CreateSlider({
+    Name = "通常状態の攻撃範囲",
+    Range = {10, 80},
+    Increment = 10,
+    Suffix = " studs",
+    CurrentValue = getgenv().RangeNormal,
+    Callback = function(v)
+        getgenv().RangeNormal = v
+    end,
+})
+
+BloxfruitTab:CreateSlider({
+    Name = "大仏状態の攻撃範囲",
+    Range = {10, 500},
+    Increment = 10,
+    Suffix = " studs",
+    CurrentValue = getgenv().RangeBuddha,
+    Callback = function(v)
+        getgenv().RangeBuddha = v
+    end,
+})
+
+BloxfruitTab:CreateSlider({
+    Name = "攻撃間隔",
+    Range = {0.1, 0.5},
+    Increment = 0.01,
+    Suffix = "秒",
+    CurrentValue = getgenv().AttackInterval,
+    Callback = function(v)
+        getgenv().AttackInterval = v
+    end,
+})
+
+BloxfruitTab:CreateDropdown({
+    Name = "ターゲットモード",
+    Options = {"敵Bot", "プレイヤー", "両方"},
+    CurrentOption = {"Both"},
+    Callback = function(option)
+        getgenv().TargetMode = option[1]
+    end,
+})
 
 --━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 --  Tab: スタンドの世界
