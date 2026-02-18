@@ -1455,12 +1455,13 @@ end)
 
 
 -- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
--- Blox Fruits Tab (FastM1V3 完全統合版) - Rayfield対応
--- 途中で切れてた部分を最後まで完成させたバージョン
+-- Blox Fruits Tab (FastM1V3 + No Lava Damage 統合版) - Rayfield対応
+-- print削除済み、溶岩無効化を同じタブに追加
 -- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
 local BloxfruitTab = Window:CreateTab("Blox Fruits", 4483362458)
 
--- getgenv設定
+-- FastM1V3 設定
 getgenv().FastM1V3 = false
 getgenv().TargetMode = "Both"
 getgenv().RangeNormal = 200
@@ -1471,7 +1472,7 @@ local RS = game:GetService("ReplicatedStorage")
 local Players = game:GetService("Players")
 local player = Players.LocalPlayer
 local RegisterAttack, RegisterHit = nil, nil
-local FastM1Thread = nil -- ループ制御用
+local FastM1Thread = nil
 
 -- findRemotes関数
 local function findRemotes()
@@ -1543,10 +1544,10 @@ local function getSessionID()
     return math.random(10000,99999)
 end
 
--- Status Label
+-- Status Label (FastAttack用)
 local StatusLabel = BloxfruitTab:CreateLabel("Status: Ready | Targets: 0 | Range: N/A")
 
--- ON/OFF Toggle
+-- FastAttack Toggle
 BloxfruitTab:CreateToggle({
     Name = "FastAttack",
     CurrentValue = false,
@@ -1564,7 +1565,6 @@ BloxfruitTab:CreateToggle({
                 return
             end
             
-            -- 独立ループ開始
             FastM1Thread = task.spawn(function()
                 while getgenv().FastM1V3 do
                     pcall(function()
@@ -1589,7 +1589,6 @@ BloxfruitTab:CreateToggle({
                         local range = isBuddha and getgenv().RangeBuddha or getgenv().RangeNormal
                         local targets = {}
                         
-                        -- Enemies
                         if getgenv().TargetMode == "Enemies" or getgenv().TargetMode == "Both" then
                             for _, enemy in pairs(workspace.Enemies:GetChildren()) do
                                 local eHRP = enemy:FindFirstChild("HumanoidRootPart")
@@ -1600,7 +1599,6 @@ BloxfruitTab:CreateToggle({
                             end
                         end
                         
-                        -- Players
                         if getgenv().TargetMode == "Players" or getgenv().TargetMode == "Both" then
                             for _, plr in pairs(Players:GetPlayers()) do
                                 if plr ~= player and plr.Character then
@@ -1627,7 +1625,6 @@ BloxfruitTab:CreateToggle({
                             end
                         end
                         
-                        -- Status更新
                         StatusLabel:Set("Status: ON | Targets: " .. #targets .. " | Buddha: " .. (isBuddha and "ON" or "OFF") .. " | Range: " .. range)
                     end)
                     
@@ -1655,7 +1652,7 @@ BloxfruitTab:CreateToggle({
     end,
 })
 
--- スライダー設定
+-- スライダー（FastAttack用）
 BloxfruitTab:CreateSlider({
     Name = "通常状態の攻撃範囲",
     Range = {10, 80},
@@ -1698,6 +1695,96 @@ BloxfruitTab:CreateDropdown({
     end,
 })
 
+-- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+-- ここから溶岩ダメージ無効化（No Lava Damage）セクション
+-- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+local NoLavaEnabled = false
+local LavaFolders = {
+    workspace.Map:WaitForChild("CircleIsland", 5):WaitForChild("LavaParts", 5),
+    workspace.Map:WaitForChild("GhostShipInterior", 5):WaitForChild("LavaParts", 5)
+}
+
+local function DisableLavaDamage()
+    for _, folder in pairs(LavaFolders) do
+        if folder then
+            for _, obj in pairs(folder:GetDescendants()) do
+                -- Script無効化
+                if obj:IsA("Script") or obj:IsA("LocalScript") then
+                    if obj.Name:lower():find("lava") or obj.Name:lower():find("damage") then
+                        obj.Disabled = true
+                    end
+                end
+                
+                -- TouchInterest破壊（これが一番効く）
+                if obj:IsA("TouchTransmitter") or obj.Name == "TouchInterest" then
+                    obj:Destroy()
+                end
+                
+                -- Partプロパティ変更
+                if obj:IsA("BasePart") and (obj.Name:lower():find("lava") or obj.Material == Enum.Material.Lava) then
+                    obj.CanTouch = false
+                    obj.CanCollide = false  -- 通り抜けたいならfalse
+                end
+            end
+        end
+    end
+end
+
+-- 溶岩無効化Toggle
+BloxfruitTab:CreateToggle({
+    Name = "No Lava Damage (溶岩無傷)",
+    CurrentValue = false,
+    Callback = function(Value)
+        NoLavaEnabled = Value
+        
+        if Value then
+            DisableLavaDamage()
+            Rayfield:Notify({
+                Title = "No Lava Damage ON",
+                Content = "CircleIsland & GhostShipInteriorの溶岩ダメージを無効化しました",
+                Duration = 4
+            })
+        else
+            Rayfield:Notify({
+                Title = "No Lava Damage OFF",
+                Content = "オフにしました（リロードで元に戻る場合あり）",
+                Duration = 4
+            })
+        end
+    end,
+})
+
+-- 即時適用ボタン（後から出現した溶岩用）
+BloxfruitTab:CreateButton({
+    Name = "今すぐ溶岩無効化適用",
+    Callback = function()
+        if NoLavaEnabled then
+            DisableLavaDamage()
+            Rayfield:Notify({
+                Title = "適用完了",
+                Content = "現在の溶岩を無効化しました",
+                Duration = 3
+            })
+        else
+            Rayfield:Notify({
+                Title = "無効",
+                Content = "まずNo Lava DamageをONにしてください",
+                Duration = 3
+            })
+        end
+    end,
+})
+
+-- 溶岩ステータス表示（任意）
+BloxfruitTab:CreateLabel("溶岩無効化: CircleIsland & GhostShipInterior対応")
+
+-- 起動完了通知
+Rayfield:Notify({
+    Title = "Blox Fruits Hub ロード完了",
+    Content = "FastAttack + No Lava Damage が利用可能！",
+    Duration = 5
+})
 --━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 --  Tab: スタンドの世界
 --━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
