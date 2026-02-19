@@ -1509,7 +1509,7 @@ BloxfruitTab:CreateToggle({
     end,
 })
 
--- 自動果実M1連打 (敵範囲内にいる間だけ高速連打)
+-- 自動果実M1連打 (敵範囲内にいる間だけ高速連打 / プレイヤー対応)
 spawn(function()
     while wait(0.1) do
         if getgenv().M1SpamEnabled then
@@ -1517,17 +1517,24 @@ spawn(function()
                 local char = player.Character
                 if not char then return end
                 
-                -- 範囲内に敵がいるかチェック (簡易版)
-                local hasEnemyInRange = false
                 local HRP = char:FindFirstChild("HumanoidRootPart")
-                if HRP then
+                if not HRP then return end
+                
+                local range = getgenv().RangeNormal + 100  -- 少し余裕持たせて検知
+                
+                local hasEnemyInRange = false
+                
+                local mode = getgenv().TargetMode
+                
+                -- 敵Botチェック
+                if mode == "敵Bot" or mode == "両方" then
                     local enemies = workspace:FindFirstChild("Enemies")
                     if enemies then
                         for _, enemy in pairs(enemies:GetChildren()) do
                             local eHRP = enemy:FindFirstChild("HumanoidRootPart")
                             local eHum = enemy:FindFirstChild("Humanoid")
                             if eHRP and eHum and eHum.Health > 0 then
-                                if (eHRP.Position - HRP.Position).Magnitude <= getgenv().RangeNormal + 100 then
+                                if (eHRP.Position - HRP.Position).Magnitude <= range then
                                     hasEnemyInRange = true
                                     break
                                 end
@@ -1536,6 +1543,24 @@ spawn(function()
                     end
                 end
                 
+                -- プレイヤーチェック（PvPモード時）
+                if not hasEnemyInRange and (mode == "プレイヤー" or mode == "両方") then
+                    for _, plr in pairs(Players:GetPlayers()) do
+                        if plr ~= player and plr.Character then
+                            local pChar = plr.Character
+                            local pHRP = pChar:FindFirstChild("HumanoidRootPart")
+                            local pHum = pChar:FindFirstChild("Humanoid")
+                            if pHRP and pHum and pHum.Health > 0 then
+                                if (pHRP.Position - HRP.Position).Magnitude <= range then
+                                    hasEnemyInRange = true
+                                    break
+                                end
+                            end
+                        end
+                    end
+                end
+                
+                -- 範囲内に何かいる場合だけM1連打
                 if hasEnemyInRange then
                     local tool = nil
                     for _, t in pairs(char:GetChildren()) do
@@ -1554,7 +1579,7 @@ spawn(function()
                     end
                 end
             end)
-            task.wait(math.random(2,5)/100)  -- 0.02-0.05秒ランダム (超高速 + BAN回避)
+            task.wait(math.random(2,5)/100)  -- 0.02-0.05秒ランダム
         end
     end
 end)
