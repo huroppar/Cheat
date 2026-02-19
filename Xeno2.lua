@@ -1562,8 +1562,8 @@ end)
 -- スライダー類 (そのまま)
 BloxfruitTab:CreateSlider({
     Name = "通常状態の攻撃範囲",
-    Range = {100, 2000},
-    Increment = 50,
+    Range = {10, 80},
+    Increment = 10,
     Suffix = " studs",
     CurrentValue = getgenv().RangeNormal,
     Callback = function(v) getgenv().RangeNormal = v end,
@@ -1571,7 +1571,7 @@ BloxfruitTab:CreateSlider({
 
 BloxfruitTab:CreateSlider({
     Name = "大仏状態の攻撃範囲",
-    Range = {200, 2500},
+    Range = {50, 500},
     Increment = 50,
     Suffix = " studs",
     CurrentValue = getgenv().RangeBuddha,
@@ -1580,7 +1580,7 @@ BloxfruitTab:CreateSlider({
 
 BloxfruitTab:CreateSlider({
     Name = "最大同時ターゲット数",
-    Range = {1, 100},
+    Range = {1, 50},
     Increment = 5,
     Suffix = "体",
     CurrentValue = getgenv().MaxTargets,
@@ -1589,8 +1589,8 @@ BloxfruitTab:CreateSlider({
 
 BloxfruitTab:CreateSlider({
     Name = "攻撃間隔",
-    Range = {0.05, 0.5},
-    Increment = 0.01,
+    Range = {0.1, 0.9},
+    Increment = 0.1,
     Suffix = "秒",
     CurrentValue = getgenv().AttackInterval,
     Callback = function(v) getgenv().AttackInterval = v end,
@@ -1635,7 +1635,7 @@ local function DisableLavaDamage()
 end
 
 BloxfruitTab:CreateToggle({
-    Name = "No Lava Damage",
+    Name = "マグマ無効",
     CurrentValue = false,
     Callback = function(Value)
         NoLavaEnabled = Value
