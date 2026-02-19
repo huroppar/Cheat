@@ -1,3 +1,7 @@
+if getgenv().__FURO_HUB_LOADED__ then
+    warn("Furo Hub は既に読み込まれています。スキップします")
+    return
+end
 local HttpService = game:GetService("HttpService")
 local Players = game:GetService("Players")
 local player = Players.LocalPlayer
