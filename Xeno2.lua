@@ -1,3 +1,6 @@
+if getgenv().__FURO_HUB_LOADED__ then return end
+getgenv().__FURO_HUB_LOADED__ = true
+
 local Rayfield = loadstring(game:HttpGet("https://sirius.menu/rayfield"))()
 --━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 -- Services
