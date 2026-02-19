@@ -1,7 +1,3 @@
-if getgenv().__FURO_HUB_LOADED__ then
-    warn("Furo Hub は既に読み込まれています。スキップします")
-    return
-end
 local Rayfield = loadstring(game:HttpGet("https://sirius.menu/rayfield"))()
 --━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 -- Services
