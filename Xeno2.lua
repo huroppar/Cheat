@@ -1325,8 +1325,8 @@ local BloxfruitTab = Window:CreateTab("Blox Fruits", 4483362458)
 -- 設定変数
 getgenv().FastM1V3 = false
 getgenv().TargetMode = "敵Bot"
-getgenv().RangeNormal = 500
-getgenv().RangeBuddha = 1000
+getgenv().RangeNormal = 80
+getgenv().RangeBuddha = 500
 getgenv().AttackInterval = 0.1
 getgenv().MaxTargets = 40
 getgenv().M1SpamEnabled = false
@@ -1669,7 +1669,192 @@ BloxfruitTab:CreateToggle({
     end,
 })
 
+-- TP座標
+local locations = {
+    ["マンション"] = Vector3.new(-12549, 337, -7506),
+    ["Tiki"] = Vector3.new(-5093, 316, -3182),
+    ["海城"] = Vector3.new(-12463, 376, -7566),
+    ["ヒドラ"] = Vector3.new(-5027, 316, -3206)
+}
 
+-- 超安定ダブルTP関数（高速2回TP）
+local function doubleTp(pos)
+    local char = player.Character
+    if not char or not char:FindFirstChild("HumanoidRootPart") then return end
+    local root = char.HumanoidRootPart
+    
+    -- 共通TP処理
+    local function performTp()
+        pcall(function() root:SetNetworkOwner(player) end)  -- 所有権奪取
+        
+        -- 毎回違う微ランダムオフセット（検知回避）
+        local offset = Vector3.new(math.random(-4,4), math.random(6,16), math.random(-4,4))
+        root.CFrame = CFrame.new(pos + offset)
+        
+        -- 速度リセット（Kick回避）
+        if char:FindFirstChild("Humanoid") then
+            char.Humanoid.WalkSpeed = 16
+            char.Humanoid.JumpPower = 50
+        end
+    end
+    
+    -- 1回目TP
+    performTp()
+    
+    -- 高速0.05秒待機 → 2回目TP（ほぼ瞬時に2回）
+    task.delay(0.05, function()
+        performTp()
+    end)
+end
+
+-- Noclip常時ON（壁抜け・張り付き安定）
+local noclip = false
+local function toggleNoclip(state)
+    noclip = state
+    local char = player.Character
+    if not char then return end
+    for _, part in pairs(char:GetDescendants()) do
+        if part:IsA("BasePart") and part ~= char.HumanoidRootPart then
+            part.CanCollide = not state
+        end
+    end
+end
+task.spawn(function()
+    toggleNoclip(true)
+    while task.wait(0.1) do
+        if noclip then toggleNoclip(true) end
+    end
+end)
+
+-- 自作TP GUI作成（初期非表示・トグルで表示）
+local tpGui = Instance.new("ScreenGui")
+tpGui.Name = "TPHub"
+tpGui.ResetOnSpawn = false
+tpGui.Enabled = false
+tpGui.Parent = player:WaitForChild("PlayerGui")
+
+local mainFrame = Instance.new("Frame")
+mainFrame.Size = UDim2.new(0, 280, 0, 350)
+mainFrame.Position = UDim2.new(0.5, -140, 0.5, -175)
+mainFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 35)
+mainFrame.BorderSizePixel = 0
+mainFrame.Parent = tpGui
+
+local uicorner = Instance.new("UICorner")
+uicorner.CornerRadius = UDim.new(0, 12)
+uicorner.Parent = mainFrame
+
+local uigradient = Instance.new("UIGradient")
+uigradient.Color = ColorSequence.new{
+    ColorSequenceKeypoint.new(0, Color3.fromRGB(40, 40, 60)),
+    ColorSequenceKeypoint.new(1, Color3.fromRGB(20, 20, 35))
+}
+uigradient.Rotation = 45
+uigradient.Parent = mainFrame
+
+-- タイトル（ドラッグ可能）
+local title = Instance.new("TextLabel")
+title.Size = UDim2.new(1, 0, 0, 50)
+title.BackgroundTransparency = 1
+title.Text = "TP Hub"
+title.TextColor3 = Color3.fromRGB(255, 255, 255)
+title.TextScaled = true
+title.Font = Enum.Font.GothamBold
+title.Parent = mainFrame
+
+-- ドラッグ機能
+local dragging = false
+local dragStart, startPos
+title.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 then
+        dragging = true
+        dragStart = input.Position
+        startPos = mainFrame.Position
+    end
+end)
+title.InputChanged:Connect(function(input)
+    if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
+        local delta = input.Position - dragStart
+        mainFrame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+    end
+end)
+game:GetService("UserInputService").InputEnded:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 then
+        dragging = false
+    end
+end)
+
+-- ボタン生成関数
+local function createTPButton(name, yPos, posVec)
+    local btn = Instance.new("TextButton")
+    btn.Size = UDim2.new(1, -20, 0, 55)
+    btn.Position = UDim2.new(0, 10, 0, yPos)
+    btn.BackgroundColor3 = Color3.fromRGB(50, 50, 70)
+    btn.Text = "⚡ " .. name
+    btn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    btn.TextScaled = true
+    btn.Font = Enum.Font.GothamSemibold
+    btn.Parent = mainFrame
+    
+    local btnCorner = Instance.new("UICorner")
+    btnCorner.CornerRadius = UDim.new(0, 10)
+    btnCorner.Parent = btn
+    
+    local btnGradient = Instance.new("UIGradient")
+    btnGradient.Color = ColorSequence.new{
+        ColorSequenceKeypoint.new(0, Color3.fromRGB(70, 70, 90)),
+        ColorSequenceKeypoint.new(1, Color3.fromRGB(40, 40, 60))
+    }
+    btnGradient.Parent = btn
+    
+    -- ホバーアニメ
+    btn.MouseEnter:Connect(function()
+        TweenService:Create(btn, TweenInfo.new(0.2), {Size = UDim2.new(1, -15, 0, 58), BackgroundColor3 = Color3.fromRGB(70, 130, 255)}):Play()
+    end)
+    btn.MouseLeave:Connect(function()
+        TweenService:Create(btn, TweenInfo.new(0.2), {Size = UDim2.new(1, -20, 0, 55), BackgroundColor3 = Color3.fromRGB(50, 50, 70)}):Play()
+    end)
+    
+    -- TP実行（ダブルTP）
+    btn.MouseButton1Click:Connect(function()
+        TweenService:Create(btn, TweenInfo.new(0.1), {BackgroundColor3 = Color3.fromRGB(0, 255, 0)}):Play()
+        task.wait(0.1)
+        TweenService:Create(btn, TweenInfo.new(0.2), {BackgroundColor3 = Color3.fromRGB(50, 50, 70)}):Play()
+        doubleTp(posVec)
+    end)
+end
+
+-- ボタン配置
+createTPButton("マンション", 65, locations["マンション"])
+createTPButton("Tiki", 130, locations["Tiki"])
+createTPButton("海城", 195, locations["海城"])
+createTPButton("ヒドラ", 260, locations["ヒドラ"])
+
+
+BloxfruitTab:CreateButton({
+    Name = "⚡ マンション",
+    Callback = function()
+        doubleTp(locations["マンション"])
+    end,
+})
+BloxfruitTab:CreateButton({
+    Name = "⚡ Tiki",
+    Callback = function()
+        doubleTp(locations["Tiki"])
+    end,
+})
+BloxfruitTab:CreateButton({
+    Name = "⚡ 海城",
+    Callback = function()
+        doubleTp(locations["海城"])
+    end,
+})
+BloxfruitTab:CreateButton({
+    Name = "⚡ ヒドラ",
+    Callback = function()
+        doubleTp(locations["ヒドラ"])
+    end,
+})
 
 
 --━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
