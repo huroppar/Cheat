@@ -1316,19 +1316,20 @@ RunService.Heartbeat:Connect(function()
     end
 end)
 -- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
--- Blox Fruits Tab (最終完全版 - 自動果実M1連動 / Targets保証 / 2025対応)
--- FastAttack ON → 自動で果実M1もON / ツール自動判別 / Range大 / モードOK
+-- Blox Fruits Tab (敵範囲内限定攻撃 / 自動果実M1連動 / BANリスク低減)
+-- FastAttack ON → 敵範囲内時だけRegisterAttack & M1連打ON / 入った瞬間発火
 -- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 local BloxfruitTab = Window:CreateTab("Blox Fruits", 4483362458)
 
 -- 設定変数
 getgenv().FastM1V3 = false
-getgenv().TargetMode = "敵Bot"  -- 日本語モードOK
-getgenv().RangeNormal = 10     -- Targets出やすくデフォ大
-getgenv().RangeBuddha = 500
+getgenv().TargetMode = "敵Bot"
+getgenv().RangeNormal = 500
+getgenv().RangeBuddha = 1000
 getgenv().AttackInterval = 0.1
-getgenv().MaxTargets = 50
+getgenv().MaxTargets = 40
+getgenv().M1SpamEnabled = false
 
 local RS = game:GetService("ReplicatedStorage")
 local Players = game:GetService("Players")
@@ -1337,7 +1338,7 @@ local RegisterAttack, RegisterHit = nil, nil
 local FastM1Thread = nil
 local M1SpamThread = nil
 
--- Remote検索関数
+-- Remote検索 (そのまま)
 local function findRemotes()
     pcall(function()
         local Modules = RS:FindFirstChild("Modules")
@@ -1388,26 +1389,25 @@ local StatusLabel = BloxfruitTab:CreateLabel("Status: Ready | Targets: 0 | Range
 
 -- FastAttack Toggle (メイン)
 BloxfruitTab:CreateToggle({
-    Name = "FastAttack (Multi 40体)",
+    Name = "FastAttack (敵範囲内限定)",
     CurrentValue = false,
     Callback = function(Value)
         getgenv().FastM1V3 = Value
         
-        -- FastAttack ON → 自動でM1連打もON
-        if Value then
-            getgenv().M1SpamEnabled = true
-        else
-            getgenv().M1SpamEnabled = false
-        end
+        -- FastAttack ON → M1連打もON
+        getgenv().M1SpamEnabled = Value
         
         if Value then
             if not (RegisterHit and RegisterAttack) then
                 Rayfield:Notify({Title = "エラー", Content = "Remote未発見！待機後再トグル", Duration = 5})
                 getgenv().FastM1V3 = false
+                getgenv().M1SpamEnabled = false
                 return
             end
             
             FastM1Thread = task.spawn(function()
+                local lastAttackTime = 0
+                
                 while getgenv().FastM1V3 do
                     pcall(function()
                         local char = player.Character
@@ -1476,12 +1476,17 @@ BloxfruitTab:CreateToggle({
                             table.insert(limitedTargets, targets[i])
                         end
                         
-                        RegisterAttack:FireServer(0.1)
-                        
+                        -- 敵が範囲内にいる場合だけ攻撃
                         if #limitedTargets > 0 then
                             local hitList = {}
                             for _, t in ipairs(limitedTargets) do
                                 table.insert(hitList, {t.model, t.head})
+                            end
+                            
+                            -- RegisterAttackは敵検知時だけ (入った瞬間1回 + クール短め)
+                            if tick() - lastAttackTime > 0.05 then  -- 0.05秒最低間隔
+                                RegisterAttack:FireServer(0)  -- Cooldown 0
+                                lastAttackTime = tick()
                             end
                             
                             RegisterHit:FireServer(limitedTargets[1].head, hitList)
@@ -1495,7 +1500,7 @@ BloxfruitTab:CreateToggle({
                 end
             end)
             
-            Rayfield:Notify({Title = "ON", Content = "FastAttack + 自動果実M1連打開始！", Duration = 4})
+            Rayfield:Notify({Title = "ON", Content = "敵範囲内時だけ攻撃開始！ BANリスク低減", Duration = 4})
         else
             if FastM1Thread then task.cancel(FastM1Thread) FastM1Thread = nil end
             StatusLabel:Set("Status: OFF")
@@ -1504,41 +1509,61 @@ BloxfruitTab:CreateToggle({
     end,
 })
 
--- 自動果実M1連打 (FastAttackと連動 / 自動ツール判別)
+-- 自動果実M1連打 (敵範囲内にいる間だけ高速連打)
 spawn(function()
-    while wait(0.2) do
+    while wait(0.1) do
         if getgenv().M1SpamEnabled then
             pcall(function()
                 local char = player.Character
                 if not char then return end
                 
-                -- 装備中の果実/ツールを自動判別
-                local tool = nil
-                for _, t in pairs(char:GetChildren()) do
-                    if t:IsA("Tool") and t:FindFirstChild("LeftClickRemote") then
-                        tool = t
-                        break
+                -- 範囲内に敵がいるかチェック (簡易版)
+                local hasEnemyInRange = false
+                local HRP = char:FindFirstChild("HumanoidRootPart")
+                if HRP then
+                    local enemies = workspace:FindFirstChild("Enemies")
+                    if enemies then
+                        for _, enemy in pairs(enemies:GetChildren()) do
+                            local eHRP = enemy:FindFirstChild("HumanoidRootPart")
+                            local eHum = enemy:FindFirstChild("Humanoid")
+                            if eHRP and eHum and eHum.Health > 0 then
+                                if (eHRP.Position - HRP.Position).Magnitude <= getgenv().RangeNormal + 100 then
+                                    hasEnemyInRange = true
+                                    break
+                                end
+                            end
+                        end
                     end
                 end
                 
-                if tool and tool:FindFirstChild("LeftClickRemote") then
-                    local remote = tool.LeftClickRemote
-                    remote:FireServer(table.unpack({
-                        [1] = Vector3.new(0.84, -0.035, -0.54),  -- 全果実最適ベクター
-                        [2] = 1,
-                    }))
+                if hasEnemyInRange then
+                    local tool = nil
+                    for _, t in pairs(char:GetChildren()) do
+                        if t:IsA("Tool") and t:FindFirstChild("LeftClickRemote") then
+                            tool = t
+                            break
+                        end
+                    end
+                    
+                    if tool and tool:FindFirstChild("LeftClickRemote") then
+                        local remote = tool.LeftClickRemote
+                        remote:FireServer(table.unpack({
+                            [1] = Vector3.new(0.84, -0.035, -0.54),  -- 全果実最適ベクター
+                            [2] = 1,
+                        }))
+                    end
                 end
             end)
-            task.wait(math.random(8,15)/100)  -- ランダム遅延でBAN回避
+            task.wait(math.random(2,5)/100)  -- 0.02-0.05秒ランダム (超高速 + BAN回避)
         end
     end
 end)
 
--- スライダー
+-- スライダー類 (そのまま)
 BloxfruitTab:CreateSlider({
     Name = "通常状態の攻撃範囲",
-    Range = {10, 80},
-    Increment = 10,
+    Range = {100, 2000},
+    Increment = 50,
     Suffix = " studs",
     CurrentValue = getgenv().RangeNormal,
     Callback = function(v) getgenv().RangeNormal = v end,
@@ -1546,7 +1571,7 @@ BloxfruitTab:CreateSlider({
 
 BloxfruitTab:CreateSlider({
     Name = "大仏状態の攻撃範囲",
-    Range = {50, 500},
+    Range = {200, 2500},
     Increment = 50,
     Suffix = " studs",
     CurrentValue = getgenv().RangeBuddha,
@@ -1556,7 +1581,7 @@ BloxfruitTab:CreateSlider({
 BloxfruitTab:CreateSlider({
     Name = "最大同時ターゲット数",
     Range = {1, 100},
-    Increment = 1,
+    Increment = 5,
     Suffix = "体",
     CurrentValue = getgenv().MaxTargets,
     Callback = function(v) getgenv().MaxTargets = v end,
@@ -1564,8 +1589,8 @@ BloxfruitTab:CreateSlider({
 
 BloxfruitTab:CreateSlider({
     Name = "攻撃間隔",
-    Range = {0.1, 0.5},
-    Increment = 0.1,
+    Range = {0.05, 0.5},
+    Increment = 0.01,
     Suffix = "秒",
     CurrentValue = getgenv().AttackInterval,
     Callback = function(v) getgenv().AttackInterval = v end,
@@ -1580,7 +1605,7 @@ BloxfruitTab:CreateDropdown({
     end,
 })
 
--- No Lava Damage
+-- No Lava Damage (そのまま)
 local NoLavaEnabled = false
 local function DisableLavaDamage()
     pcall(function()
@@ -1619,10 +1644,6 @@ BloxfruitTab:CreateToggle({
     end,
 })
 
-BloxfruitTab:CreateButton({
-    Name = "溶岩即適用",
-    Callback = function() if NoLavaEnabled then DisableLavaDamage() end end
-})
 
 
 
