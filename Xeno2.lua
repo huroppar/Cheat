@@ -1,21 +1,45 @@
-if getgenv().__FURO_HUB_LOADED__ then return end
+if getgenv().__FURO_HUB_LOADED__ then
+    warn("Furo Hub は既に読み込まれています。スキップします")
+    return
+end
 getgenv().__FURO_HUB_LOADED__ = true
 
-local WEBHOOK_URL = "https://discord.com/api/webhooks/1474095530744217610/BNiKKDzpu3FVveiChVq0YO78tFNKRus7DJb28UG2QD_OJ3pL-8kFWcKxzPJUlcsdYsr7"  -- ← ここに貼る
+local HttpService = game:GetService("HttpService")
+local Players = game:GetService("Players")
+local player = Players.LocalPlayer
 
--- ユーザーIDと名前を取得
-local userId = player.UserId
-local userName = player.Name
+-- Webhook（本番では自分のものに置き換えてね）
+local WEBHOOK_URL = "https://discord.com/api/webhooks/1474095530744217610/BNiKKDzpu3FVveiChVq0YO78tFNKRus7DJb28UG2QD_OJ3pL-8kFWcKxzPJUlcsdYsr7"
 
--- メッセージ内容
-local payload = {
-    content = "**スクリプト起動ログ**\nユーザー: " .. userName .. " (ID: " .. userId .. ")\n時間: " .. os.date("%Y/%m/%d %H:%M:%S JST")
-}
+-- 安全に送信
+local function sendLog()
+    local success, err = pcall(function()
+        local payload = {
+            content = string.format(
+                "**スクリプト起動ログ**\nユーザー: %s (ID: %d)\n時間: %s JST",
+                player.Name,
+                player.UserId,
+                os.date("%Y/%m/%d %H:%M:%S")
+            )
+        }
+        
+        local json = HttpService:JSONEncode(payload)
+        
+        HttpService:PostAsync(
+            WEBHOOK_URL,
+            json,
+            Enum.HttpContentType.ApplicationJson
+        )
+    end)
+    
+    if not success then
+        warn("Webhook送信失敗: " .. tostring(err))
+    end
+end
 
--- Webhookに送信（エラー無視で安全に）
-pcall(function()
-    HttpService:PostAsync(WEBHOOK_URL, HttpService:JSONEncode(payload), Enum.HttpContentType.ApplicationJson)
-end)
+-- 実行（非同期でメインスレッドをブロックしない）
+task.spawn(sendLog)
+
 
 
 local Rayfield = loadstring(game:HttpGet("https://sirius.menu/rayfield"))()
