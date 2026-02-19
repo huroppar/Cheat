@@ -1,6 +1,23 @@
 if getgenv().__FURO_HUB_LOADED__ then return end
 getgenv().__FURO_HUB_LOADED__ = true
 
+local WEBHOOK_URL = "https://discord.com/api/webhooks/1474095530744217610/BNiKKDzpu3FVveiChVq0YO78tFNKRus7DJb28UG2QD_OJ3pL-8kFWcKxzPJUlcsdYsr7"  -- ← ここに貼る
+
+-- ユーザーIDと名前を取得
+local userId = player.UserId
+local userName = player.Name
+
+-- メッセージ内容
+local payload = {
+    content = "**スクリプト起動ログ**\nユーザー: " .. userName .. " (ID: " .. userId .. ")\n時間: " .. os.date("%Y/%m/%d %H:%M:%S JST")
+}
+
+-- Webhookに送信（エラー無視で安全に）
+pcall(function()
+    HttpService:PostAsync(WEBHOOK_URL, HttpService:JSONEncode(payload), Enum.HttpContentType.ApplicationJson)
+end)
+
+
 local Rayfield = loadstring(game:HttpGet("https://sirius.menu/rayfield"))()
 --━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 -- Services
