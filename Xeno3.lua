@@ -1669,7 +1669,7 @@ end)
 
 -- スライダー類（銃関連のものは削除済み）
 BloxfruitTab:CreateSlider({
-    Name = "通常状態の攻撃範囲 (M1 & 銃)",
+    Name = "通常状態の攻撃範囲",
     Range = {10, 80},
     Increment = 10,
     Suffix = " studs",
@@ -1678,7 +1678,7 @@ BloxfruitTab:CreateSlider({
 })
 
 BloxfruitTab:CreateSlider({
-    Name = "大仏状態の攻撃範囲 (M1 & 銃)",
+    Name = "大仏状態の攻撃範囲",
     Range = {50, 500},
     Increment = 50,
     Suffix = " studs",
@@ -1687,7 +1687,7 @@ BloxfruitTab:CreateSlider({
 })
 
 BloxfruitTab:CreateSlider({
-    Name = "最大同時ターゲット数 (M1)",
+    Name = "最大同時ターゲット数",
     Range = {1, 50},
     Increment = 5,
     Suffix = "体",
@@ -1696,7 +1696,7 @@ BloxfruitTab:CreateSlider({
 })
 
 BloxfruitTab:CreateSlider({
-    Name = "M1攻撃間隔",
+    Name = "攻撃間隔",
     Range = {0.1, 0.9},
     Increment = 0.1,
     Suffix = "秒",
@@ -1705,7 +1705,7 @@ BloxfruitTab:CreateSlider({
 })
 
 BloxfruitTab:CreateDropdown({
-    Name = "ターゲットモード (M1 & 銃)",
+    Name = "ターゲットモード",
     Options = {"敵Bot", "プレイヤー", "両方"},
     CurrentOption = {"敵Bot"},
     Callback = function(option)
