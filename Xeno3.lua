@@ -1322,25 +1322,19 @@ end)
 -- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 local BloxfruitTab = Window:CreateTab("Blox Fruits", 4483362458)
-
 -- 設定変数（既存）
-getgenv().FastM1V3       = false
-getgenv().TargetMode     = "敵Bot"
-getgenv().RangeNormal    = 80
-getgenv().RangeBuddha    = 500
+getgenv().FastM1V3 = false
+getgenv().TargetMode = "敵Bot"
+getgenv().RangeNormal = 80
+getgenv().RangeBuddha = 500
 getgenv().AttackInterval = 0.1
-getgenv().MaxTargets     = 40
-getgenv().M1SpamEnabled  = false
-
--- 銃関連（固定値）
-local GUN_SHOOT_INTERVAL = 0.2  -- 固定0.2秒
-local GunConnection = nil
+getgenv().MaxTargets = 40
+getgenv().M1SpamEnabled = false
 
 local RS = game:GetService("ReplicatedStorage")
 local Players = game:GetService("Players")
 local player = Players.LocalPlayer
 local RunService = game:GetService("RunService")
-
 local RegisterAttack, RegisterHit = nil, nil
 local FastM1Thread = nil
 
@@ -1354,7 +1348,7 @@ local function findRemotes()
                 RegisterAttack = Net:FindFirstChild("RE/RegisterAttack") or Net["RE/RegisterAttack"]
                 RegisterHit = Net:FindFirstChild("RE/RegisterHit") or Net["RE/RegisterHit"]
                 if RegisterHit and RegisterAttack then return true end
-                
+               
                 local RE = Net:FindFirstChild("RE")
                 if RE then
                     RegisterAttack = RE:FindFirstChild("RegisterAttack")
@@ -1363,19 +1357,18 @@ local function findRemotes()
                 end
             end
         end
-        
+       
         for _, obj in pairs(RS:GetDescendants()) do
             if obj:IsA("RemoteEvent") then
                 if obj.Name:find("RegisterAttack") then RegisterAttack = obj end
                 if obj.Name:find("RegisterHit") then RegisterHit = obj end
             end
         end
-        
+       
         if RegisterHit and RegisterAttack then return true end
     end)
     return false
 end
-
 findRemotes()
 spawn(function()
     local attempts = 0
@@ -1392,96 +1385,14 @@ end)
 -- Statusラベル（M1用のみ残す）
 local StatusLabel = BloxfruitTab:CreateLabel("Status: Ready | Targets: 0 | Range: N/A")
 
--- 銃自動射撃関数（M1と同じ範囲・モードを使用）
-local function startGunAuto()
-    if GunConnection then GunConnection:Disconnect() end
-    
-    GunConnection = RunService.Stepped:Connect(function()
-        if not getgenv().FastM1V3 then
-            GunConnection:Disconnect()
-            GunConnection = nil
-            return
-        end
-        
-        pcall(function()
-            local char = player.Character
-            if not char or not char:FindFirstChild("HumanoidRootPart") then return end
-            
-            local HRP = char.HumanoidRootPart
-            local myPos = HRP.Position
-            
-            -- M1と同じ状態判定（大仏か通常か）
-            local isBuddha = HRP.Size.Y > 12
-            local bodyEffects = char:FindFirstChild("BodyEffects")
-            if bodyEffects then
-                for _, v in pairs(bodyEffects:GetChildren()) do
-                    if v.Name:lower():find("buddha") or v.Name:lower():find("transform") then
-                        isBuddha = true
-                        break
-                    end
-                end
-            end
-            
-            local range = isBuddha and getgenv().RangeBuddha or getgenv().RangeNormal
-            local mode = getgenv().TargetMode
-            local doEnemies = (mode == "敵Bot" or mode == "両方")
-            local doPlayers = (mode == "プレイヤー" or mode == "両方")
-            
-            local bestRoot, bestDist = nil, range + 1
-            
-            -- Enemies優先
-            if doEnemies then
-                local enemies = workspace:FindFirstChild("Enemies")
-                if enemies then
-                    for _, enemy in pairs(enemies:GetChildren()) do
-                        local root = enemy:FindFirstChild("HumanoidRootPart")
-                        local hum = enemy:FindFirstChild("Humanoid")
-                        if root and hum and hum.Health > 0 then
-                            local dist = (root.Position - myPos).Magnitude
-                            if dist < bestDist then
-                                bestDist = dist
-                                bestRoot = root
-                            end
-                        end
-                    end
-                end
-            end
-            
-            -- 敵がいなければプレイヤー
-            if doPlayers and not bestRoot then
-                for _, plr in pairs(Players:GetPlayers()) do
-                    if plr ~= player and plr.Character then
-                        local pRoot = plr.Character:FindFirstChild("HumanoidRootPart")
-                        local pHum = plr.Character:FindFirstChild("Humanoid")
-                        if pRoot and pHum and pHum.Health > 0 then
-                            local dist = (pRoot.Position - myPos).Magnitude
-                            if dist < bestDist then
-                                bestDist = dist
-                                bestRoot = pRoot
-                            end
-                        end
-                    end
-                end
-            end
-            
-            if bestRoot then
-                local shootEvent = RS.Modules.Net["RE/ShootGunEvent"]
-                shootEvent:FireServer(myPos, {bestRoot})
-            end
-        end)
-        
-        task.wait(GUN_SHOOT_INTERVAL)  -- 固定0.2秒
-    end)
-end
-
--- FastAttackトグル（銃も自動連動）
+-- FastAttackトグル（銃部分を削除）
 BloxfruitTab:CreateToggle({
-    Name = "FastAttack + 自動銃 (範囲連動)",
+    Name = "FastAttack (範囲連動)",
     CurrentValue = false,
     Callback = function(Value)
         getgenv().FastM1V3 = Value
         getgenv().M1SpamEnabled = Value
-        
+       
         if Value then
             if not (RegisterHit and RegisterAttack) then
                 Rayfield:Notify({Title = "エラー", Content = "Remote未発見！待機後再トグル", Duration = 5})
@@ -1489,7 +1400,7 @@ BloxfruitTab:CreateToggle({
                 getgenv().M1SpamEnabled = false
                 return
             end
-            
+           
             -- FastAttackスレッド（元のまま）
             FastM1Thread = task.spawn(function()
                 local lastAttackTime = 0
@@ -1500,7 +1411,7 @@ BloxfruitTab:CreateToggle({
                             task.wait(0.1)
                             return
                         end
-                        
+                       
                         local HRP = char.HumanoidRootPart
                         local isBuddha = HRP.Size.Y > 12
                         local bodyEffects = char:FindFirstChild("BodyEffects")
@@ -1512,21 +1423,21 @@ BloxfruitTab:CreateToggle({
                                 end
                             end
                         end
-                        
+                       
                         local range = isBuddha and getgenv().RangeBuddha or getgenv().RangeNormal
                         local targets = {}
-                        
+                       
                         local enemiesFolder = workspace:FindFirstChild("Enemies")
                         local mode = getgenv().TargetMode
                         local doEnemies = (mode == "敵Bot" or mode == "両方")
                         local doPlayers = (mode == "プレイヤー" or mode == "両方")
-                        
+                       
                         if doEnemies and enemiesFolder then
                             for _, enemy in pairs(enemiesFolder:GetChildren()) do
                                 local eHead = enemy:FindFirstChild("Head") or enemy:FindFirstChild("UpperTorso") or enemy:FindFirstChild("Torso")
                                 local eHRP = enemy:FindFirstChild("HumanoidRootPart") or enemy:FindFirstChild("Torso") or enemy:FindFirstChild("UpperTorso")
                                 local eHum = enemy:FindFirstChildOfClass("Humanoid")
-                                
+                               
                                 if eHRP and eHead and eHum and eHum.Health > 0 then
                                     local dist = (eHRP.Position - HRP.Position).Magnitude
                                     if dist <= range then
@@ -1535,7 +1446,7 @@ BloxfruitTab:CreateToggle({
                                 end
                             end
                         end
-                        
+                       
                         if doPlayers then
                             for _, plr in pairs(Players:GetPlayers()) do
                                 if plr ~= player and plr.Character then
@@ -1552,46 +1463,42 @@ BloxfruitTab:CreateToggle({
                                 end
                             end
                         end
-                        
+                       
                         table.sort(targets, function(a,b) return a.dist < b.dist end)
-                        
+                       
                         local limitedTargets = {}
                         for i = 1, math.min(getgenv().MaxTargets, #targets) do
                             table.insert(limitedTargets, targets[i])
                         end
-                        
+                       
                         if #limitedTargets > 0 then
                             local hitList = {}
                             for _, t in ipairs(limitedTargets) do
                                 table.insert(hitList, {t.model, t.head})
                             end
-                            
+                           
                             if tick() - lastAttackTime > 0.05 then
                                 RegisterAttack:FireServer(0)
                                 lastAttackTime = tick()
                             end
-                            
+                           
                             RegisterHit:FireServer(limitedTargets[1].head, hitList)
                         end
-                        
+                       
                         StatusLabel:Set("Status: ON | Targets: " .. #limitedTargets .. "/" .. getgenv().MaxTargets
                             .. " | Range: " .. range .. " | Mode: " .. mode)
                     end)
-                    
+                   
                     task.wait(getgenv().AttackInterval + math.random(5,15)/100)
                 end
             end)
-            
-            -- 銃自動射撃開始
-            startGunAuto()
-            
-            Rayfield:Notify({Title = "ON", Content = "FastAttack + 自動銃開始（範囲自動連動）", Duration = 4})
+           
+            Rayfield:Notify({Title = "ON", Content = "FastAttack開始（範囲自動連動）", Duration = 4})
         else
             if FastM1Thread then task.cancel(FastM1Thread) FastM1Thread = nil end
-            if GunConnection then GunConnection:Disconnect() GunConnection = nil end
-            
+           
             StatusLabel:Set("Status: OFF")
-            Rayfield:Notify({Title = "OFF", Content = "FastAttack & 自動銃停止", Duration = 3})
+            Rayfield:Notify({Title = "OFF", Content = "FastAttack停止", Duration = 3})
         end
     end,
 })
@@ -1603,15 +1510,15 @@ spawn(function()
             pcall(function()
                 local char = player.Character
                 if not char then return end
-                
+               
                 local HRP = char:FindFirstChild("HumanoidRootPart")
                 if not HRP then return end
-                
+               
                 local range = getgenv().RangeNormal + 100
-                
+               
                 local hasEnemyInRange = false
                 local mode = getgenv().TargetMode
-                
+               
                 if mode == "敵Bot" or mode == "両方" then
                     local enemies = workspace:FindFirstChild("Enemies")
                     if enemies then
@@ -1627,7 +1534,7 @@ spawn(function()
                         end
                     end
                 end
-                
+               
                 if not hasEnemyInRange and (mode == "プレイヤー" or mode == "両方") then
                     for _, plr in pairs(Players:GetPlayers()) do
                         if plr ~= player and plr.Character then
@@ -1643,7 +1550,7 @@ spawn(function()
                         end
                     end
                 end
-                
+               
                 if hasEnemyInRange then
                     local tool = nil
                     for _, t in pairs(char:GetChildren()) do
@@ -1652,7 +1559,7 @@ spawn(function()
                             break
                         end
                     end
-                    
+                   
                     if tool and tool:FindFirstChild("LeftClickRemote") then
                         local remote = tool.LeftClickRemote
                         remote:FireServer(table.unpack({
@@ -1741,6 +1648,16 @@ local function DisableLavaDamage()
         end
     end)
 end
+
+BloxfruitTab:CreateToggle({
+    Name = "マグマ無効",
+    CurrentValue = false,
+    Callback = function(Value)
+        NoLavaEnabled = Value
+        if Value then DisableLavaDamage() end
+        Rayfield:Notify({Title = Value and "ON" or "OFF", Content = "溶岩ダメージ無効化", Duration = 3})
+    end,
+})
 -- バリア設定
 local BARRIER_THICKNESS = 30          -- 厚さ30 studs
 local BARRIER_TOP_Y     = -4         -- バリアの上面Y座標（ここより下には絶対落ちない）
