@@ -1769,6 +1769,49 @@ BloxfruitTab:CreateToggle({
     end,
 })
 
+
+
+-- Autov3 トグル追加（BloxfruitTab内に挿入）
+local AutoV3Enabled = false
+local AutoV3Thread = nil
+local RS = game:GetService("ReplicatedStorage")
+local CommE = RS:WaitForChild("Remotes"):WaitForChild("CommE")
+
+BloxfruitTab:CreateToggle({
+    Name = "Autov3",
+    CurrentValue = false,
+    Callback = function(Value)
+        AutoV3Enabled = Value
+        
+        if Value then
+            AutoV3Thread = task.spawn(function()
+                while AutoV3Enabled do
+                    pcall(function()
+                        CommE:FireServer("ActivateAbility")
+                    end)
+                    task.wait(0.1) -- 調整可能
+                end
+            end)
+            Rayfield:Notify({
+                Title = "ON",
+                Content = "Autov3 開始",
+                Duration = 3
+            })
+        else
+            if AutoV3Thread then
+                task.cancel(AutoV3Thread)
+                AutoV3Thread = nil
+            end
+            Rayfield:Notify({
+                Title = "OFF",
+                Content = "Autov3 停止",
+                Duration = 3
+            })
+        end
+    end,
+})
+
+
 -- TP座標
 local locations = {
     ["マンション"] = Vector3.new(-12549, 337, -7506),
