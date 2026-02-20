@@ -1741,7 +1741,107 @@ local function DisableLavaDamage()
         end
     end)
 end
+-- バリア設定
+local BARRIER_THICKNESS = 30          -- 厚さ30 studs
+local BARRIER_TOP_Y     = -4         -- バリアの上面Y座標（ここより下には絶対落ちない）
+local BARRIER_SIZE_XZ   = 10000       -- X,Z方向の広さ（十分大きく）
 
+local barrier = nil
+local heartbeatConn = nil
+local enabled = false
+
+-- バリア作成/更新関数
+local function updateBarrier(character)
+    -- すでに存在したら一旦削除
+    if barrier then
+        barrier:Destroy()
+        barrier = nil
+    end
+
+    if not enabled then return end
+    if not character or not character:FindFirstChild("HumanoidRootPart") then return end
+
+    barrier = Instance.new("Part")
+    barrier.Name = "AntiFallBarrier"
+    barrier.Size = Vector3.new(BARRIER_SIZE_XZ, BARRIER_THICKNESS, BARRIER_SIZE_XZ)
+    
+    -- 中心Y座標 = 上面Y - 厚さ/2
+    local centerY = BARRIER_TOP_Y - (BARRIER_THICKNESS / 2)
+    barrier.Position = Vector3.new(0, centerY, 0)
+    
+    barrier.Anchored = true
+    barrier.CanCollide = true
+    barrier.Transparency = 0          -- 完全に不透明
+    barrier.BrickColor = BrickColor.new("Bright blue")
+    barrier.Material = Enum.Material.Neon     -- 少し目立つように（任意）
+    barrier.Parent = workspace
+
+    -- X,Z追従
+    if heartbeatConn then heartbeatConn:Disconnect() end
+    heartbeatConn = RunService.Heartbeat:Connect(function()
+        if not enabled or not character or not character:FindFirstChild("HumanoidRootPart") then
+            if barrier then barrier:Destroy() barrier = nil end
+            if heartbeatConn then heartbeatConn:Disconnect() heartbeatConn = nil end
+            return
+        end
+        
+        local hrp = character.HumanoidRootPart
+        barrier.Position = Vector3.new(hrp.Position.X, centerY, hrp.Position.Z)
+    end)
+end
+
+-- バリアON/OFF切り替え関数
+local function toggleBarrier(state)
+    enabled = state
+    
+    if enabled then
+        if player.Character then
+            updateBarrier(player.Character)
+        end
+        -- 通知（任意）
+        -- Rayfield:Notify({Title = "Anti-Fall Barrier", Content = "有効化しました", Duration = 3})
+    else
+        if barrier then barrier:Destroy() barrier = nil end
+        if heartbeatConn then heartbeatConn:Disconnect() heartbeatConn = nil end
+        -- Rayfield:Notify({Title = "Anti-Fall Barrier", Content = "無効化しました", Duration = 3})
+    end
+end
+
+-- キャラクター追加時（死亡→リスポーン含む）
+player.CharacterAdded:Connect(function(char)
+    if enabled then
+        -- 少し待ってから作成（HumanoidRootPartが確実に存在するように）
+        task.delay(0.1, function()
+            updateBarrier(char)
+        end)
+    end
+end)
+
+-- 既にキャラクターが存在する場合
+if player.Character then
+    task.delay(0.1, function()
+        if enabled then
+            updateBarrier(player.Character)
+        end
+    end)
+end
+
+
+BloxfruitTab:CreateToggle({
+    Name = "WalkWater",
+    CurrentValue = false,
+    Callback = function(Value)
+        toggleBarrier(Value)
+    end,
+})
+
+-- スクリプト終了時のクリーンアップ
+script.AncestryChanged:Connect(function(_, parent)
+    if parent == nil then
+        if heartbeatConn then heartbeatConn:Disconnect() end
+        if barrier then barrier:Destroy() end
+    end
+end)
 BloxfruitTab:CreateToggle({
     Name = "マグマ無効",
     CurrentValue = false,
