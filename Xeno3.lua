@@ -1649,15 +1649,6 @@ local function DisableLavaDamage()
     end)
 end
 
-BloxfruitTab:CreateToggle({
-    Name = "マグマ無効",
-    CurrentValue = false,
-    Callback = function(Value)
-        NoLavaEnabled = Value
-        if Value then DisableLavaDamage() end
-        Rayfield:Notify({Title = Value and "ON" or "OFF", Content = "溶岩ダメージ無効化", Duration = 3})
-    end,
-})
 -- バリア設定
 local BARRIER_THICKNESS = 30          -- 厚さ30 studs
 local BARRIER_TOP_Y     = -4         -- バリアの上面Y座標（ここより下には絶対落ちない）
