@@ -494,7 +494,7 @@ RunService.RenderStepped:Connect(function()
             
             local lvl = getLevel(player)
             drawings.level.Text = "Lv." .. tostring(lvl)
-            drawings.level.Position = Vector2.new(rootPos.X - 70, headPos.Y - 8)
+            drawings.level.Position = Vector2.new(rootPos.X, headPos.Y - 50)
             drawings.level.Visible = true
         elseif NameDrawings[player] then
             for _, d in pairs(NameDrawings[player]) do d.Visible = false end
