@@ -1679,7 +1679,7 @@ local function updateBarrier(character)
     
     barrier.Anchored = true
     barrier.CanCollide = true
-    barrier.Transparency = 0          -- 完全に不透明
+    barrier.Transparency = 1          -- 完全に不透明
     barrier.BrickColor = BrickColor.new("Bright blue")
     barrier.Material = Enum.Material.Neon     -- 少し目立つように（任意）
     barrier.Parent = workspace
