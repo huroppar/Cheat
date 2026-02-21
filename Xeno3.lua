@@ -356,11 +356,33 @@ RunService.RenderStepped:Connect(function()
     end
 end)
 --━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
--- Tab: ESP
+-- Tab: ESP (Safe/Unsafe削除版: NameESPにLv表示のみ追加 + 全機能)
 --━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 local ESPTab = Window:CreateTab("ESP", 4483362458)
--- ── Services（スクリプト全体で共有されているので再定義不要） ──
--- ※ すでに上部で定義済みのものを利用
+
+-- ── Services ────────────────────────────────────────
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local Lighting = game:GetService("Lighting")
+local Camera = workspace.CurrentCamera
+local LocalPlayer = Players.LocalPlayer
+
+-- ── Level 取得関数のみ残す ─────────────────────────
+local function getLevel(player)
+    local success, lvl = pcall(function()
+        local leaderstats = player:FindFirstChild("leaderstats")
+        if leaderstats and leaderstats:FindFirstChild("Level") then
+            return leaderstats.Level.Value
+        end
+        local data = player:FindFirstChild("Data")
+        if data and data:FindFirstChild("Level") then
+            return data.Level.Value
+        end
+        return 0
+    end)
+    return success and lvl or 0
+end
+
 -- ── 状態フラグ ──────────────────────────────────────
 local Settings = {
     AllyHighlight = false,
@@ -373,18 +395,20 @@ local Settings = {
     ItemHighlight = false,
     ChestHighlight = false,
     HitboxExtender = false,
-   
+  
     WorldXRayAlpha = 0.6,
     PlayerXRayAlpha = 0.6,
-   
+  
     ClockGUI = false,
 }
+
 -- ── 管理テーブル ────────────────────────────────────
 local Highlights = {} -- char → Highlight
-local NameDrawings = {} -- player → Drawing Text
+local NameDrawings = {} -- player → {name=Text, level=Text}
 local LineDrawings = {} -- player → Drawing Line
 local ChestHighlights = {} -- model → Highlight
 local OriginalHRPSizes = {} -- player → Vector3 (他人のHRP)
+
 -- ── ユーティリティ ──────────────────────────────────
 local function IsEnemy(player)
     if not LocalPlayer.Team or not player.Team then
@@ -392,9 +416,10 @@ local function IsEnemy(player)
     end
     return player.Team ~= LocalPlayer.Team
 end
+
 local function CreateHighlight(target, color)
     if Highlights[target] then return end
-   
+  
     local hl = Instance.new("Highlight")
     hl.FillColor = color
     hl.OutlineColor = Color3.new(1,1,1)
@@ -402,71 +427,104 @@ local function CreateHighlight(target, color)
     hl.Parent = target
     Highlights[target] = hl
 end
+
 local function RemoveHighlight(target)
     if Highlights[target] then
         Highlights[target]:Destroy()
         Highlights[target] = nil
     end
 end
--- ── Name + Line ESP ─────────────────────────────────
+
+-- ── Name + Line + Lv ESP ───────────────────────────
 RunService.RenderStepped:Connect(function()
     for _, player in Players:GetPlayers() do
         if player == LocalPlayer then continue end
-       
+      
         local char = player.Character
-        local hrp = char and char:FindFirstChild("HumanoidRootPart")
-        if not hrp then continue end
-       
-        local screenPos, onScreen = Camera:WorldToViewportPoint(hrp.Position)
+        if not char then continue end
+      
+        local hrp = char:FindFirstChild("HumanoidRootPart")
+        local head = char:FindFirstChild("Head")
+        if not hrp or not head then 
+            if NameDrawings[player] then
+                for _, d in pairs(NameDrawings[player]) do d.Visible = false end
+            end
+            if LineDrawings[player] then LineDrawings[player].Visible = false end
+            continue 
+        end
+      
+        local rootPos, onScreen = Camera:WorldToViewportPoint(hrp.Position)
+        local headPos = Camera:WorldToViewportPoint(head.Position + Vector3.new(0, 0.5, 0))
+      
         if not onScreen then
-            if NameDrawings[player] then NameDrawings[player].Visible = false end
+            if NameDrawings[player] then
+                for _, d in pairs(NameDrawings[player]) do d.Visible = false end
+            end
             if LineDrawings[player] then LineDrawings[player].Visible = false end
             continue
         end
-       
+      
         local distance = (Camera.CFrame.Position - hrp.Position).Magnitude
-       
-        -- Name ESP
+      
+        -- Name + Lv ESP
         if Settings.NameESP then
             if not NameDrawings[player] then
-                local txt = Drawing.new("Text")
-                txt.Center = true
-                txt.Outline = true
-                txt.Size = 16
-                NameDrawings[player] = txt
+                local nameTxt = Drawing.new("Text")
+                nameTxt.Center = true
+                nameTxt.Outline = true
+                nameTxt.Size = 16
+                nameTxt.Font = 2
+                
+                local levelTxt = Drawing.new("Text")
+                levelTxt.Center = true
+                levelTxt.Outline = true
+                levelTxt.Size = 15
+                levelTxt.Font = 2
+                levelTxt.Color = Color3.new(0, 1, 1)  -- 青
+                
+                NameDrawings[player] = {name = nameTxt, level = levelTxt}
             end
-           
-            local txt = NameDrawings[player]
-            txt.Visible = true
-            txt.Text = string.format("%s | %.0fm", player.Name, distance)
-            txt.Position = Vector2.new(screenPos.X, screenPos.Y - 25)
-            txt.Color = IsEnemy(player) and Color3.new(1,0,0) or Color3.new(0,1,0)
+          
+            local drawings = NameDrawings[player]
+            
+            drawings.name.Visible = true
+            drawings.name.Text = string.format("%s | %.0fm", player.Name, distance)
+            drawings.name.Position = Vector2.new(rootPos.X, headPos.Y - 30)
+            drawings.name.Color = IsEnemy(player) and Color3.new(1,0,0) or Color3.new(0,1,0)
+            
+            local lvl = getLevel(player)
+            drawings.level.Text = "Lv." .. tostring(lvl)
+            drawings.level.Position = Vector2.new(rootPos.X - 70, headPos.Y - 8)
+            drawings.level.Visible = true
         elseif NameDrawings[player] then
-            NameDrawings[player].Visible = false
+            for _, d in pairs(NameDrawings[player]) do d.Visible = false end
         end
-       
-        -- Line ESP (from bottom center)
+      
+        -- Line ESP
         if Settings.LineESP then
             if not LineDrawings[player] then
                 local line = Drawing.new("Line")
                 line.Thickness = 1.5
                 LineDrawings[player] = line
             end
-           
+          
             local line = LineDrawings[player]
             line.Visible = true
             line.From = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y)
-            line.To = Vector2.new(screenPos.X, screenPos.Y)
-            line.Color = Color3.new(1, 0, 0) -- 固定色（好みで変更可）
+            line.To = Vector2.new(rootPos.X, rootPos.Y)
+            line.Color = Color3.new(1, 0, 0)
         elseif LineDrawings[player] then
             LineDrawings[player].Visible = false
         end
     end
 end)
+
 -- プレイヤー退出時のクリーンアップ
 Players.PlayerRemoving:Connect(function(player)
     if NameDrawings[player] then
-        NameDrawings[player]:Remove()
+        for _, drawing in pairs(NameDrawings[player]) do
+            drawing:Remove()
+        end
         NameDrawings[player] = nil
     end
     if LineDrawings[player] then
@@ -478,13 +536,15 @@ Players.PlayerRemoving:Connect(function(player)
     end
     OriginalHRPSizes[player] = nil
 end)
--- ── Clock 表示（ラベル + GUI） ──────────────────────
+
+-- ── Clock 表示 ──────────────────────────────────────
 local ClockLabel = ESPTab:CreateLabel("Time: --:--")
 local ClockGui = Instance.new("ScreenGui")
 ClockGui.Name = "ClockGui"
 ClockGui.ResetOnSpawn = false
 ClockGui.Enabled = false
 ClockGui.Parent = game:GetService("CoreGui")
+
 do
     local frame = Instance.new("Frame")
     frame.Size = UDim2.new(0, 220, 0, 60)
@@ -492,11 +552,11 @@ do
     frame.BackgroundColor3 = Color3.fromRGB(15,15,15)
     frame.BackgroundTransparency = 0.15
     frame.Parent = ClockGui
-   
+  
     local corner = Instance.new("UICorner")
     corner.CornerRadius = UDim.new(0, 12)
     corner.Parent = frame
-   
+  
     local label = Instance.new("TextLabel")
     label.Size = UDim2.new(1, -10, 1, -10)
     label.Position = UDim2.new(0, 5, 0, 5)
@@ -507,25 +567,29 @@ do
     label.Text = "--:--"
     label.Parent = frame
 end
+
 local function FormatTime(t)
     local h = math.floor(t)
     local m = math.floor((t - h) * 60)
     return string.format("%02d:%02d", h, m)
 end
+
 local function IsNight(t)
     return t >= 18 or t < 7
 end
+
 RunService.Heartbeat:Connect(function()
     local t = Lighting.ClockTime
     local timeStr = FormatTime(t)
     local state = IsNight(t) and "Night" or "Morning"
-   
+  
     ClockLabel:Set("Time: " .. timeStr .. " (" .. state .. ")")
-   
+  
     if Settings.ClockGUI and ClockGui:FindFirstChild("Frame", true) then
         ClockGui.Frame.TextLabel.Text = timeStr .. " (" .. state .. ")"
     end
 end)
+
 ESPTab:CreateToggle({
     Name = "Clock GUI 表示",
     CurrentValue = false,
@@ -534,10 +598,12 @@ ESPTab:CreateToggle({
         ClockGui.Enabled = v
     end,
 })
+
 -- ── 自分の現在位置表示 ──────────────────────────────
 local PositionLabel = ESPTab:CreateLabel("Position: --, --, --")
 RunService.RenderStepped:Connect(function()
-    local _, _, hrp = getCharacter()
+    local char = LocalPlayer.Character
+    local hrp = char and char:FindFirstChild("HumanoidRootPart")
     if hrp then
         local p = hrp.Position
         PositionLabel:Set(string.format("Position: X %.1f | Y %.1f | Z %.1f", p.X, p.Y, p.Z))
@@ -545,6 +611,7 @@ RunService.RenderStepped:Connect(function()
         PositionLabel:Set("Position: Loading...")
     end
 end)
+
 -- ── FullBright ──────────────────────────────────────
 local fullBrightConn
 local OriginalLightingProps = {
@@ -552,12 +619,13 @@ local OriginalLightingProps = {
     ClockTime = Lighting.ClockTime,
     FogEnd = Lighting.FogEnd,
 }
+
 ESPTab:CreateToggle({
     Name = "FullBright",
     CurrentValue = false,
     Callback = function(enabled)
         Settings.FullBright = enabled
-       
+      
         if enabled then
             if fullBrightConn then fullBrightConn:Disconnect() end
             fullBrightConn = RunService.RenderStepped:Connect(function()
@@ -576,6 +644,7 @@ ESPTab:CreateToggle({
         end
     end,
 })
+
 -- ── Fog / Atmosphere 無効化 ─────────────────────────
 local fogEnabled = false
 local fogConn
@@ -585,6 +654,7 @@ local OriginalFog = {
 }
 local SavedAtmospheres = {}
 local SavedEffects = {}
+
 do
     for _, child in Lighting:GetChildren() do
         if child:IsA("Atmosphere") then
@@ -595,10 +665,11 @@ do
         end
     end
 end
+
 local function DisableFogAndEffects()
     Lighting.FogStart = 1e9
     Lighting.FogEnd = 1e9
-   
+  
     for _, child in Lighting:GetChildren() do
         if child:IsA("Atmosphere") then
             child:Destroy()
@@ -607,6 +678,7 @@ local function DisableFogAndEffects()
         end
     end
 end
+
 ESPTab:CreateToggle({
     Name = "Fog / Atmosphere 無効化",
     CurrentValue = false,
@@ -623,7 +695,7 @@ ESPTab:CreateToggle({
             end
             Lighting.FogStart = OriginalFog.Start
             Lighting.FogEnd = OriginalFog.End
-           
+          
             for _, child in Lighting:GetChildren() do
                 if child:IsA("Atmosphere") then child:Destroy() end
             end
@@ -638,6 +710,8 @@ ESPTab:CreateToggle({
         end
     end,
 })
+
+-- ── ハイライト ──────────────────────────────────────
 ESPTab:CreateToggle({
     Name = "味方ハイライト",
     CurrentValue = false,
@@ -645,6 +719,7 @@ ESPTab:CreateToggle({
         Settings.AllyHighlight = v
     end,
 })
+
 ESPTab:CreateToggle({
     Name = "敵ハイライト",
     CurrentValue = false,
@@ -652,10 +727,11 @@ ESPTab:CreateToggle({
         Settings.EnemyHighlight = v
     end,
 })
+
 RunService.Stepped:Connect(function()
     for _, player in Players:GetPlayers() do
         if player == LocalPlayer or not player.Character then continue end
-       
+      
         if IsEnemy(player) and Settings.EnemyHighlight then
             CreateHighlight(player.Character, Color3.new(1,0,0))
         elseif not IsEnemy(player) and Settings.AllyHighlight then
@@ -665,18 +741,23 @@ RunService.Stepped:Connect(function()
         end
     end
 end)
+
 -- ── Name / Line ESP トグル ──────────────────────────
 ESPTab:CreateToggle({
-    Name = "名前ESP",
+    Name = "名前ESP (Lv表示付き)",
     CurrentValue = false,
-    Callback = function(v) Settings.NameESP = v end,
+    Callback = function(v) 
+        Settings.NameESP = v 
+    end,
 })
+
 ESPTab:CreateToggle({
     Name = "線ESP",
     CurrentValue = false,
     Callback = function(v) Settings.LineESP = v end,
 })
--- ── X-Ray（ワールド / プレイヤー） ──────────────────
+
+-- ── X-Ray ───────────────────────────────────────────
 ESPTab:CreateToggle({
     Name = "ワールド X-Ray",
     CurrentValue = false,
@@ -689,6 +770,7 @@ ESPTab:CreateToggle({
         end
     end,
 })
+
 ESPTab:CreateSlider({
     Name = "ワールド X-Ray 透明度",
     Range = {0, 0.95},
@@ -705,6 +787,7 @@ ESPTab:CreateSlider({
         end
     end,
 })
+
 ESPTab:CreateToggle({
     Name = "プレイヤー X-Ray",
     CurrentValue = false,
@@ -720,6 +803,7 @@ ESPTab:CreateToggle({
         end
     end,
 })
+
 ESPTab:CreateSlider({
     Name = "プレイヤー X-Ray 透明度",
     Range = {0, 0.95},
@@ -739,6 +823,7 @@ ESPTab:CreateSlider({
         end
     end,
 })
+
 -- ── アイテム / チェスト ハイライト ──────────────────
 local function HighlightModelsByKeyword(keyword, color)
     for _, obj in Workspace:GetDescendants() do
@@ -750,6 +835,7 @@ local function HighlightModelsByKeyword(keyword, color)
         end
     end
 end
+
 ESPTab:CreateToggle({
     Name = "アイテムハイライト",
     CurrentValue = false,
@@ -757,12 +843,10 @@ ESPTab:CreateToggle({
         Settings.ItemHighlight = v
         if v then
             HighlightModelsByKeyword("item", Color3.fromRGB(0, 255, 255))
-        else
-            -- アイテムはHighlightテーブル経由で管理されているので一括削除はせず、必要に応じて
-            -- （現状はトグルオフで消えない仕様のまま）
         end
     end,
 })
+
 ESPTab:CreateToggle({
     Name = "チェストハイライト",
     CurrentValue = false,
@@ -788,7 +872,8 @@ ESPTab:CreateToggle({
         end
     end,
 })
--- ── Hitbox Extender（他プレイヤー） ─────────────────
+
+-- ── Hitbox Extender ─────────────────────────────────
 ESPTab:CreateToggle({
     Name = "HitBox 表示（拡張）",
     CurrentValue = false,
@@ -796,18 +881,18 @@ ESPTab:CreateToggle({
         Settings.HitboxExtender = v
         for _, player in Players:GetPlayers() do
             if player == LocalPlayer or not player.Character then continue end
-           
+          
             local hrp = player.Character:FindFirstChild("HumanoidRootPart")
             if not hrp then continue end
-           
+          
             if v then
                 if not OriginalHRPSizes[player] then
                     OriginalHRPSizes[player] = hrp.Size
                 end
-               
+              
                 local base = math.max(hrp.Size.X, hrp.Size.Y, hrp.Size.Z) / 2
                 local newSize = Vector3.new(base*2, base*2, base*2) * HitboxScale
-               
+              
                 hrp.Size = newSize
                 hrp.Transparency = 0.5
                 hrp.CanCollide = false
@@ -817,11 +902,12 @@ ESPTab:CreateToggle({
                     hrp.Size = OriginalHRPSizes[player]
                 end
                 hrp.Transparency = 1
-                hrp.CanCollide = true -- 元に戻すかはゲームによる
+                hrp.CanCollide = true
             end
         end
     end,
 })
+
 local HitboxScale = 1
 ESPTab:CreateSlider({
     Name = "HitBox 倍率",
@@ -832,7 +918,7 @@ ESPTab:CreateSlider({
     Callback = function(v)
         HitboxScale = v
         if not Settings.HitboxExtender then return end
-       
+      
         for _, player in Players:GetPlayers() do
             if player == LocalPlayer or not player.Character then continue end
             local hrp = player.Character:FindFirstChild("HumanoidRootPart")
@@ -844,7 +930,8 @@ ESPTab:CreateSlider({
         end
     end,
 })
--- ── 自分の攻撃範囲拡大（HRPサイズ変更） ─────────────
+
+-- ── 自分の攻撃範囲拡大 ──────────────────────────────
 local SelfHitboxOriginalSize
 local SelfHitboxScale = 1
 ESPTab:CreateSlider({
@@ -855,38 +942,41 @@ ESPTab:CreateSlider({
     CurrentValue = SelfHitboxScale,
     Callback = function(v)
         SelfHitboxScale = v
-       
-        local _, _, hrp = getCharacter()
+      
+        local char = LocalPlayer.Character
+        local hrp = char and char:FindFirstChild("HumanoidRootPart")
         if not hrp then return end
-       
+      
         if not SelfHitboxOriginalSize then
             SelfHitboxOriginalSize = hrp.Size
         end
-       
+      
         hrp.Size = SelfHitboxOriginalSize * v
     end,
 })
--- ── Fruit VFX Color（Blox Fruits用） ────────────────
+
+-- ── Fruit VFX Color ─────────────────────────────────
 local VFXEnabled = false
 local RainbowEnabled = false
 local SelectedVFXColor = Color3.fromRGB(255, 0, 0)
 local hue = 0
 local const RAINBOW_SPEED = 0.12
 local const HUE_OFFSET = 0.08
+
 local function ScanFruitVFX()
     local results = {}
     for _, child in LocalPlayer:GetChildren() do
         if child:IsA("Folder") and child.Name:find("FruitVFXColor") then
             local container = child:FindFirstChild("Shifted") or child:FindFirstChild("Default")
             if not container then continue end
-           
+          
             local attrs = {}
             for name, value in container:GetAttributes() do
                 if typeof(value) == "Color3" then
                     table.insert(attrs, name)
                 end
             end
-           
+          
             if #attrs > 0 then
                 table.insert(results, { folder = container, attrs = attrs })
             end
@@ -894,12 +984,13 @@ local function ScanFruitVFX()
     end
     return results
 end
+
 local function ApplyVFXColor()
     if not VFXEnabled and not RainbowEnabled then return end
-   
+  
     local targets = ScanFruitVFX()
     if #targets == 0 then return end
-   
+  
     if RainbowEnabled then
         hue = (hue + RAINBOW_SPEED) % 1
         for _, data in targets do
@@ -916,12 +1007,14 @@ local function ApplyVFXColor()
         end
     end
 end
+
 task.spawn(function()
     while true do
         task.wait(0.6)
         ApplyVFXColor()
     end
 end)
+
 ESPTab:CreateToggle({
     Name = "Fruit VFX Color",
     CurrentValue = false,
@@ -930,6 +1023,7 @@ ESPTab:CreateToggle({
         ApplyVFXColor()
     end,
 })
+
 ESPTab:CreateToggle({
     Name = "Rainbow VFX",
     CurrentValue = false,
@@ -938,6 +1032,7 @@ ESPTab:CreateToggle({
         ApplyVFXColor()
     end,
 })
+
 ESPTab:CreateColorPicker({
     Name = "VFX Color",
     Color = SelectedVFXColor,
@@ -948,6 +1043,9 @@ ESPTab:CreateColorPicker({
         end
     end,
 })
+
+
+
 --━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 -- Tab: 戦闘 (Combat) - 完全版（エラー対策強化）
 --━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -1797,6 +1895,178 @@ BloxfruitTab:CreateToggle({
                 Title = "OFF",
                 Content = "Autov3 停止",
                 Duration = 3
+            })
+        end
+    end,
+})
+
+
+-- Blox Fruits: Auto Load Fruit + Auto Chip (Rayfield用・完全分離版)
+-- 自動ロードと自動チップを別トグルで制御
+
+local RS = game:GetService("ReplicatedStorage")
+local CommF = RS:WaitForChild("Remotes"):WaitForChild("CommF_")
+
+-- 全実リスト（価値低い順）
+local FruitsByValue = {
+    "Rocket", "Spin", "Blade", "Spring", "Bomb", "Spike", "Smoke",      -- Common
+    "Flame", "Ice", "Sand", "Dark", "Eagle", "Diamond",                 -- Uncommon
+    "Light", "Rubber", "Ghost", "Magma",                                -- Rare
+    "Quake", "Buddha", "Love", "Creation", "Spider", "Sound", "Portal", -- Legendary
+    "Lightning", "Pain", "Blizzard", "Phoenix",
+    "Gravity", "Shadow", "Venom", "Dough", "Control", "Spirit", "Gas",  -- Mythical
+    "Mammoth", "T-Rex", "Tiger", "Yeti", "Kitsune", "Dragon"
+}
+
+-- 選択状態
+local SelectedFruits = {}           -- 複数選択された実（ロード＆チップ共通）
+local AutoLoadEnabled = false       -- 自動ロード用
+local AutoChipEnabled = false       -- 自動チップ用
+local LoadThread = nil
+local ChipThread = nil
+
+-- インベントリ内の実名リストを取得
+local function getInventoryFruitNames()
+    local inv = {}
+    pcall(function()
+        local result = CommF:InvokeServer("getInventory")
+        if result and result["Fruits"] then
+            for _, fruit in ipairs(result["Fruits"]) do
+                local name = fruit["Name"]:gsub(" Fruit$", "")  -- "Rocket Fruit" → "Rocket"
+                table.insert(inv, name)
+            end
+        end
+    end)
+    return inv
+end
+
+-- 自動ロード処理（別スレッド）
+local function startLoadThread()
+    if LoadThread then task.cancel(LoadThread) end
+    
+    LoadThread = task.spawn(function()
+        while AutoLoadEnabled do
+            pcall(function()
+                local inv = getInventoryFruitNames()
+                local hasAnyFruit = #inv > 0
+                
+                -- インベントリが完全に空の場合のみロード
+                if not hasAnyFruit then
+                    for _, fruit in ipairs(FruitsByValue) do
+                        if table.find(SelectedFruits, fruit) then
+                            CommF:InvokeServer("LoadFruit", fruit .. "-" .. fruit)
+                            task.wait(0.8)  -- ロード間隔（BAN対策）
+                            break           -- 1回に1つだけ
+                        end
+                    end
+                end
+            end)
+            task.wait(2)  -- チェック間隔
+        end
+    end)
+end
+
+-- 自動チップ処理（別スレッド）
+local function startChipThread()
+    if ChipThread then task.cancel(ChipThread) end
+    
+    ChipThread = task.spawn(function()
+        while AutoChipEnabled do
+            pcall(function()
+                local inv = getInventoryFruitNames()
+                
+                for _, fruit in ipairs(SelectedFruits) do
+                    if table.find(inv, fruit) then
+                        CommF:InvokeServer("Chip", fruit)
+                        task.wait(0.8)  -- チップ間隔
+                    end
+                end
+            end)
+            task.wait(2)  -- チェック間隔
+        end
+    end)
+end
+
+-- 複数選択ドロップダウン（共通）
+BloxfruitTab:CreateDropdown({
+    Name = "対象の実を選択（複数可）",
+    Options = FruitsByValue,
+    CurrentOption = {},
+    MultipleOptions = true,
+    Callback = function(option)
+        SelectedFruits = option
+    end,
+})
+
+-- 自動ロード専用トグル
+BloxfruitTab:CreateToggle({
+    Name = "自動ロード（インベントリ空時のみ）",
+    CurrentValue = false,
+    Callback = function(Value)
+        AutoLoadEnabled = Value
+        
+        if Value then
+            if #SelectedFruits == 0 then
+                Rayfield:Notify({
+                    Title = "注意",
+                    Content = "少なくとも1つの実を選択してください",
+                    Duration = 4
+                })
+                AutoLoadEnabled = false
+                return
+            end
+            startLoadThread()
+            Rayfield:Notify({
+                Title = "自動ロード開始",
+                Content = "インベントリが空の時、選択実を低価値順にロード",
+                Duration = 5
+            })
+        else
+            if LoadThread then
+                task.cancel(LoadThread)
+                LoadThread = nil
+            end
+            Rayfield:Notify({
+                Title = "自動ロード停止",
+                Content = "ロード自動化を停止しました",
+                Duration = 4
+            })
+        end
+    end,
+})
+
+-- 自動チップ専用トグル
+BloxfruitTab:CreateToggle({
+    Name = "自動チップ（選択実のみ）",
+    CurrentValue = false,
+    Callback = function(Value)
+        AutoChipEnabled = Value
+        
+        if Value then
+            if #SelectedFruits == 0 then
+                Rayfield:Notify({
+                    Title = "注意",
+                    Content = "少なくとも1つの実を選択してください",
+                    Duration = 4
+                })
+                AutoChipEnabled = false
+                return
+            end
+            startChipThread()
+            Rayfield:Notify({
+                Title = "自動チップ開始",
+                Content = "選択した実を自動でチップ化（持ってる場合）",
+                Duration = 5
+            })
+        else
+            if ChipThread then
+                task.cancel(ChipThread)
+                ChipThread = nil
+            end
+            Rayfield:Notify({
+                Title = "自動チップ停止",
+                Content = "チップ自動化を停止しました",
+                Duration = 4
             })
         end
     end,
